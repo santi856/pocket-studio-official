@@ -2,6 +2,8 @@ import "server-only";
 import { resolveIntent } from "@/lib/orchestration/intent-resolver";
 import { analyzeImpact } from "@/lib/orchestration/impact-analysis";
 import { recordDecision } from "@/lib/product/decisions";
+import { generateProductIntelligence } from "@/lib/orchestration/product-intelligence";
+import type { ProductIntelligenceResult } from "@/lib/orchestration/product-intelligence";
 import type { ResolvedIntent } from "@/lib/ai/provider";
 import type { ImpactAnalysisResult } from "@/lib/orchestration/impact-analysis";
 import type { Decision } from "@/generated/prisma/client";
@@ -10,6 +12,8 @@ export type ChangeFlowResult = {
   intent: ResolvedIntent;
   impact: ImpactAnalysisResult;
   decision: Decision;
+  /** Only present when intent.type === "describe_idea" — see Master Spec §51. */
+  productIntelligence?: ProductIntelligenceResult;
 };
 
 /**
@@ -24,13 +28,13 @@ export type ChangeFlowResult = {
  *   Regenerate Affected Artifacts → Validate and Test → Create Evidence →
  *   Create Version → Update Truth Status → Respond Simply
  *
- * Phase 1 implements the steps up through "Apply Disclosure and Approval
- * Rules": intent resolution (which itself loads Product State) and impact
- * analysis feed a recorded Decision at the correct disclosure tier. The
- * remaining steps have real content only once later units exist —
- * Feasibility (P1-05), structured proposals / Product Intelligence
- * (P1-06), and Truth Status (P1-07) — and will extend this function
- * rather than duplicate the flow.
+ * A first-time idea (`describe_idea`) runs Feasibility and Generate
+ * Structured Proposals via `generateProductIntelligence`, which itself
+ * updates Product State atomically and creates a version — Phase 1's
+ * customer flow (§51) never requires an edit, so `edit_request` intents
+ * only reach the disclosure/approval decision for now; full conversational
+ * editing with impact-aware regeneration is Phase 2 scope (§55, §57).
+ * Truth Status (P1-07) will extend this function rather than duplicate it.
  */
 export async function beginChangeFlow(
   actorUserId: string,
@@ -59,5 +63,10 @@ export async function beginChangeFlow(
     impact: { categories: impact.categories, consequential: impact.consequential },
   });
 
-  return { intent, impact, decision };
+  const productIntelligence =
+    intent.type === "describe_idea"
+      ? await generateProductIntelligence(actorUserId, projectId, rawText)
+      : undefined;
+
+  return { intent, impact, decision, productIntelligence };
 }

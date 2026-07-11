@@ -6,11 +6,13 @@ import { registerUser } from "@/lib/services/users";
 import { createOrganization } from "@/lib/services/organizations";
 import { createProject } from "@/lib/services/projects";
 import { listDecisions } from "@/lib/product/decisions";
+import { seedCapabilityRegistry } from "@/lib/registry/seed-data";
 import { beginChangeFlow } from "./change-flow";
 
 describe("beginChangeFlow", () => {
   beforeEach(async () => {
     await resetDatabase();
+    await seedCapabilityRegistry();
   });
 
   afterAll(async () => {
@@ -42,6 +44,25 @@ describe("beginChangeFlow", () => {
     expect(result.impact.consequential).toBe(false);
     expect(result.decision.disclosureTier).toBe("ROUTINE");
     expect(result.decision.approvalStatus).toBe("AUTO_APPLIED");
+    expect(result.productIntelligence?.productState.version).toBe(1);
+  });
+
+  it("does not generate Product Intelligence for a follow-up edit_request", async () => {
+    const { owner, project } = await seedProject();
+
+    await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Build a premium booking app for mobile detailers.",
+    );
+    const second = await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Add appointment deposits and monthly memberships.",
+    );
+
+    expect(second.intent.type).toBe("edit_request");
+    expect(second.productIntelligence).toBeUndefined();
   });
 
   it("records a CONSEQUENTIAL decision pending approval for a monetization request", async () => {

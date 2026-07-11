@@ -7,7 +7,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase:** Phase 1 — Intelligence, Business Foundation, Trust Architecture, and Premium Experience
 - **Phase status:** active
 - **Milestone:** M1-foundation — repository/project foundation, durable multi-tenant state, provider abstraction
-- **Active implementation unit:** P1-06 (Product Intelligence, Requirements Engine, Business Model Brief, unit economics)
+- **Active implementation unit:** P1-07 (Event Ledger, Evidence Ledger, Truth Status — product-facing)
 
 ## Completed
 
@@ -80,12 +80,28 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
   what exists today. `assessFeasibility` looks capability keys up against the registry and reports
   unrecognized keys explicitly rather than assuming support. 13 new tests (81 total). Evidence:
   `EV-0020`..`EV-0022`.
+- **P1-06 — Product Intelligence, Requirements Engine, Business Model Brief, unit economics.**
+  `deriveRequirements` reuses Impact Analysis's categories as its signal source (one taxonomy, not two)
+  to produce EXPLICIT/INFERRED/RECOMMENDED requirement statements; `extractTargetCustomer` does
+  best-effort "... for &lt;audience&gt;" pattern matching, honestly labeled as not real language
+  understanding. `suggestCapabilityKeys` only ever emits keys that exist in the seed-data registry —
+  never invents a plausible-sounding one, so Feasibility can catch drift. `deriveBusinessModelBrief` and
+  `deriveMonetizationRecommendations` (Master Spec §19) default toward simplicity and never assume a
+  price. `defaultUnitEconomicsAssumptions` (§20) labels every field's source (`unknown` / `estimate`;
+  never `provider_reported` or `actual_connected` in Phase 1). `generateProductIntelligence` wires all
+  of it together: derives everything, calls `assessFeasibility` (P1-05) for a real Feasibility Report,
+  then persists a new Canonical Product State version, a new Product DNA version, one Requirement
+  knowledge node per derived requirement, a FACT memory entry for the original idea, and an
+  OPEN_QUESTION memory entry per real gap. Wired into `beginChangeFlow` for `describe_idea` intents only
+  — Phase 1's own customer flow (§51) never requires an edit, so `edit_request` handling stays at the
+  disclosure/approval level until Phase 2's conversational editing (§55, §57) (`D-0010`). 25 new tests
+  (107 total). Evidence: `EV-0023`..`EV-0025`.
 
 ## Active
 
-- P1-06: Product Intelligence, Requirements Engine, Business Model Brief, monetization recommendations,
-  editable unit-economics assumptions, and operational-complexity analysis, generated via the mock AI
-  provider and grounded in the Supported Capability Registry (Master Spec §17, §19-21).
+- P1-07: product-facing Event Ledger, Evidence Ledger, and Truth Status data models and services, so
+  every project can truthfully report implemented/planned/missing/blocked/unsupported/not-evaluated
+  status in both Simple and Expert Mode (Master Spec §50, §53).
 
 ## Deferred
 
@@ -101,25 +117,22 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - Auth/tenancy/product-state/orchestration/registry exist only as a service/library layer — no UI,
   Server Actions, or HTTP routes wire them up yet (that is P1-10/P1-11). Tenant isolation is proven at
   the service+authz layer against a real database, not yet at the HTTP boundary.
-- Intent resolution and impact analysis are deterministic/keyword-based, not real language
-  understanding — must remain honestly disclosed in Truth Status once P1-07 exists.
-- `assessFeasibility` takes explicit capability keys, not raw text — the raw-text-to-capability-key
-  mapping is P1-06's Requirements Engine job.
-- `beginChangeFlow` does not yet call `assessFeasibility` — wiring Feasibility into the change flow
-  happens once P1-06's Requirements Engine can produce real capability keys from an idea. Change Set
-  creation, artifact regeneration, and Truth Status update are added by P1-06/P1-07, extending this
-  function rather than duplicating it.
+- AI provider is mock-only; no live provider is connected (by design, Phase 3 scope). Requirements
+  Engine, Business Model Brief, and unit economics are deterministic/template-based, not real product or
+  market intelligence — must remain honestly disclosed once Truth Status is customer-visible.
+- Phase 1's own customer flow (§51) never requires an edit; full conversational editing with
+  impact-aware regeneration is Phase 2 scope (§55, §57) and is not implemented.
+- No product-facing Truth Status yet — nothing currently makes the "this is mock-generated" disclosure
+  customer-visible (P1-07, active now, is what closes this gap).
 - Product Knowledge graph only exercises REQUIREMENT/WORKFLOW node types so far; no generation system
   yet produces Screen/Action/DataModel nodes (Phase 2 concern).
-- AI provider is mock-only; no live provider is connected (by design, Phase 3 scope).
 - No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end.
 
 ## Next Action
 
-Implement P1-06: Product Intelligence, a Requirements Engine, Business Model Brief, monetization
-recommendations, editable unit-economics assumptions, and operational-complexity analysis — generated
-through the mock AI provider, grounded in the Supported Capability Registry so feasibility claims are
-never invented, and persisted as a new Canonical Product State version (Master Spec §17, §19-21).
+Implement P1-07: product-facing Event Ledger, Evidence Ledger, and Truth Status models/services (Master
+Spec §50, §53) so implemented/planned/missing/blocked/unsupported/not-evaluated status is a real,
+queryable, tenant-scoped fact about each project — not just something disclosed in code comments.
 
 ## Decision Ledger Pointer
 

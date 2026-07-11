@@ -12,24 +12,25 @@
     "current": "M1-foundation",
     "description": "Repository/project foundation, durable multi-tenant state, provider abstraction"
   },
-  "activeImplementationUnit": "P1-06",
+  "activeImplementationUnit": "P1-07",
   "requirements": {
     "completed": [
       "P1-01: Repo/app foundation (Next.js 16 App Router, strict TypeScript, Tailwind 4, ESLint, Prettier, Vitest, Playwright, Prisma 7 + Postgres via Docker, env validation, deterministic health check)",
       "P1-02: Data layer — User/Session/Organization/Membership/Project schema + migration, password hashing (scrypt), session lifecycle, tenant-aware authorization (requireOrganizationMembership/requireProjectAccess), organization/project service layer with tenant-isolation integration tests against a real Postgres test database",
       "P1-03: Canonical Product State (append-only versioned), Product DNA (versioned with merge-not-erase partial updates), Product Memory (discrete typed entries), Product Knowledge relationships (typed node/edge graph with stable ids, same-project + no-self-loop constraints), all project-scoped and tenant-isolated",
       "P1-04: AI provider abstraction (MockAIProvider fully implemented, AnthropicAIProvider stubbed for Phase 3), Intent Resolver, deterministic Impact Analysis foundation, product-facing Decision Ledger with disclosure tiers (ROUTINE/IMPORTANT/CONSEQUENTIAL) and approval flow, Orchestration Contract change-flow skeleton wiring them together",
-      "P1-05: Platform-wide versioned Supported Capability Registry mirroring Master Spec §4.3 classification exactly, seeded with truthful Phase 1 status (auth/tenancy SUPPORTED_NOW, generation/payments/mobile/AI/governance/distribution/billing correctly deferred with spec citations), and a Feasibility Engine that looks up capability keys against the registry rather than inventing feasibility claims"
+      "P1-05: Platform-wide versioned Supported Capability Registry mirroring Master Spec §4.3 classification exactly, seeded with truthful Phase 1 status (auth/tenancy SUPPORTED_NOW, generation/payments/mobile/AI/governance/distribution/billing correctly deferred with spec citations), and a Feasibility Engine that looks up capability keys against the registry rather than inventing feasibility claims",
+      "P1-06: Requirements Engine (target-customer extraction, requirement derivation from Impact Analysis categories, open-question detection, capability-key suggestion grounded in the registry), Business Model Brief + monetization recommendations, unit-economics assumptions (all fields honestly labeled unknown/estimate, never fabricated), and generateProductIntelligence wiring all of it into a persisted Canonical Product State version, Product DNA version, Requirement knowledge nodes, and Product Memory entries; wired into beginChangeFlow for describe_idea intents"
     ],
     "active": [
-      "P1-06: Product Intelligence, Requirements Engine, Business Model Brief, unit economics"
+      "P1-07: Event Ledger, Evidence Ledger, Truth Status (product-facing)"
     ],
     "deferred": [],
     "blocked": []
   },
   "decisions": [
     "D-0001", "D-0002", "D-0003", "D-0004", "D-0005",
-    "D-0006", "D-0007", "D-0008", "D-0009"
+    "D-0006", "D-0007", "D-0008", "D-0009", "D-0010"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -40,8 +41,8 @@
   "testStatus": {
     "typecheck": "pass",
     "lint": "pass",
-    "unit": "pass (19/19: env 4, slug 4, mock-provider 4, anthropic-provider 1, impact-analysis 6)",
-    "integration": "pass (62/62: users 5, session 5, tenancy 7, product-state 5, product-dna 6, product-memory 4, product-knowledge 5, decisions 7, intent-resolver 3, change-flow 2, capability-registry 5, seed-data 3, feasibility 5)",
+    "unit": "pass (39/39: env 4, slug 4, mock-provider 4, anthropic-provider 1, impact-analysis 6, requirements-engine 10, business-intelligence 7, unit-economics 3)",
+    "integration": "pass (68/68: users 5, session 5, tenancy 7, product-state 5, product-dna 6, product-memory 4, product-knowledge 5, decisions 7, intent-resolver 3, change-flow 3, capability-registry 5, seed-data 3, feasibility 5, product-intelligence 5)",
     "e2e": "not run",
     "productionBuild": "pass"
   },
@@ -49,19 +50,18 @@
     "EV-0001", "EV-0002", "EV-0003", "EV-0004", "EV-0005", "EV-0006",
     "EV-0007", "EV-0008", "EV-0009", "EV-0010", "EV-0011", "EV-0012",
     "EV-0013", "EV-0014", "EV-0015", "EV-0016", "EV-0017", "EV-0018",
-    "EV-0019", "EV-0020", "EV-0021", "EV-0022"
+    "EV-0019", "EV-0020", "EV-0021", "EV-0022", "EV-0023", "EV-0024", "EV-0025"
   ],
   "knownLimitations": [
     "Auth/tenancy/product-state/orchestration/registry exist only as a service/library layer — no UI, no Server Actions, no HTTP routes wire them up yet. That is P1-10/P1-11.",
     "Tenant isolation is proven at the service+authz layer against a real database, not yet at the HTTP boundary (no routes exist to attack yet).",
-    "AI provider is mock-only; no live provider is connected (by design, Phase 3 scope per Master Spec §61).",
-    "Intent resolution and impact analysis are deterministic/keyword-based, not real language understanding.",
-    "assessFeasibility takes explicit capability keys, not raw text — the raw-text-to-capability-key mapping is P1-06's Requirements Engine job.",
-    "beginChangeFlow does not yet call assessFeasibility — wiring Feasibility into the change flow happens once P1-06's Requirements Engine can produce real capability keys from an idea.",
+    "AI provider is mock-only; no live provider is connected (by design, Phase 3 scope per Master Spec §61). Requirements Engine, Business Model Brief, and unit economics are deterministic/template-based, not real product or market intelligence.",
+    "Phase 1's own customer flow (§51) never requires an edit; full conversational editing with impact-aware regeneration is Phase 2 scope (§55, §57) and is not implemented.",
+    "No product-facing Truth Status yet — nothing currently labels these mock-generated artifacts as such to an end customer (P1-07, next, is what makes this honest disclosure customer-visible).",
     "Product Knowledge graph only exercises REQUIREMENT/WORKFLOW node types so far; no generation system yet produces Screen/Action/DataModel nodes (Phase 2 concern).",
     "No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end."
   ],
   "requiredCustomerActions": [],
   "requiredExternalActions": [],
-  "nextAction": "Begin P1-06: Product Intelligence, Requirements Engine, Business Model Brief, monetization recommendations, editable unit-economics assumptions, and operational-complexity analysis, generated via the mock AI provider and grounded in the Supported Capability Registry (Master Spec §17, §19-21)."
+  "nextAction": "Begin P1-07: product-facing Event Ledger, Evidence Ledger, and Truth Status data models and services, so every project can truthfully report implemented/planned/missing/blocked/unsupported/not-evaluated status in both Simple and Expert Mode (Master Spec §50, §53)."
 }
