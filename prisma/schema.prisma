@@ -303,3 +303,60 @@ model ProductKnowledgeEdge {
   @@index([projectId])
   @@map("product_knowledge_edges")
 }
+
+// ---------------------------------------------------------------------------
+// Capability and Feasibility Engine / Supported Capability Registry
+// (Master Spec §16). Platform-wide, not tenant-scoped — this is Pocket
+// Studio's own catalog of what it may promise, not customer data. Written
+// by internal seed/admin operations, read by the Feasibility Engine.
+// ---------------------------------------------------------------------------
+
+// Mirrors the Master Spec §4.3 classification exactly so the registry can
+// never drift from the governing taxonomy of what Pocket Studio may claim.
+enum CapabilityImplementationLevel {
+  SUPPORTED_NOW
+  SUPPORTED_WITH_CONFIGURATION
+  SUPPORTED_WITH_CUSTOMER_INTEGRATION
+  SUPPORTED_LATER_PHASE
+  PROTOTYPE_ONLY
+  PLANNING_ONLY
+  EXTERNAL_APPROVAL_REQUIRED
+  PROFESSIONAL_REVIEW_REQUIRED
+  NOT_CURRENTLY_SUPPORTED
+  UNSAFE_OR_PROHIBITED
+  INSUFFICIENT_INFORMATION
+}
+
+enum CapabilityRiskClass {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// Append-only per capabilityKey, same versioning pattern as ProductState/
+// ProductDNA: "current" is the latest version for a given key, and prior
+// versions remain inspectable evidence of what Pocket Studio used to
+// promise (or not) at a point in time.
+model CapabilityRegistryEntry {
+  id            String @id @default(cuid())
+  capabilityKey String
+  version       Int
+
+  label                String
+  category             String
+  outputTargets        Json?
+  implementationLevel  CapabilityImplementationLevel
+  requiredIntegrations Json?
+  evidenceStandard     String?
+  riskClass            CapabilityRiskClass
+  limitations          Json?
+  providerDependencies Json?
+  launchImplications   String?
+
+  createdAt       DateTime @default(now())
+  createdByUserId String?
+
+  @@unique([capabilityKey, version])
+  @@index([capabilityKey])
+  @@map("capability_registry_entries")
+}

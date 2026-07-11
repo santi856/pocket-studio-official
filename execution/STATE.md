@@ -7,7 +7,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase:** Phase 1 — Intelligence, Business Foundation, Trust Architecture, and Premium Experience
 - **Phase status:** active
 - **Milestone:** M1-foundation — repository/project foundation, durable multi-tenant state, provider abstraction
-- **Active implementation unit:** P1-05 (Capability/Feasibility Engine + Supported Capability Registry)
+- **Active implementation unit:** P1-06 (Product Intelligence, Requirements Engine, Business Model Brief, unit economics)
 
 ## Completed
 
@@ -69,12 +69,23 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
   keyword). Fixing this by requiring both-edge word boundaries then broke matching on ordinary plurals
   like "deposits". Settled on left-boundary-only matching (`D-0008`), with regression tests for both
   failure modes. 33 new tests (68 total in the suite). Evidence: `EV-0016`..`EV-0019`.
+- **P1-05 — Capability and Feasibility Engine, Supported Capability Registry.** Platform-wide (not
+  tenant-scoped — this is Pocket Studio's own policy, not customer data), append-only versioned per
+  `capabilityKey`, migration `20260711142316_capability_registry`. The `implementationLevel` enum
+  mirrors Master Spec §4.3's classification exactly. Seed data (`src/lib/registry/seed-data.ts`) is
+  deliberately truthful: only `auth.email_password` and `tenancy.organizations_and_projects` are
+  `SUPPORTED_NOW`; generation, payments, mobile, live AI, governance drafts, store distribution, and
+  Pocket Studio's own billing are all `SUPPORTED_LATER_PHASE` or `EXTERNAL_APPROVAL_REQUIRED`, each
+  citing the specific Master Spec section that defers it (`D-0009`) — the registry never overstates
+  what exists today. `assessFeasibility` looks capability keys up against the registry and reports
+  unrecognized keys explicitly rather than assuming support. 13 new tests (81 total). Evidence:
+  `EV-0020`..`EV-0022`.
 
 ## Active
 
-- P1-05: Capability and Feasibility Engine (Master Spec §16) and a versioned Supported Capability
-  Registry that determines what Pocket Studio may promise, feeding the "Determine Feasibility" stage of
-  the Orchestration Contract.
+- P1-06: Product Intelligence, Requirements Engine, Business Model Brief, monetization recommendations,
+  editable unit-economics assumptions, and operational-complexity analysis, generated via the mock AI
+  provider and grounded in the Supported Capability Registry (Master Spec §17, §19-21).
 
 ## Deferred
 
@@ -87,15 +98,17 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 ## Known Limitations (truthful, current)
 
-- Auth/tenancy/product-state/orchestration exist only as a service/library layer — no UI, Server
-  Actions, or HTTP routes wire them up yet (that is P1-10/P1-11). Tenant isolation is proven at the
-  service+authz layer against a real database, not yet at the HTTP boundary.
+- Auth/tenancy/product-state/orchestration/registry exist only as a service/library layer — no UI,
+  Server Actions, or HTTP routes wire them up yet (that is P1-10/P1-11). Tenant isolation is proven at
+  the service+authz layer against a real database, not yet at the HTTP boundary.
 - Intent resolution and impact analysis are deterministic/keyword-based, not real language
   understanding — must remain honestly disclosed in Truth Status once P1-07 exists.
-- `beginChangeFlow` implements only the early Orchestration Contract stages (intent → impact →
-  disclosure/approval); Feasibility, structured proposals, Change Set creation, artifact regeneration,
-  and Truth Status update are added by P1-05/P1-06/P1-07, extending this function rather than
-  duplicating it.
+- `assessFeasibility` takes explicit capability keys, not raw text — the raw-text-to-capability-key
+  mapping is P1-06's Requirements Engine job.
+- `beginChangeFlow` does not yet call `assessFeasibility` — wiring Feasibility into the change flow
+  happens once P1-06's Requirements Engine can produce real capability keys from an idea. Change Set
+  creation, artifact regeneration, and Truth Status update are added by P1-06/P1-07, extending this
+  function rather than duplicating it.
 - Product Knowledge graph only exercises REQUIREMENT/WORKFLOW node types so far; no generation system
   yet produces Screen/Action/DataModel nodes (Phase 2 concern).
 - AI provider is mock-only; no live provider is connected (by design, Phase 3 scope).
@@ -103,10 +116,10 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 ## Next Action
 
-Implement P1-05: the Capability and Feasibility Engine and a versioned Supported Capability Registry
-(Master Spec §16), classifying capabilities per §4.3 (supported now / with configuration / with
-integration / later phase / prototype only / not supported / etc.) so Product Intelligence generation
-(P1-06) has a real registry to consult rather than inventing feasibility claims.
+Implement P1-06: Product Intelligence, a Requirements Engine, Business Model Brief, monetization
+recommendations, editable unit-economics assumptions, and operational-complexity analysis — generated
+through the mock AI provider, grounded in the Supported Capability Registry so feasibility claims are
+never invented, and persisted as a new Canonical Product State version (Master Spec §17, §19-21).
 
 ## Decision Ledger Pointer
 
