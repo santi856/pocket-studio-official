@@ -7,7 +7,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase:** Phase 1 — Intelligence, Business Foundation, Trust Architecture, and Premium Experience
 - **Phase status:** active
 - **Milestone:** M1-foundation — repository/project foundation, durable multi-tenant state, provider abstraction
-- **Active implementation unit:** P1-04 (Orchestration Contract, Intent Resolver, Impact Analysis foundation)
+- **Active implementation unit:** P1-05 (Capability/Feasibility Engine + Supported Capability Registry)
 
 ## Completed
 
@@ -51,12 +51,30 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
   distinct states in JS but not distinguishable the way the code first assumed. Fixed at the type level
   so the public contract only recognizes two states (`D-0006`). 28 integration tests across the four
   models. Evidence: `EV-0013`..`EV-0015`.
+- **P1-04 — Orchestration Contract, Intent Resolver, Impact Analysis foundation, Decision Ledger.**
+  AI provider abstraction (`src/lib/ai/`): one interface, `MockAIProvider` fully implemented
+  (deterministic, no external calls — `summary` echoes input rather than paraphrasing it, so it never
+  misrepresents itself as real understanding), `AnthropicAIProvider` stubbed to throw
+  `ProviderNotImplementedError` since real provider connections are Phase 3 scope (Master Spec §61,
+  `D-0007`). Intent Resolver classifies a submission as `describe_idea` vs. `edit_request` by checking
+  for existing Product State. Impact Analysis (`src/lib/orchestration/impact-analysis.ts`) is a
+  deterministic keyword categorizer against the Master Spec §14 impact categories, flagging
+  monetization/security/privacy/governance as consequential per §4.2. Product-facing Decision Ledger
+  (`Decision` model, distinct from this file's build-process ledger) implements §15 disclosure tiers:
+  ROUTINE auto-applies, IMPORTANT is recommended-but-not-applied, CONSEQUENTIAL holds
+  `PENDING_APPROVAL` until an explicit approve/reject response. `beginChangeFlow` wires intent
+  resolution → impact analysis → decision recording into the early stages of the §13 Orchestration
+  Contract flow. Caught and fixed a real bug during implementation: plain substring matching flagged
+  "Build a premium booking app" as touching "screens" because "build" contains "ui" (the screens
+  keyword). Fixing this by requiring both-edge word boundaries then broke matching on ordinary plurals
+  like "deposits". Settled on left-boundary-only matching (`D-0008`), with regression tests for both
+  failure modes. 33 new tests (68 total in the suite). Evidence: `EV-0016`..`EV-0019`.
 
 ## Active
 
-- P1-04: Orchestration Contract change-flow skeleton (User Intent → Load State → Resolve Intent →
-  Feasibility → Impact Analysis → ... → Truth Status → Respond), product-facing Decision Ledger,
-  disclosure tiers, and approval model. Traces to Master Spec §13 and §15.
+- P1-05: Capability and Feasibility Engine (Master Spec §16) and a versioned Supported Capability
+  Registry that determines what Pocket Studio may promise, feeding the "Determine Feasibility" stage of
+  the Orchestration Contract.
 
 ## Deferred
 
@@ -69,21 +87,26 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 ## Known Limitations (truthful, current)
 
-- Auth/tenancy/product-state exist only as a service/library layer — no UI, Server Actions, or HTTP
-  routes wire them up yet (that is P1-10/P1-11). Tenant isolation is proven at the service+authz layer
-  against a real database, not yet at the HTTP boundary, because no HTTP routes exist yet to test.
-- Product Knowledge graph only exercises REQUIREMENT/WORKFLOW node types so far; no generation system yet
-  produces Screen/Action/DataModel nodes (Phase 2 concern). Edge-type/direction rules are not enforced,
-  only same-project + non-self-loop.
-- No product-facing Orchestration Contract / Intent Resolver / Decision Ledger yet (P1-04, active now).
-- AI provider is mock-only; no live provider is connected (by design).
+- Auth/tenancy/product-state/orchestration exist only as a service/library layer — no UI, Server
+  Actions, or HTTP routes wire them up yet (that is P1-10/P1-11). Tenant isolation is proven at the
+  service+authz layer against a real database, not yet at the HTTP boundary.
+- Intent resolution and impact analysis are deterministic/keyword-based, not real language
+  understanding — must remain honestly disclosed in Truth Status once P1-07 exists.
+- `beginChangeFlow` implements only the early Orchestration Contract stages (intent → impact →
+  disclosure/approval); Feasibility, structured proposals, Change Set creation, artifact regeneration,
+  and Truth Status update are added by P1-05/P1-06/P1-07, extending this function rather than
+  duplicating it.
+- Product Knowledge graph only exercises REQUIREMENT/WORKFLOW node types so far; no generation system
+  yet produces Screen/Action/DataModel nodes (Phase 2 concern).
+- AI provider is mock-only; no live provider is connected (by design, Phase 3 scope).
 - No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end.
 
 ## Next Action
 
-Implement P1-04: the Orchestration Contract change-flow skeleton, an Intent Resolver, Impact Analysis
-foundation, and a product-facing Decision Ledger with disclosure tiers (routine/important/consequential)
-and an approval model, per Master Spec §13 and §15.
+Implement P1-05: the Capability and Feasibility Engine and a versioned Supported Capability Registry
+(Master Spec §16), classifying capabilities per §4.3 (supported now / with configuration / with
+integration / later phase / prototype only / not supported / etc.) so Product Intelligence generation
+(P1-06) has a real registry to consult rather than inventing feasibility claims.
 
 ## Decision Ledger Pointer
 

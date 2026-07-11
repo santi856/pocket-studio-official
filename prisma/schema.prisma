@@ -87,10 +87,61 @@ model Project {
   memoryEntries      ProductMemoryEntry[]
   knowledgeNodes     ProductKnowledgeNode[]
   knowledgeEdges     ProductKnowledgeEdge[]
+  decisions          Decision[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
   @@map("projects")
+}
+
+enum DecisionDisclosureTier {
+  ROUTINE
+  IMPORTANT
+  CONSEQUENTIAL
+}
+
+enum DecisionApprovalStatus {
+  AUTO_APPLIED
+  RECOMMENDED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+// Product-facing Decision Ledger (Master Spec §15) — distinct from
+// execution/decisions/ledger.jsonl, which records *this build's own*
+// architecture decisions. This table records decisions Pocket Studio makes
+// or recommends *about a customer's product*. Disclosure tiers: ROUTINE
+// applies automatically and is recorded for the record; IMPORTANT
+// recommends a default and summarizes it; CONSEQUENTIAL must be explained
+// and explicitly approved before taking effect in production.
+model Decision {
+  id             String                 @id @default(cuid())
+  projectId      String
+  project        Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  source         String
+  summary        String
+  recommendation String?
+  alternatives   Json?
+  reason         String?
+  impact         Json?
+  risk           String?
+  disclosureTier DecisionDisclosureTier
+  approvalStatus DecisionApprovalStatus
+
+  customerResponse  String?
+  respondedAt       DateTime?
+  respondedByUserId String?
+
+  effectiveVersion String?
+  evidenceRef      String?
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  @@index([projectId])
+  @@index([projectId, approvalStatus])
+  @@map("decisions")
 }
 
 // ---------------------------------------------------------------------------
