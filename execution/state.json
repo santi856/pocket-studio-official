@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0",
+  "generatedBy": "execution-protocol-v1.0-session-init",
+  "lastUpdated": "2026-07-11T00:00:00Z",
+  "governanceCommit": "25a33f0",
+  "phase": {
+    "current": "phase-1",
+    "status": "active",
+    "goal": "PHASE 1 — INTELLIGENCE, BUSINESS FOUNDATION, TRUST ARCHITECTURE, AND PREMIUM EXPERIENCE"
+  },
+  "milestone": {
+    "current": "M1-foundation",
+    "description": "Repository/project foundation, durable multi-tenant state, provider abstraction"
+  },
+  "activeImplementationUnit": null,
+  "requirements": {
+    "completed": [],
+    "active": [],
+    "deferred": [],
+    "blocked": []
+  },
+  "decisions": [],
+  "migrations": [],
+  "testStatus": {
+    "typecheck": "not run",
+    "lint": "not run",
+    "unit": "not run",
+    "integration": "not run",
+    "e2e": "not run",
+    "productionBuild": "not run"
+  },
+  "evidenceRefs": [
+    "EV-0001"
+  ],
+  "knownLimitations": [
+    "No implementation exists yet beyond governance baseline and durable execution scaffolding."
+  ],
+  "requiredCustomerActions": [],
+  "requiredExternalActions": [],
+  "nextAction": "Decompose Phase 1 into dependency-aware implementation units, then begin M1-foundation: initialize Next.js App Router project with strict TypeScript, Tailwind, linting, Vitest, and Playwright foundations."
+}
