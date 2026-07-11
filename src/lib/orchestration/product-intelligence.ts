@@ -5,6 +5,8 @@ import { updateProductDNA } from "@/lib/product/product-dna";
 import { addProductMemoryEntry } from "@/lib/product/product-memory";
 import { createKnowledgeNode } from "@/lib/product/product-knowledge";
 import { assessFeasibility } from "@/lib/orchestration/feasibility";
+import { syncTruthStatusFromFeasibility } from "@/lib/orchestration/truth-status-sync";
+import { recordEvent } from "@/lib/product/events";
 import {
   deriveOpenQuestions,
   deriveRequirements,
@@ -114,6 +116,14 @@ export async function generateProductIntelligence(
       content: question,
     });
   }
+
+  await syncTruthStatusFromFeasibility(actorUserId, projectId, feasibilityReport);
+
+  await recordEvent(actorUserId, projectId, {
+    type: "PRODUCT_STATE_VERSION_CREATED",
+    summary: `Generated Product Intelligence and created Product State version ${productState.version}.`,
+    data: { version: productState.version, requirementCount: requirements.length },
+  });
 
   return { productState, productDNA, requirements, openQuestions, feasibilityReport };
 }

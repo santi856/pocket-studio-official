@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
+import { recordEvent } from "@/lib/product/events";
 import type {
   Decision,
   DecisionApprovalStatus,
@@ -54,7 +55,7 @@ export async function recordDecision(
 ): Promise<Decision> {
   await requireProjectAccess(actorUserId, projectId, "MEMBER");
 
-  return db.decision.create({
+  const decision = await db.decision.create({
     data: {
       projectId,
       source: input.source,
@@ -71,6 +72,14 @@ export async function recordDecision(
       createdByUserId: actorUserId,
     },
   });
+
+  await recordEvent(actorUserId, projectId, {
+    type: "DECISION_RECORDED",
+    summary: `Decision recorded (${decision.disclosureTier}): ${decision.summary}`,
+    data: { decisionId: decision.id, disclosureTier: decision.disclosureTier },
+  });
+
+  return decision;
 }
 
 export async function respondToDecision(
@@ -81,7 +90,7 @@ export async function respondToDecision(
 ): Promise<Decision> {
   await requireProjectAccess(actorUserId, projectId, "MEMBER");
 
-  return db.$transaction(async (tx) => {
+  const updated = await db.$transaction(async (tx) => {
     const decision = await tx.decision.findFirst({ where: { id: decisionId, projectId } });
 
     if (!decision || decision.approvalStatus !== "PENDING_APPROVAL") {
@@ -98,6 +107,14 @@ export async function respondToDecision(
       },
     });
   });
+
+  await recordEvent(actorUserId, projectId, {
+    type: "DECISION_RESPONDED",
+    summary: `Decision ${updated.approvalStatus.toLowerCase()}: ${updated.summary}`,
+    data: { decisionId: updated.id, approvalStatus: updated.approvalStatus },
+  });
+
+  return updated;
 }
 
 export async function listDecisions(

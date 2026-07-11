@@ -7,7 +7,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase:** Phase 1 — Intelligence, Business Foundation, Trust Architecture, and Premium Experience
 - **Phase status:** active
 - **Milestone:** M1-foundation — repository/project foundation, durable multi-tenant state, provider abstraction
-- **Active implementation unit:** P1-07 (Event Ledger, Evidence Ledger, Truth Status — product-facing)
+- **Active implementation unit:** P1-08 (Integrations, credential-vault architecture, governance profile)
 
 ## Completed
 
@@ -96,12 +96,25 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
   — Phase 1's own customer flow (§51) never requires an edit, so `edit_request` handling stays at the
   disclosure/approval level until Phase 2's conversational editing (§55, §57) (`D-0010`). 25 new tests
   (107 total). Evidence: `EV-0023`..`EV-0025`.
+- **P1-07 — Event Ledger, Evidence Ledger, Truth Status (product-facing).** `ProductEvent` is an
+  append-only audit trail; `ProductEvidence` backs every claim with a verifiable record; `TruthStatusEntry`
+  is versioned per `(projectId, subjectKey)`, same latest-wins pattern as the other append-only models.
+  `syncTruthStatusFromFeasibility` maps a capability's *platform* `implementationLevel` to a conservative
+  *per-project* status: `SUPPORTED_NOW → IMPLEMENTED`, every `SUPPORTED_WITH_*`/`SUPPORTED_LATER_PHASE`/
+  `PROTOTYPE_ONLY`/`PLANNING_ONLY → PLANNED`, `EXTERNAL_APPROVAL_REQUIRED`/`PROFESSIONAL_REVIEW_REQUIRED
+  → BLOCKED`, `NOT_CURRENTLY_SUPPORTED`/`UNSAFE_OR_PROHIBITED → UNSUPPORTED`, and no registry entry
+  (or `INSUFFICIENT_INFORMATION`) `→ NOT_EVALUATED` — a platform capability being ready does not mean
+  anything was built for a specific project (Master Spec §4.4, `D-0011`). Every status entry references
+  the `ProductEvidence` record that justifies it. Wired into `generateProductIntelligence` (syncs Truth
+  Status from the Feasibility Report, records a `PRODUCT_STATE_VERSION_CREATED` event) and the Decision
+  Ledger (`DECISION_RECORDED`/`DECISION_RESPONDED` events). 15 new tests plus 2 pre-existing suites
+  re-verified against the new side effects (122 total). Evidence: `EV-0026`..`EV-0029`.
 
 ## Active
 
-- P1-07: product-facing Event Ledger, Evidence Ledger, and Truth Status data models and services, so
-  every project can truthfully report implemented/planned/missing/blocked/unsupported/not-evaluated
-  status in both Simple and Expert Mode (Master Spec §50, §53).
+- P1-08: Integration Requirements tracking, secure credential-vault architecture (encrypted
+  server-side, never in chat/bundles/prompts/logs), and governance profile/requirement architecture plus
+  policy-document model scaffolding (Master Spec §4.7, §30, §32, §34).
 
 ## Deferred
 
@@ -114,25 +127,27 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 ## Known Limitations (truthful, current)
 
-- Auth/tenancy/product-state/orchestration/registry exist only as a service/library layer — no UI,
-  Server Actions, or HTTP routes wire them up yet (that is P1-10/P1-11). Tenant isolation is proven at
-  the service+authz layer against a real database, not yet at the HTTP boundary.
-- AI provider is mock-only; no live provider is connected (by design, Phase 3 scope). Requirements
-  Engine, Business Model Brief, and unit economics are deterministic/template-based, not real product or
-  market intelligence — must remain honestly disclosed once Truth Status is customer-visible.
+- Auth/tenancy/product-state/orchestration/registry/truth-status exist only as a service/library layer —
+  no UI, Server Actions, or HTTP routes wire them up yet (that is P1-10/P1-11). Tenant isolation is
+  proven at the service+authz layer against a real database, not yet at the HTTP boundary.
+- AI provider is mock-only; Requirements Engine, Business Model Brief, and unit economics are
+  deterministic/template-based, not real product or market intelligence — but this is now an honest,
+  queryable Truth Status fact per project, not just a code comment.
+- Evidence in Phase 1 is necessarily about intelligence-generation claims (registry lookups), not
+  implementation/test/build/deployment evidence, since no generation system exists yet (Phase 2).
 - Phase 1's own customer flow (§51) never requires an edit; full conversational editing with
   impact-aware regeneration is Phase 2 scope (§55, §57) and is not implemented.
-- No product-facing Truth Status yet — nothing currently makes the "this is mock-generated" disclosure
-  customer-visible (P1-07, active now, is what closes this gap).
 - Product Knowledge graph only exercises REQUIREMENT/WORKFLOW node types so far; no generation system
   yet produces Screen/Action/DataModel nodes (Phase 2 concern).
+- No customer-owned integrations, credential vault, or governance profile yet — P1-08, active now.
 - No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end.
 
 ## Next Action
 
-Implement P1-07: product-facing Event Ledger, Evidence Ledger, and Truth Status models/services (Master
-Spec §50, §53) so implemented/planned/missing/blocked/unsupported/not-evaluated status is a real,
-queryable, tenant-scoped fact about each project — not just something disclosed in code comments.
+Implement P1-08: an Integration Requirements model tracking category/purpose/required-or-optional/
+provider options/ownership/connection status (Master Spec §30), a secure credential-vault architecture
+(encrypted server-side references, never secrets in chat/bundles/prompts/logs — §4.7), and a governance
+profile/requirement architecture plus policy-document model scaffolding (§32, §34).
 
 ## Decision Ledger Pointer
 

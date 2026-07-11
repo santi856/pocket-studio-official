@@ -88,6 +88,9 @@ model Project {
   knowledgeNodes     ProductKnowledgeNode[]
   knowledgeEdges     ProductKnowledgeEdge[]
   decisions          Decision[]
+  events             ProductEvent[]
+  evidenceRecords    ProductEvidence[]
+  truthStatuses      TruthStatusEntry[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -359,4 +362,101 @@ model CapabilityRegistryEntry {
   @@unique([capabilityKey, version])
   @@index([capabilityKey])
   @@map("capability_registry_entries")
+}
+
+// ---------------------------------------------------------------------------
+// Product-facing Event Ledger, Evidence Ledger, and Truth Status (Master
+// Spec §50, §53). Distinct from execution/{evidence,decisions}/*.jsonl,
+// which record this *build's own* process — these record facts about a
+// customer's project, tenant-scoped like everything else in this section.
+// ---------------------------------------------------------------------------
+
+enum ProductEventType {
+  PRODUCT_STATE_VERSION_CREATED
+  PRODUCT_DNA_VERSION_CREATED
+  DECISION_RECORDED
+  DECISION_RESPONDED
+  TRUTH_STATUS_UPDATED
+}
+
+// Append-only audit trail of state-changing actions on a project. Never
+// updated or deleted — a wrong past event is corrected by a new event, not
+// by rewriting history (same principle as the append-only versioned models
+// elsewhere in this schema).
+model ProductEvent {
+  id          String           @id @default(cuid())
+  projectId   String
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type        ProductEventType
+  summary     String
+  data        Json?
+  actorUserId String?
+  createdAt   DateTime         @default(now())
+
+  @@index([projectId])
+  @@index([projectId, type])
+  @@map("product_events")
+}
+
+enum ProductEvidenceType {
+  FEASIBILITY_ASSESSMENT
+  REQUIREMENT_DERIVATION
+  STRUCTURED_MANUAL_VERIFICATION
+}
+
+// Backs Truth Status claims with a verifiable record, mirroring the
+// Evidence Contract shape from Execution Protocol §10 but scoped to a
+// customer's project rather than this build's own process. Phase 1 has no
+// generated application to test/build/deploy yet, so evidence here is
+// necessarily about *intelligence-generation* claims (what was assessed,
+// how, and with what result) — not implementation evidence, which only
+// becomes possible once Phase 2 generation exists.
+model ProductEvidence {
+  id                 String              @id @default(cuid())
+  projectId          String
+  project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  evidenceType       ProductEvidenceType
+  subjectKey         String
+  verificationMethod String
+  result             String
+  limitations        String?
+  createdByUserId    String?
+  createdAt          DateTime            @default(now())
+
+  @@index([projectId])
+  @@index([projectId, subjectKey])
+  @@map("product_evidence")
+}
+
+enum TruthStatusValue {
+  IMPLEMENTED
+  PLANNED
+  MISSING
+  BLOCKED
+  UNSUPPORTED
+  NOT_EVALUATED
+}
+
+// Append-only versioned per (projectId, subjectKey) — same "latest wins,
+// history preserved" pattern as ProductState/ProductDNA/CapabilityRegistry.
+// subjectKey is typically a Supported Capability Registry key so a
+// project's Truth Status can be cross-referenced against the platform
+// registry that justifies it.
+model TruthStatusEntry {
+  id              String           @id @default(cuid())
+  projectId       String
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  subjectKey      String
+  subjectLabel    String
+  version         Int
+  status          TruthStatusValue
+  evidenceRef     String?
+  rationale       String?
+  createdByUserId String?
+  createdAt       DateTime         @default(now())
+
+  @@unique([projectId, subjectKey, version])
+  @@index([projectId])
+  @@index([projectId, subjectKey])
+  @@map("truth_status_entries")
 }

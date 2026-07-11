@@ -8,6 +8,8 @@ import { createProject } from "@/lib/services/projects";
 import { seedCapabilityRegistry } from "@/lib/registry/seed-data";
 import { listProductMemoryEntries } from "@/lib/product/product-memory";
 import { listKnowledgeNodes } from "@/lib/product/product-knowledge";
+import { listEvents } from "@/lib/product/events";
+import { listLatestTruthStatuses } from "@/lib/product/truth-status";
 import { generateProductIntelligence } from "./product-intelligence";
 
 describe("generateProductIntelligence", () => {
@@ -89,6 +91,22 @@ describe("generateProductIntelligence", () => {
 
     expect(facts.some((f) => f.content.includes("Build a booking app."))).toBe(true);
     expect(questions.length).toBeGreaterThan(0);
+  });
+
+  it("syncs Truth Status from the Feasibility Report and records a PRODUCT_STATE_VERSION_CREATED event", async () => {
+    const { owner, project } = await seedProject();
+
+    await generateProductIntelligence(owner.id, project.id, "Build a booking app.");
+
+    const statuses = await listLatestTruthStatuses(owner.id, project.id);
+    const webAppStatus = statuses.find((s) => s.subjectKey === "generation.full_stack_web_app");
+    expect(webAppStatus?.status).toBe("PLANNED");
+    expect(webAppStatus?.evidenceRef).toBeTruthy();
+
+    const events = await listEvents(owner.id, project.id, {
+      type: "PRODUCT_STATE_VERSION_CREATED",
+    });
+    expect(events).toHaveLength(1);
   });
 
   it("flags an unrecognized capability instead of assuming support when the registry is unseeded", async () => {
