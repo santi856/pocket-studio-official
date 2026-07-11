@@ -15,5 +15,11 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
     exclude: ["e2e/**", "node_modules/**"],
+    // Integration tests share one real Postgres test database and each
+    // resets it in beforeEach. Running test *files* in parallel lets one
+    // file's reset wipe rows another file's test just created (observed:
+    // spurious foreign-key violations). Sequential file execution avoids
+    // the race without needing a per-file database.
+    fileParallelism: false,
   },
 });

@@ -7,7 +7,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase:** Phase 1 — Intelligence, Business Foundation, Trust Architecture, and Premium Experience
 - **Phase status:** active
 - **Milestone:** M1-foundation — repository/project foundation, durable multi-tenant state, provider abstraction
-- **Active implementation unit:** P1-02 (data layer — users, auth, sessions, orgs, memberships, projects)
+- **Active implementation unit:** P1-03 (Canonical Product State, Product DNA, Product Memory, Knowledge relationships)
 
 ## Completed
 
@@ -23,11 +23,25 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
   (typecheck, lint, format check, unit tests, production build, manual runtime smoke test) passes —
   see `EV-0002`..`EV-0006`. Next.js 16 / Prisma 7 breaking changes vs. older conventions documented in
   `D-0002`.
+- **P1-02 — Data layer.** Prisma schema + first migration (`20260711133038_init_identity_and_tenancy`)
+  for User, Session, Organization, Membership (role enum: OWNER/ADMIN/MEMBER), Project — applied to both
+  the dev database and a dedicated `pocket_studio_test` database (see `docker/postgres-init/`). Password
+  hashing via Node's built-in scrypt (`D-0004`, no new native-binding dependency). Opaque, hashed session
+  tokens in httpOnly cookies. The tenant-isolation choke point (`src/lib/tenancy/authz.ts`:
+  `requireOrganizationMembership` / `requireProjectAccess`) resolves a project's *actual* owning
+  organization before checking membership — a caller-supplied organizationId is never trusted directly.
+  17 integration tests run against the real test database (not mocks) prove: same-tenant access works,
+  cross-tenant organization and project access is denied, project creation is denied for non-members (and
+  verified no row is created), minimum-role enforcement works, and a nonexistent project id fails closed
+  without leaking existence. Caught and fixed a real cross-file test-parallelism race where three
+  integration test files sharing one Postgres database stomped on each other's fixtures (`D-0005`).
+  Evidence: `EV-0007`..`EV-0012`.
 
 ## Active
 
-- P1-02: Prisma schema + migrations for User, Session, Organization, Membership, Project; server-side
-  authorization; tenant-aware service layer. Traces to Master Spec §50 and §53 (tenant isolation tested).
+- P1-03: persisted, versioned Canonical Product State, Product DNA, Product Memory, and Product Knowledge
+  relationships (Requirement→Workflow→Screen→Action→Data Model→Permission→Integration→Implementation→
+  Test→Evidence), scoped per project/tenant. Traces to Master Spec §9-12.
 
 ## Deferred
 
@@ -40,14 +54,17 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 ## Known Limitations (truthful, current)
 
-- No data models exist yet: no users, auth, organizations, projects, or Canonical Product State.
+- Auth/tenancy exist only as a service/library layer — no UI, Server Actions, or HTTP routes wire them up
+  yet (that is P1-10/P1-11). Tenant isolation is proven at the service+authz layer against a real
+  database, not yet at the HTTP boundary, because no HTTP routes exist yet to test.
+- No Canonical Product State / Product DNA / Product Memory yet (P1-03, active now).
 - AI provider is mock-only; no live provider is connected (by design).
 - No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end.
 
 ## Next Action
 
-Implement P1-02: Prisma schema + migrations for User, Session, Organization, Membership (roles), Project,
-with server-side authorization and a tenant-aware service layer, plus tenant-isolation tests.
+Implement P1-03: Canonical Product State, Product DNA, Product Memory, and Product Knowledge relationship
+data models, project-scoped and versioned, per Master Spec §9-12.
 
 ## Decision Ledger Pointer
 

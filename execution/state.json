@@ -12,34 +12,40 @@
     "current": "M1-foundation",
     "description": "Repository/project foundation, durable multi-tenant state, provider abstraction"
   },
-  "activeImplementationUnit": "P1-02",
+  "activeImplementationUnit": "P1-03",
   "requirements": {
     "completed": [
-      "P1-01: Repo/app foundation (Next.js 16 App Router, strict TypeScript, Tailwind 4, ESLint, Prettier, Vitest, Playwright, Prisma 7 + Postgres via Docker, env validation, deterministic health check)"
+      "P1-01: Repo/app foundation (Next.js 16 App Router, strict TypeScript, Tailwind 4, ESLint, Prettier, Vitest, Playwright, Prisma 7 + Postgres via Docker, env validation, deterministic health check)",
+      "P1-02: Data layer — User/Session/Organization/Membership/Project schema + migration, password hashing (scrypt), session lifecycle, tenant-aware authorization (requireOrganizationMembership/requireProjectAccess), organization/project service layer with tenant-isolation integration tests against a real Postgres test database"
     ],
     "active": [
-      "P1-02: Data layer — users, auth, sessions, orgs, memberships, projects"
+      "P1-03: Canonical Product State, Product DNA, Product Memory, Knowledge relationships"
     ],
     "deferred": [],
     "blocked": []
   },
-  "decisions": ["D-0001", "D-0002", "D-0003"],
-  "migrations": [],
+  "decisions": ["D-0001", "D-0002", "D-0003", "D-0004", "D-0005"],
+  "migrations": ["20260711133038_init_identity_and_tenancy"],
   "testStatus": {
     "typecheck": "pass",
     "lint": "pass",
-    "unit": "pass (4/4)",
-    "integration": "not run",
+    "unit": "pass (8/8: env 4, slug 4)",
+    "integration": "pass (17/17: users 5, session 5, tenant-isolation 7)",
     "e2e": "not run",
     "productionBuild": "pass"
   },
-  "evidenceRefs": ["EV-0001", "EV-0002", "EV-0003", "EV-0004", "EV-0005", "EV-0006"],
+  "evidenceRefs": [
+    "EV-0001", "EV-0002", "EV-0003", "EV-0004", "EV-0005", "EV-0006",
+    "EV-0007", "EV-0008", "EV-0009", "EV-0010", "EV-0011", "EV-0012"
+  ],
   "knownLimitations": [
-    "No data models exist yet (P1-02 starts next): no users, auth, orgs, projects, or Canonical Product State.",
-    "AI provider is mock-only; no live provider is connected (by design per Execution Protocol §8).",
+    "Auth/tenancy exist only as a service/library layer — no UI, no Server Actions, no HTTP routes wire them up yet. That is P1-10/P1-11.",
+    "Tenant isolation is proven at the service+authz layer against a real database, not yet at the HTTP boundary (no routes exist to attack yet).",
+    "AI provider is mock-only; no live provider is connected (by design).",
+    "No Canonical Product State / Product DNA / Product Memory yet (P1-03, next).",
     "No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end."
   ],
   "requiredCustomerActions": [],
   "requiredExternalActions": [],
-  "nextAction": "Begin P1-02: Prisma schema + migrations for User, Session, Organization, Membership, Project with server-side authorization and tenant-aware service layer."
+  "nextAction": "Begin P1-03: persisted, versioned Canonical Product State, Product DNA, Product Memory, and Product Knowledge relationships (Requirement→Workflow→Screen→Action→Data Model→Permission→Integration→Implementation→Test→Evidence), scoped per project/tenant."
 }
