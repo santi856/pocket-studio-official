@@ -16,6 +16,14 @@ const serverEnvSchema = z.object({
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters"),
   AI_PROVIDER: z.enum(["mock", "anthropic"]).default("mock"),
   ANTHROPIC_API_KEY: z.string().optional(),
+  // Base64-encoded 32-byte (256-bit) AES-256-GCM key for the credential
+  // vault (Master Spec §4.7, §30). Generate with: openssl rand -base64 32
+  CREDENTIAL_ENCRYPTION_KEY: z
+    .string()
+    .refine(
+      (value) => Buffer.from(value, "base64").length === 32,
+      "CREDENTIAL_ENCRYPTION_KEY must decode from base64 to exactly 32 bytes",
+    ),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

@@ -12,39 +12,41 @@
     "current": "M1-foundation",
     "description": "Repository/project foundation, durable multi-tenant state, provider abstraction"
   },
-  "activeImplementationUnit": "P1-08",
+  "activeImplementationUnit": "P1-09",
   "requirements": {
     "completed": [
       "P1-01: Repo/app foundation (Next.js 16 App Router, strict TypeScript, Tailwind 4, ESLint, Prettier, Vitest, Playwright, Prisma 7 + Postgres via Docker, env validation, deterministic health check)",
-      "P1-02: Data layer — User/Session/Organization/Membership/Project schema + migration, password hashing (scrypt), session lifecycle, tenant-aware authorization (requireOrganizationMembership/requireProjectAccess), organization/project service layer with tenant-isolation integration tests against a real Postgres test database",
-      "P1-03: Canonical Product State (append-only versioned), Product DNA (versioned with merge-not-erase partial updates), Product Memory (discrete typed entries), Product Knowledge relationships (typed node/edge graph with stable ids, same-project + no-self-loop constraints), all project-scoped and tenant-isolated",
-      "P1-04: AI provider abstraction (MockAIProvider fully implemented, AnthropicAIProvider stubbed for Phase 3), Intent Resolver, deterministic Impact Analysis foundation, product-facing Decision Ledger with disclosure tiers (ROUTINE/IMPORTANT/CONSEQUENTIAL) and approval flow, Orchestration Contract change-flow skeleton wiring them together",
-      "P1-05: Platform-wide versioned Supported Capability Registry mirroring Master Spec §4.3 classification exactly, seeded with truthful Phase 1 status, and a Feasibility Engine that looks up capability keys against the registry rather than inventing feasibility claims",
-      "P1-06: Requirements Engine, Business Model Brief + monetization recommendations, unit-economics assumptions (all fields honestly labeled unknown/estimate, never fabricated), and generateProductIntelligence wiring all of it into a persisted Canonical Product State version, Product DNA version, Requirement knowledge nodes, and Product Memory entries; wired into beginChangeFlow for describe_idea intents",
-      "P1-07: Product-facing Event Ledger (append-only audit trail), Evidence Ledger (backs every Truth Status claim with a verifiable record), and Truth Status (versioned per subjectKey, mapped conservatively from platform capability level to per-project status — SUPPORTED_NOW never auto-implies IMPLEMENTED for a project, only the platform's own already-built capabilities do); wired into generateProductIntelligence and the Decision Ledger"
+      "P1-02: Data layer — User/Session/Organization/Membership/Project schema + migration, password hashing, session lifecycle, tenant-aware authorization, tenant-isolation integration tests",
+      "P1-03: Canonical Product State, Product DNA, Product Memory, Product Knowledge relationships, all project-scoped and tenant-isolated",
+      "P1-04: AI provider abstraction, Intent Resolver, Impact Analysis foundation, product-facing Decision Ledger, Orchestration Contract change-flow skeleton",
+      "P1-05: Platform-wide versioned Supported Capability Registry mirroring Master Spec §4.3, seeded truthfully, and a Feasibility Engine",
+      "P1-06: Requirements Engine, Business Model Brief + monetization recommendations, unit-economics assumptions, generateProductIntelligence wired into beginChangeFlow",
+      "P1-07: Product-facing Event Ledger, Evidence Ledger, and Truth Status, mapped conservatively from platform capability level to per-project status, wired into generateProductIntelligence and the Decision Ledger",
+      "P1-08: Integration Requirements tracking (upsert-by-category, Master Spec §30), AES-256-GCM credential vault (fresh IV per call, tamper-detected via GCM auth tag, narrow plaintext accessor separate from broadly-safe metadata), Governance Profile (one mutable profile per project, §32), and versioned Policy Document scaffolding per (type, language) (§34)"
     ],
     "active": [
-      "P1-08: Integrations, credential-vault architecture, governance profile"
+      "P1-09: Plans/entitlements/billing-state architecture (no live billing)"
     ],
     "deferred": [],
     "blocked": []
   },
   "decisions": [
-    "D-0001", "D-0002", "D-0003", "D-0004", "D-0005", "D-0006",
-    "D-0007", "D-0008", "D-0009", "D-0010", "D-0011"
+    "D-0001", "D-0002", "D-0003", "D-0004", "D-0005", "D-0006", "D-0007",
+    "D-0008", "D-0009", "D-0010", "D-0011", "D-0012"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
     "20260711135504_product_state_dna_memory_knowledge",
     "20260711141234_decision_ledger",
     "20260711142316_capability_registry",
-    "20260711144025_event_evidence_truth_status"
+    "20260711144025_event_evidence_truth_status",
+    "20260711145046_integrations_credentials_governance_policy"
   ],
   "testStatus": {
     "typecheck": "pass",
     "lint": "pass",
-    "unit": "pass (39/39: env 4, slug 4, mock-provider 4, anthropic-provider 1, impact-analysis 6, requirements-engine 10, business-intelligence 7, unit-economics 3)",
-    "integration": "pass (83/83: users 5, session 5, tenancy 7, product-state 5, product-dna 6, product-memory 4, product-knowledge 5, decisions 7, intent-resolver 3, change-flow 3, capability-registry 5, seed-data 3, feasibility 5, product-intelligence 6, events 3, evidence 3, truth-status 4, truth-status-sync 4)",
+    "unit": "pass (44/44: env 4, slug 4, mock-provider 4, anthropic-provider 1, impact-analysis 6, requirements-engine 10, business-intelligence 7, unit-economics 3, crypto 5)",
+    "integration": "pass (101/101: users 5, session 5, tenancy 7, product-state 5, product-dna 6, product-memory 4, product-knowledge 5, decisions 7, intent-resolver 3, change-flow 3, capability-registry 5, seed-data 3, feasibility 5, product-intelligence 6, events 3, evidence 3, truth-status 4, truth-status-sync 4, vault 6, governance-profile 4, integrations 3, policy-documents 5)",
     "e2e": "not run",
     "productionBuild": "pass"
   },
@@ -53,19 +55,20 @@
     "EV-0007", "EV-0008", "EV-0009", "EV-0010", "EV-0011", "EV-0012",
     "EV-0013", "EV-0014", "EV-0015", "EV-0016", "EV-0017", "EV-0018",
     "EV-0019", "EV-0020", "EV-0021", "EV-0022", "EV-0023", "EV-0024",
-    "EV-0025", "EV-0026", "EV-0027", "EV-0028", "EV-0029"
+    "EV-0025", "EV-0026", "EV-0027", "EV-0028", "EV-0029", "EV-0030",
+    "EV-0031", "EV-0032", "EV-0033", "EV-0034"
   ],
   "knownLimitations": [
-    "Auth/tenancy/product-state/orchestration/registry/truth-status exist only as a service/library layer — no UI, no Server Actions, no HTTP routes wire them up yet. That is P1-10/P1-11.",
+    "Everything through P1-08 exists only as a service/library layer — no UI, no Server Actions, no HTTP routes wire it up yet. That is P1-10/P1-11.",
     "Tenant isolation is proven at the service+authz layer against a real database, not yet at the HTTP boundary (no routes exist to attack yet).",
-    "AI provider is mock-only; Requirements Engine, Business Model Brief, and unit economics are deterministic/template-based, not real product or market intelligence — but this is now an honest, queryable Truth Status fact per project, not just a code comment.",
-    "Evidence in Phase 1 is necessarily about intelligence-generation claims (registry lookups), not implementation/test/build/deployment evidence, since no generation system exists yet (Phase 2). Evidence types will expand once that becomes true.",
-    "Phase 1's own customer flow (§51) never requires an edit; full conversational editing with impact-aware regeneration is Phase 2 scope (§55, §57) and is not implemented.",
-    "Product Knowledge graph only exercises REQUIREMENT/WORKFLOW node types so far; no generation system yet produces Screen/Action/DataModel nodes (Phase 2 concern).",
-    "No customer-owned integrations, credential vault, or governance profile yet — P1-08, next.",
+    "No real integration provider (Stripe etc.) is connected — the credential vault is proven correct in isolation but has no live caller until Phase 2/3 wire an actual provider connection flow.",
+    "Policy documents are durable/versioned but not yet generated from real Product State content (generation itself is optional per §34, not required in Phase 1).",
+    "AI provider is mock-only; Requirements Engine, Business Model Brief, and unit economics are deterministic/template-based, not real product or market intelligence.",
+    "Phase 1's own customer flow (§51) never requires an edit; full conversational editing is Phase 2 scope (§55, §57).",
+    "No billing/entitlement architecture yet — P1-09, next.",
     "No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end."
   ],
   "requiredCustomerActions": [],
   "requiredExternalActions": [],
-  "nextAction": "Begin P1-08: Integration Requirements tracking, secure credential-vault architecture (encrypted server-side, never in chat/bundles/prompts/logs per Master Spec §4.7/§30), and governance profile/requirement architecture (§32) plus policy-document model scaffolding (§34)."
+  "nextAction": "Begin P1-09: plans, entitlements, and billing-state architecture (Master Spec §36-37) using mock/test state only — live Pocket Studio billing is explicitly Phase 3 scope (§62)."
 }

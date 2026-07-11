@@ -7,7 +7,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase:** Phase 1 — Intelligence, Business Foundation, Trust Architecture, and Premium Experience
 - **Phase status:** active
 - **Milestone:** M1-foundation — repository/project foundation, durable multi-tenant state, provider abstraction
-- **Active implementation unit:** P1-08 (Integrations, credential-vault architecture, governance profile)
+- **Active implementation unit:** P1-09 (Plans/entitlements/billing-state architecture — no live billing)
 
 ## Completed
 
@@ -99,22 +99,34 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **P1-07 — Event Ledger, Evidence Ledger, Truth Status (product-facing).** `ProductEvent` is an
   append-only audit trail; `ProductEvidence` backs every claim with a verifiable record; `TruthStatusEntry`
   is versioned per `(projectId, subjectKey)`, same latest-wins pattern as the other append-only models.
-  `syncTruthStatusFromFeasibility` maps a capability's *platform* `implementationLevel` to a conservative
-  *per-project* status: `SUPPORTED_NOW → IMPLEMENTED`, every `SUPPORTED_WITH_*`/`SUPPORTED_LATER_PHASE`/
+  `syncTruthStatusFromFeasibility` maps a capability's _platform_ `implementationLevel` to a conservative
+  _per-project_ status: `SUPPORTED_NOW → IMPLEMENTED`, every `SUPPORTED_WITH_*`/`SUPPORTED_LATER_PHASE`/
   `PROTOTYPE_ONLY`/`PLANNING_ONLY → PLANNED`, `EXTERNAL_APPROVAL_REQUIRED`/`PROFESSIONAL_REVIEW_REQUIRED
-  → BLOCKED`, `NOT_CURRENTLY_SUPPORTED`/`UNSAFE_OR_PROHIBITED → UNSUPPORTED`, and no registry entry
+→ BLOCKED`, `NOT_CURRENTLY_SUPPORTED`/`UNSAFE_OR_PROHIBITED → UNSUPPORTED`, and no registry entry
   (or `INSUFFICIENT_INFORMATION`) `→ NOT_EVALUATED` — a platform capability being ready does not mean
   anything was built for a specific project (Master Spec §4.4, `D-0011`). Every status entry references
   the `ProductEvidence` record that justifies it. Wired into `generateProductIntelligence` (syncs Truth
   Status from the Feasibility Report, records a `PRODUCT_STATE_VERSION_CREATED` event) and the Decision
   Ledger (`DECISION_RECORDED`/`DECISION_RESPONDED` events). 15 new tests plus 2 pre-existing suites
   re-verified against the new side effects (122 total). Evidence: `EV-0026`..`EV-0029`.
+- **P1-08 — Integrations, credential-vault architecture, governance profile.** `IntegrationRequirement`
+  is upsert-by-`(project, category)` (Master Spec §30) — current connection state, not an intelligence
+  artifact needing history. The credential vault (`src/lib/credentials/`) is real AES-256-GCM: a fresh
+  random IV per `encryptSecret` call, GCM's auth tag detects tampering (verified with dedicated tests),
+  keyed by a server-only `CREDENTIAL_ENCRYPTION_KEY`. `storeCredential`/`retrieveCredentialSecret` are
+  the only functions that ever touch plaintext; `getCredentialMetadata` is a separate, deliberately
+  narrower accessor that never returns ciphertext/iv/authTag, so it's safe to expose broadly (`D-0012`).
+  `GovernanceProfile` is one mutable profile per project (§32) — deliberately excludes the full external
+  Governance Requirement Registry, since Continuous Governance Monitoring is explicit Phase 3 scope
+  (§33, §65). `PolicyDocument` is versioned per `(project, type, language)` (§34/§35) — durable model
+  only, no generation logic yet (drafting is optional per §34, not a Phase 1 requirement). 23 new tests
+  plus a 5-test crypto suite (145 total). Runtime-verified: `npm run build && npm run start` still boots
+  and `/api/health` still reaches Postgres with the new required env var. Evidence: `EV-0030`..`EV-0034`.
 
 ## Active
 
-- P1-08: Integration Requirements tracking, secure credential-vault architecture (encrypted
-  server-side, never in chat/bundles/prompts/logs), and governance profile/requirement architecture plus
-  policy-document model scaffolding (Master Spec §4.7, §30, §32, §34).
+- P1-09: plans, entitlements, and billing-state architecture (Master Spec §36-37) using mock/test state
+  only — live Pocket Studio billing is explicitly Phase 3 scope (§62).
 
 ## Deferred
 
@@ -127,27 +139,26 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 ## Known Limitations (truthful, current)
 
-- Auth/tenancy/product-state/orchestration/registry/truth-status exist only as a service/library layer —
-  no UI, Server Actions, or HTTP routes wire them up yet (that is P1-10/P1-11). Tenant isolation is
-  proven at the service+authz layer against a real database, not yet at the HTTP boundary.
+- Everything through P1-08 exists only as a service/library layer — no UI, Server Actions, or HTTP
+  routes wire it up yet (that is P1-10/P1-11). Tenant isolation is proven at the service+authz layer
+  against a real database, not yet at the HTTP boundary.
+- No real integration provider (Stripe etc.) is connected — the credential vault is proven correct in
+  isolation but has no live caller until Phase 2/3 wire an actual provider connection flow.
+- Policy documents are durable/versioned but not yet generated from real Product State content.
 - AI provider is mock-only; Requirements Engine, Business Model Brief, and unit economics are
-  deterministic/template-based, not real product or market intelligence — but this is now an honest,
-  queryable Truth Status fact per project, not just a code comment.
-- Evidence in Phase 1 is necessarily about intelligence-generation claims (registry lookups), not
-  implementation/test/build/deployment evidence, since no generation system exists yet (Phase 2).
-- Phase 1's own customer flow (§51) never requires an edit; full conversational editing with
-  impact-aware regeneration is Phase 2 scope (§55, §57) and is not implemented.
+  deterministic/template-based, not real product or market intelligence.
+- Phase 1's own customer flow (§51) never requires an edit; full conversational editing is Phase 2
+  scope (§55, §57).
 - Product Knowledge graph only exercises REQUIREMENT/WORKFLOW node types so far; no generation system
   yet produces Screen/Action/DataModel nodes (Phase 2 concern).
-- No customer-owned integrations, credential vault, or governance profile yet — P1-08, active now.
+- No billing/entitlement architecture yet — P1-09, active now.
 - No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end.
 
 ## Next Action
 
-Implement P1-08: an Integration Requirements model tracking category/purpose/required-or-optional/
-provider options/ownership/connection status (Master Spec §30), a secure credential-vault architecture
-(encrypted server-side references, never secrets in chat/bundles/prompts/logs — §4.7), and a governance
-profile/requirement architecture plus policy-document model scaffolding (§32, §34).
+Implement P1-09: plans, entitlements, and billing-state architecture (Master Spec §36-37) and
+billing-enforcement policy architecture, using mock/test state only — live Pocket Studio billing,
+webhooks, and real charges are explicitly Phase 3 scope (§62).
 
 ## Decision Ledger Pointer
 

@@ -82,15 +82,19 @@ model Project {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  productStates      ProductState[]
-  productDnaVersions ProductDNA[]
-  memoryEntries      ProductMemoryEntry[]
-  knowledgeNodes     ProductKnowledgeNode[]
-  knowledgeEdges     ProductKnowledgeEdge[]
-  decisions          Decision[]
-  events             ProductEvent[]
-  evidenceRecords    ProductEvidence[]
-  truthStatuses      TruthStatusEntry[]
+  productStates           ProductState[]
+  productDnaVersions      ProductDNA[]
+  memoryEntries           ProductMemoryEntry[]
+  knowledgeNodes          ProductKnowledgeNode[]
+  knowledgeEdges          ProductKnowledgeEdge[]
+  decisions               Decision[]
+  events                  ProductEvent[]
+  evidenceRecords         ProductEvidence[]
+  truthStatuses           TruthStatusEntry[]
+  integrationRequirements IntegrationRequirement[]
+  credentialReferences    CredentialReference[]
+  governanceProfile       GovernanceProfile?
+  policyDocuments         PolicyDocument[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -459,4 +463,159 @@ model TruthStatusEntry {
   @@index([projectId])
   @@index([projectId, subjectKey])
   @@map("truth_status_entries")
+}
+
+// ---------------------------------------------------------------------------
+// Customer-owned integrations, credential vault, governance profile, and
+// policy-document scaffolding (Master Spec §4.7, §30, §32, §34).
+// ---------------------------------------------------------------------------
+
+enum IntegrationRequirementLevel {
+  REQUIRED
+  OPTIONAL
+  NOT_NEEDED
+}
+
+enum IntegrationOwner {
+  POCKET_STUDIO
+  CUSTOMER
+  POCKET_STUDIO_MANAGED
+}
+
+enum IntegrationConnectionStatus {
+  NOT_NEEDED
+  RECOMMENDED
+  REQUIRED
+  SETUP_NEEDED
+  CONNECTED
+  DISCONNECTED
+  MISSING
+  BLOCKED
+}
+
+// One row per (project, category) — mutable, not append-only versioned,
+// because this tracks *current connection state* (Master Spec §30), not a
+// historical intelligence artifact. Status transitions are still visible
+// via the Event Ledger once a caller records them there.
+model IntegrationRequirement {
+  id                String                      @id @default(cuid())
+  projectId         String
+  project           Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category          String
+  purpose           String
+  requirementLevel  IntegrationRequirementLevel
+  providerOptions   Json?
+  selectedProvider  String?
+  owner             IntegrationOwner
+  connectionStatus  IntegrationConnectionStatus
+  setupRequirements String?
+  costNotes         String?
+  securityNotes     String?
+  privacyNotes      String?
+  launchImpact      String?
+  fallbackBehavior  String?
+
+  credential CredentialReference?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, category])
+  @@index([projectId])
+  @@map("integration_requirements")
+}
+
+// Never stores a secret in plaintext. `ciphertext`/`iv`/`authTag` are the
+// three AES-256-GCM outputs (base64) from src/lib/credentials/crypto.ts —
+// decryption requires CREDENTIAL_ENCRYPTION_KEY, which lives only in the
+// server environment, never in this table, a prompt, a log, or a client
+// bundle (Master Spec §4.7).
+model CredentialReference {
+  id                       String                 @id @default(cuid())
+  projectId                String
+  project                  Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  integrationRequirementId String                 @unique
+  integrationRequirement   IntegrationRequirement @relation(fields: [integrationRequirementId], references: [id], onDelete: Cascade)
+  provider                 String
+  ciphertext               String
+  iv                       String
+  authTag                  String
+  lastVerifiedAt           DateTime?
+  createdByUserId          String?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+
+  @@index([projectId])
+  @@map("credential_references")
+}
+
+// One mutable profile per project (Master Spec §32). Deliberately does
+// *not* include the full Governance Requirement Registry (external legal-
+// source tracking, effective/enforcement dates, etc.) — that requires
+// Continuous Governance Monitoring, which Master Spec §33/§65 explicitly
+// assigns to Phase 3. Phase 1 only needs the project-level facts a future
+// governance check will be evaluated against.
+model GovernanceProfile {
+  id                        String  @id @default(cuid())
+  projectId                 String  @unique
+  project                   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  businessLocations         Json?
+  userLocations             Json?
+  productCategory           String?
+  userAgeRange              String?
+  dataCategories            Json?
+  monetizationModel         String?
+  distributionChannels      Json?
+  relevantGovernanceDomains Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("governance_profiles")
+}
+
+enum PolicyDocumentType {
+  TERMS_OF_SERVICE
+  PRIVACY_POLICY
+  ACCEPTABLE_USE_POLICY
+  COOKIE_NOTICE
+  AI_DISCLOSURE
+  SUBSCRIPTION_TERMS
+  CANCELLATION_REFUND_POLICY
+  DATA_RETENTION_DELETION_POLICY
+  SUPPORT_POLICY
+  ACCESSIBILITY_STATEMENT
+  COMMUNICATIONS_CONSENT
+  MOBILE_PERMISSION_EXPLANATION
+  MARKETPLACE_TERMS
+}
+
+enum PolicyDocumentStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  PUBLISHED
+}
+
+// Versioned per (projectId, type, language) — Master Spec §34/§35 require
+// tracking both legal-document versions and their translations
+// independently. Phase 1 only needs the durable, versioned model; actual
+// drafting against real Product State and professional-review workflows
+// are populated by later phases/units.
+model PolicyDocument {
+  id                         String               @id @default(cuid())
+  projectId                  String
+  project                    Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type                       PolicyDocumentType
+  version                    Int
+  status                     PolicyDocumentStatus
+  content                    String
+  language                   String               @default("en")
+  basedOnProductStateVersion Int?
+  createdByUserId            String?
+  createdAt                  DateTime             @default(now())
+
+  @@unique([projectId, type, language, version])
+  @@index([projectId])
+  @@map("policy_documents")
 }
