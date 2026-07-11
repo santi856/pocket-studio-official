@@ -73,16 +73,182 @@ model Membership {
 }
 
 model Project {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name           String
-  slug           String
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  slug            String
   createdByUserId String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  productStates      ProductState[]
+  productDnaVersions ProductDNA[]
+  memoryEntries      ProductMemoryEntry[]
+  knowledgeNodes     ProductKnowledgeNode[]
+  knowledgeEdges     ProductKnowledgeEdge[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
   @@map("projects")
+}
+
+// ---------------------------------------------------------------------------
+// Canonical Product State, Product DNA, Product Memory, and Product
+// Knowledge relationships (Master Spec §9-12). Phase 1 persists and
+// versions these; Phase 2's Blueprint/Build Plan/generation systems are the
+// first things to populate Workflow/Screen/DataModel-typed knowledge nodes
+// in earnest — Phase 1 only needs the durable structure and Requirement
+// nodes emitted by the Requirements Engine (P1-06).
+// ---------------------------------------------------------------------------
+
+// Append-only: each call to the product-state service creates a new row
+// rather than mutating one in place, so "current state" is always
+// `orderBy(version desc) take 1` and prior states remain inspectable
+// evidence (Master Spec §9 lists "versions" as part of the canonical state).
+model ProductState {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version   Int
+
+  originalIdea                String
+  productIntelligence         Json?
+  feasibilityReport           Json?
+  businessModelBrief          Json?
+  monetizationRecommendations Json?
+  unitEconomicsAssumptions    Json?
+  operationalComplexity       Json?
+  requiredIntegrations        Json?
+  outputTargets               Json?
+  governanceRequirements      Json?
+
+  createdAt       DateTime @default(now())
+  createdByUserId String
+
+  @@unique([projectId, version])
+  @@index([projectId])
+  @@map("product_states")
+}
+
+// Same append-only pattern as ProductState. The service layer enforces
+// "edits must not silently erase Product DNA" (Master Spec §10) by merging
+// a partial update onto the previous version rather than accepting a bare
+// replacement.
+model ProductDNA {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version   Int
+
+  originalIdea          String
+  purpose               String?
+  problem               String?
+  targetUsers           Json?
+  productThesis         String?
+  differentiation       String?
+  productEdge           String?
+  customerPromise       String?
+  brandDirection        Json?
+  businessModel         String?
+  monetizationDirection String?
+  constraints           Json?
+  nonNegotiables        Json?
+  acceptedDecisions     Json?
+  rejectedDecisions     Json?
+  openQuestions         Json?
+  knownRisks            Json?
+
+  createdAt       DateTime @default(now())
+  createdByUserId String
+
+  @@unique([projectId, version])
+  @@index([projectId])
+  @@map("product_dna_versions")
+}
+
+enum ProductMemoryEntryType {
+  FACT
+  REQUIREMENT
+  RECOMMENDATION
+  DECISION
+  REJECTED_OPTION
+  CONSTRAINT
+  PREFERENCE
+  HISTORY
+  LIMITATION
+  OPEN_QUESTION
+  CONTEXT
+}
+
+// Discrete, appendable memory entries rather than one blob — Master Spec
+// §11 requires memory to be "inspectable, correctable, exportable,
+// deletable according to policy" per entry, and explicitly rejects
+// "unbounded chat history" as the sole memory architecture.
+model ProductMemoryEntry {
+  id              String                 @id @default(cuid())
+  projectId       String
+  project         Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type            ProductMemoryEntryType
+  content         String
+  metadata        Json?
+  createdByUserId String?
+  createdAt       DateTime               @default(now())
+
+  @@index([projectId])
+  @@index([projectId, type])
+  @@map("product_memory_entries")
+}
+
+enum ProductKnowledgeNodeType {
+  REQUIREMENT
+  WORKFLOW
+  SCREEN
+  ACTION
+  DATA_MODEL
+  PERMISSION
+  INTEGRATION
+  IMPLEMENTATION
+  TEST
+  EVIDENCE
+}
+
+// Requirement → Workflow → Screen → Action → Data Model → Permission →
+// Integration → Implementation → Test → Evidence (Master Spec §12). Stable
+// cuid identifiers on nodes and edges are what make impact analysis and
+// selective regeneration possible later — this is deliberately a generic
+// typed graph rather than one table per node type, because the edge shape
+// (which types connect to which) is a Phase 2 orchestration concern, not a
+// Phase 1 schema concern.
+model ProductKnowledgeNode {
+  id        String                   @id @default(cuid())
+  projectId String
+  project   Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      ProductKnowledgeNodeType
+  label     String
+  data      Json?
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+
+  outgoingEdges ProductKnowledgeEdge[] @relation("SourceNode")
+  incomingEdges ProductKnowledgeEdge[] @relation("TargetNode")
+
+  @@index([projectId])
+  @@index([projectId, type])
+  @@map("product_knowledge_nodes")
+}
+
+model ProductKnowledgeEdge {
+  id           String               @id @default(cuid())
+  projectId    String
+  project      Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceNodeId String
+  sourceNode   ProductKnowledgeNode @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNodeId String
+  targetNode   ProductKnowledgeNode @relation("TargetNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
+  createdAt    DateTime             @default(now())
+
+  @@unique([sourceNodeId, targetNodeId])
+  @@index([projectId])
+  @@map("product_knowledge_edges")
 }

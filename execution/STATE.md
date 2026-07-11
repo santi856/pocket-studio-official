@@ -7,7 +7,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase:** Phase 1 — Intelligence, Business Foundation, Trust Architecture, and Premium Experience
 - **Phase status:** active
 - **Milestone:** M1-foundation — repository/project foundation, durable multi-tenant state, provider abstraction
-- **Active implementation unit:** P1-03 (Canonical Product State, Product DNA, Product Memory, Knowledge relationships)
+- **Active implementation unit:** P1-04 (Orchestration Contract, Intent Resolver, Impact Analysis foundation)
 
 ## Completed
 
@@ -28,7 +28,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
   the dev database and a dedicated `pocket_studio_test` database (see `docker/postgres-init/`). Password
   hashing via Node's built-in scrypt (`D-0004`, no new native-binding dependency). Opaque, hashed session
   tokens in httpOnly cookies. The tenant-isolation choke point (`src/lib/tenancy/authz.ts`:
-  `requireOrganizationMembership` / `requireProjectAccess`) resolves a project's *actual* owning
+  `requireOrganizationMembership` / `requireProjectAccess`) resolves a project's _actual_ owning
   organization before checking membership — a caller-supplied organizationId is never trusted directly.
   17 integration tests run against the real test database (not mocks) prove: same-tenant access works,
   cross-tenant organization and project access is denied, project creation is denied for non-members (and
@@ -36,12 +36,27 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
   without leaking existence. Caught and fixed a real cross-file test-parallelism race where three
   integration test files sharing one Postgres database stomped on each other's fixtures (`D-0005`).
   Evidence: `EV-0007`..`EV-0012`.
+- **P1-03 — Canonical Product State, Product DNA, Product Memory, Product Knowledge relationships.**
+  Migration `20260711135504_product_state_dna_memory_knowledge`. `ProductState` and `ProductDNA` are
+  append-only/versioned (each write creates a new row; "current" is the latest version, prior versions
+  stay inspectable). `ProductDNA` partial updates merge onto the previous version instead of replacing it
+  — omitting a key carries the old value forward, passing `null` explicitly clears it — implementing
+  Master Spec §10's "edits must not silently erase Product DNA." `ProductMemoryEntry` is discrete, typed,
+  appendable entries (not one blob), matching §11's rejection of "unbounded chat history" as the sole
+  memory architecture. `ProductKnowledgeNode`/`ProductKnowledgeEdge` form a generic typed graph with
+  stable cuid ids for the §12 Requirement→Workflow→Screen→...→Evidence chain; edges are rejected across
+  projects and self-loops are rejected. Caught and fixed a real bug during implementation: Prisma's
+  generated create input rejects a literal `null` for nullable Json columns (needs the `Prisma.JsonNull`
+  sentinel), and an early test conflated "key omitted" with "key present but `undefined`" — both
+  distinct states in JS but not distinguishable the way the code first assumed. Fixed at the type level
+  so the public contract only recognizes two states (`D-0006`). 28 integration tests across the four
+  models. Evidence: `EV-0013`..`EV-0015`.
 
 ## Active
 
-- P1-03: persisted, versioned Canonical Product State, Product DNA, Product Memory, and Product Knowledge
-  relationships (Requirement→Workflow→Screen→Action→Data Model→Permission→Integration→Implementation→
-  Test→Evidence), scoped per project/tenant. Traces to Master Spec §9-12.
+- P1-04: Orchestration Contract change-flow skeleton (User Intent → Load State → Resolve Intent →
+  Feasibility → Impact Analysis → ... → Truth Status → Respond), product-facing Decision Ledger,
+  disclosure tiers, and approval model. Traces to Master Spec §13 and §15.
 
 ## Deferred
 
@@ -54,17 +69,21 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 ## Known Limitations (truthful, current)
 
-- Auth/tenancy exist only as a service/library layer — no UI, Server Actions, or HTTP routes wire them up
-  yet (that is P1-10/P1-11). Tenant isolation is proven at the service+authz layer against a real
-  database, not yet at the HTTP boundary, because no HTTP routes exist yet to test.
-- No Canonical Product State / Product DNA / Product Memory yet (P1-03, active now).
+- Auth/tenancy/product-state exist only as a service/library layer — no UI, Server Actions, or HTTP
+  routes wire them up yet (that is P1-10/P1-11). Tenant isolation is proven at the service+authz layer
+  against a real database, not yet at the HTTP boundary, because no HTTP routes exist yet to test.
+- Product Knowledge graph only exercises REQUIREMENT/WORKFLOW node types so far; no generation system yet
+  produces Screen/Action/DataModel nodes (Phase 2 concern). Edge-type/direction rules are not enforced,
+  only same-project + non-self-loop.
+- No product-facing Orchestration Contract / Intent Resolver / Decision Ledger yet (P1-04, active now).
 - AI provider is mock-only; no live provider is connected (by design).
 - No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end.
 
 ## Next Action
 
-Implement P1-03: Canonical Product State, Product DNA, Product Memory, and Product Knowledge relationship
-data models, project-scoped and versioned, per Master Spec §9-12.
+Implement P1-04: the Orchestration Contract change-flow skeleton, an Intent Resolver, Impact Analysis
+foundation, and a product-facing Decision Ledger with disclosure tiers (routine/important/consequential)
+and an approval model, per Master Spec §13 and §15.
 
 ## Decision Ledger Pointer
 
