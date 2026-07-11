@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pocket_studio
+      POSTGRES_PASSWORD: pocket_studio
+      POSTGRES_DB: pocket_studio_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pocket_studio_db_data:/var/lib/postgresql/data
+
+volumes:
+  pocket_studio_db_data:

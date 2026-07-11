@@ -1,0 +1,10 @@
+.next
+node_modules
+coverage
+playwright-report
+test-results
+src/generated
+
+# Governance documents are the authoritative source of truth (Execution
+# Protocol §1) and must never be reformatted by tooling.
+docs/

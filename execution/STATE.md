@@ -7,34 +7,47 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase:** Phase 1 — Intelligence, Business Foundation, Trust Architecture, and Premium Experience
 - **Phase status:** active
 - **Milestone:** M1-foundation — repository/project foundation, durable multi-tenant state, provider abstraction
-- **Active implementation unit:** none yet (about to select first unit from Phase 1 decomposition)
+- **Active implementation unit:** P1-02 (data layer — users, auth, sessions, orgs, memberships, projects)
 
 ## Completed
 
 - Governance baseline committed (`25a33f0`): Master Spec, Execution Protocol, Review Protocol v1.0, all in `docs/`.
 - Completeness Check (Execution Protocol §2) passed — see `EV-0001` in the Evidence Ledger.
 - Durable execution state initialized (this directory).
+- **P1-01 — Repo/app foundation.** Next.js 16.2.10 App Router + React 19.2.4, strict TypeScript
+  (`noUncheckedIndexedAccess`, `noImplicitOverride`, etc.), Tailwind 4, ESLint (eslint-config-next),
+  Prettier (+ tailwindcss plugin, `docs/` excluded — see D-0003), Vitest + Testing Library, Playwright
+  scaffolding, Prisma 7 with the new driver-adapter architecture (`@prisma/adapter-pg` + `pg`,
+  `prisma.config.ts`) against a local Postgres run via `docker-compose.yml`, server-only env validation
+  (`src/lib/env.ts`, zod), and a `/api/health` route proving real DB connectivity. Full validation suite
+  (typecheck, lint, format check, unit tests, production build, manual runtime smoke test) passes —
+  see `EV-0002`..`EV-0006`. Next.js 16 / Prisma 7 breaking changes vs. older conventions documented in
+  `D-0002`.
 
 ## Active
 
-- Phase 1 decomposition into implementation units (in progress).
+- P1-02: Prisma schema + migrations for User, Session, Organization, Membership, Project; server-side
+  authorization; tenant-aware service layer. Traces to Master Spec §50 and §53 (tenant isolation tested).
 
 ## Deferred
 
-- Nothing yet deferred — no implementation exists to defer from.
+- Nothing yet deferred.
 
 ## Blocked
 
-- None. No credential or customer-decision blockers exist yet; Phase 1 begins with deterministic/mock provider per Master Spec §8 (Execution Protocol) and does not require live AI, Stripe, Apple, or Google credentials.
+- None. No credential or customer-decision blockers exist yet; Phase 1 runs on the mock AI provider per
+  Master Spec §8 / Execution Protocol §8 and does not require live AI, Stripe, Apple, or Google credentials.
 
 ## Known Limitations (truthful, current)
 
-- No application code exists yet. Only governance documents and execution scaffolding are committed.
-- No tests, no build, no schema exist yet.
+- No data models exist yet: no users, auth, organizations, projects, or Canonical Product State.
+- AI provider is mock-only; no live provider is connected (by design).
+- No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end.
 
 ## Next Action
 
-Decompose Phase 1 into dependency-aware implementation units traceable to Master Spec §50/§51/§53, then begin the first unit: canonical repository and application foundation (Next.js App Router, strict TypeScript, Tailwind, environment validation, lint/format/Vitest/Playwright scaffolding).
+Implement P1-02: Prisma schema + migrations for User, Session, Organization, Membership (roles), Project,
+with server-side authorization and a tenant-aware service layer, plus tenant-isolation tests.
 
 ## Decision Ledger Pointer
 

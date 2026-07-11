@@ -12,30 +12,34 @@
     "current": "M1-foundation",
     "description": "Repository/project foundation, durable multi-tenant state, provider abstraction"
   },
-  "activeImplementationUnit": null,
+  "activeImplementationUnit": "P1-02",
   "requirements": {
-    "completed": [],
-    "active": [],
+    "completed": [
+      "P1-01: Repo/app foundation (Next.js 16 App Router, strict TypeScript, Tailwind 4, ESLint, Prettier, Vitest, Playwright, Prisma 7 + Postgres via Docker, env validation, deterministic health check)"
+    ],
+    "active": [
+      "P1-02: Data layer — users, auth, sessions, orgs, memberships, projects"
+    ],
     "deferred": [],
     "blocked": []
   },
-  "decisions": [],
+  "decisions": ["D-0001", "D-0002", "D-0003"],
   "migrations": [],
   "testStatus": {
-    "typecheck": "not run",
-    "lint": "not run",
-    "unit": "not run",
+    "typecheck": "pass",
+    "lint": "pass",
+    "unit": "pass (4/4)",
     "integration": "not run",
     "e2e": "not run",
-    "productionBuild": "not run"
+    "productionBuild": "pass"
   },
-  "evidenceRefs": [
-    "EV-0001"
-  ],
+  "evidenceRefs": ["EV-0001", "EV-0002", "EV-0003", "EV-0004", "EV-0005", "EV-0006"],
   "knownLimitations": [
-    "No implementation exists yet beyond governance baseline and durable execution scaffolding."
+    "No data models exist yet (P1-02 starts next): no users, auth, orgs, projects, or Canonical Product State.",
+    "AI provider is mock-only; no live provider is connected (by design per Execution Protocol §8).",
+    "No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end."
   ],
   "requiredCustomerActions": [],
   "requiredExternalActions": [],
-  "nextAction": "Decompose Phase 1 into dependency-aware implementation units, then begin M1-foundation: initialize Next.js App Router project with strict TypeScript, Tailwind, linting, Vitest, and Playwright foundations."
+  "nextAction": "Begin P1-02: Prisma schema + migrations for User, Session, Organization, Membership, Project with server-side authorization and tenant-aware service layer."
 }

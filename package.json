@@ -1,0 +1,58 @@
+{
+  "name": "pocket-studio-official",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "validate": "npm run typecheck && npm run lint && npm run format:check && npm run test"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "next": "16.2.10",
+    "pg": "^8.22.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "server-only": "^0.0.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^20",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^6.0.3",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.10",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.9.5",
+    "prettier-plugin-tailwindcss": "^0.8.0",
+    "prisma": "^7.8.0",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  },
+  "allowScripts": {
+    "@prisma/engines@7.8.0": true,
+    "prisma@7.8.0": true,
+    "sharp@0.34.5": true,
+    "unrs-resolver@1.12.2": true
+  }
+}
