@@ -9,30 +9,31 @@
     "goal": "PHASE 1 — INTELLIGENCE, BUSINESS FOUNDATION, TRUST ARCHITECTURE, AND PREMIUM EXPERIENCE"
   },
   "milestone": {
-    "current": "M1-foundation",
-    "description": "Repository/project foundation, durable multi-tenant state, provider abstraction"
+    "current": "M2-studio-shell",
+    "description": "Customer-facing surfaces wiring the M1-foundation service layer together into the §51 first customer flow"
   },
-  "activeImplementationUnit": "P1-09",
+  "activeImplementationUnit": "P1-10",
   "requirements": {
     "completed": [
-      "P1-01: Repo/app foundation (Next.js 16 App Router, strict TypeScript, Tailwind 4, ESLint, Prettier, Vitest, Playwright, Prisma 7 + Postgres via Docker, env validation, deterministic health check)",
-      "P1-02: Data layer — User/Session/Organization/Membership/Project schema + migration, password hashing, session lifecycle, tenant-aware authorization, tenant-isolation integration tests",
-      "P1-03: Canonical Product State, Product DNA, Product Memory, Product Knowledge relationships, all project-scoped and tenant-isolated",
-      "P1-04: AI provider abstraction, Intent Resolver, Impact Analysis foundation, product-facing Decision Ledger, Orchestration Contract change-flow skeleton",
-      "P1-05: Platform-wide versioned Supported Capability Registry mirroring Master Spec §4.3, seeded truthfully, and a Feasibility Engine",
-      "P1-06: Requirements Engine, Business Model Brief + monetization recommendations, unit-economics assumptions, generateProductIntelligence wired into beginChangeFlow",
-      "P1-07: Product-facing Event Ledger, Evidence Ledger, and Truth Status, mapped conservatively from platform capability level to per-project status, wired into generateProductIntelligence and the Decision Ledger",
-      "P1-08: Integration Requirements tracking (upsert-by-category, Master Spec §30), AES-256-GCM credential vault (fresh IV per call, tamper-detected via GCM auth tag, narrow plaintext accessor separate from broadly-safe metadata), Governance Profile (one mutable profile per project, §32), and versioned Policy Document scaffolding per (type, language) (§34)"
+      "P1-01: Repo/app foundation",
+      "P1-02: Data layer — identity, tenancy, authorization",
+      "P1-03: Canonical Product State, Product DNA, Product Memory, Product Knowledge relationships",
+      "P1-04: Orchestration Contract foundation, Intent Resolver, Impact Analysis, product-facing Decision Ledger",
+      "P1-05: Supported Capability Registry + Feasibility Engine",
+      "P1-06: Requirements Engine, Business Model Brief, unit economics, generateProductIntelligence",
+      "P1-07: Product-facing Event Ledger, Evidence Ledger, Truth Status",
+      "P1-08: Integration Requirements, AES-256-GCM credential vault, Governance Profile, Policy Document scaffolding",
+      "P1-09: Plan Registry (versioned, truthful pricing), OrganizationSubscription + deterministic billing-state machine mirroring Master Spec §37 exactly, BillingEvent audit trail, entitlement resolution"
     ],
     "active": [
-      "P1-09: Plans/entitlements/billing-state architecture (no live billing)"
+      "P1-10: Premium landing, auth/onboarding, dashboard, Studio workspace shell (Simple Mode + Expert Mode)"
     ],
     "deferred": [],
     "blocked": []
   },
   "decisions": [
     "D-0001", "D-0002", "D-0003", "D-0004", "D-0005", "D-0006", "D-0007",
-    "D-0008", "D-0009", "D-0010", "D-0011", "D-0012"
+    "D-0008", "D-0009", "D-0010", "D-0011", "D-0012", "D-0013"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -40,13 +41,14 @@
     "20260711141234_decision_ledger",
     "20260711142316_capability_registry",
     "20260711144025_event_evidence_truth_status",
-    "20260711145046_integrations_credentials_governance_policy"
+    "20260711145046_integrations_credentials_governance_policy",
+    "20260711145846_plans_entitlements_billing_state"
   ],
   "testStatus": {
     "typecheck": "pass",
     "lint": "pass",
-    "unit": "pass (44/44: env 4, slug 4, mock-provider 4, anthropic-provider 1, impact-analysis 6, requirements-engine 10, business-intelligence 7, unit-economics 3, crypto 5)",
-    "integration": "pass (101/101: users 5, session 5, tenancy 7, product-state 5, product-dna 6, product-memory 4, product-knowledge 5, decisions 7, intent-resolver 3, change-flow 3, capability-registry 5, seed-data 3, feasibility 5, product-intelligence 6, events 3, evidence 3, truth-status 4, truth-status-sync 4, vault 6, governance-profile 4, integrations 3, policy-documents 5)",
+    "unit": "pass (54/54: env 4, slug 4, mock-provider 4, anthropic-provider 1, impact-analysis 6, requirements-engine 10, business-intelligence 7, unit-economics 3, crypto 5, billing-access 10)",
+    "integration": "pass (113/113: users 5, session 5, tenancy 7, product-state 5, product-dna 6, product-memory 4, product-knowledge 5, decisions 7, intent-resolver 3, change-flow 3, capability-registry 5, seed-data 3, feasibility 5, product-intelligence 6, events 3, evidence 3, truth-status 4, truth-status-sync 4, vault 6, governance-profile 4, integrations 3, policy-documents 5, plans 6, subscription 6)",
     "e2e": "not run",
     "productionBuild": "pass"
   },
@@ -56,19 +58,19 @@
     "EV-0013", "EV-0014", "EV-0015", "EV-0016", "EV-0017", "EV-0018",
     "EV-0019", "EV-0020", "EV-0021", "EV-0022", "EV-0023", "EV-0024",
     "EV-0025", "EV-0026", "EV-0027", "EV-0028", "EV-0029", "EV-0030",
-    "EV-0031", "EV-0032", "EV-0033", "EV-0034"
+    "EV-0031", "EV-0032", "EV-0033", "EV-0034", "EV-0035", "EV-0036",
+    "EV-0037", "EV-0038"
   ],
   "knownLimitations": [
-    "Everything through P1-08 exists only as a service/library layer — no UI, no Server Actions, no HTTP routes wire it up yet. That is P1-10/P1-11.",
-    "Tenant isolation is proven at the service+authz layer against a real database, not yet at the HTTP boundary (no routes exist to attack yet).",
-    "No real integration provider (Stripe etc.) is connected — the credential vault is proven correct in isolation but has no live caller until Phase 2/3 wire an actual provider connection flow.",
-    "Policy documents are durable/versioned but not yet generated from real Product State content (generation itself is optional per §34, not required in Phase 1).",
+    "Everything through P1-09 exists only as a service/library layer — no UI, no Server Actions, no HTTP routes wire it up yet. That is P1-10/P1-11, starting now.",
+    "Tenant isolation is proven at the service+authz layer against a real database, not yet at the HTTP boundary.",
+    "No real payment provider webhooks exist to drive the billing state machine in production — Phase 3 scope (§62). Architecture is proven correct in isolation only.",
+    "No real integration provider (Stripe etc.) is connected to the credential vault yet.",
     "AI provider is mock-only; Requirements Engine, Business Model Brief, and unit economics are deterministic/template-based, not real product or market intelligence.",
-    "Phase 1's own customer flow (§51) never requires an edit; full conversational editing is Phase 2 scope (§55, §57).",
-    "No billing/entitlement architecture yet — P1-09, next.",
-    "No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end."
+    "Phase 1's own customer flow (§51) never requires an edit; full conversational editing is Phase 2 scope.",
+    "No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end until P1-10 ships a UI."
   ],
   "requiredCustomerActions": [],
   "requiredExternalActions": [],
-  "nextAction": "Begin P1-09: plans, entitlements, and billing-state architecture (Master Spec §36-37) using mock/test state only — live Pocket Studio billing is explicitly Phase 3 scope (§62)."
+  "nextAction": "Begin P1-10: premium landing page, authentication/onboarding UI, project dashboard, and the Studio workspace shell (Simple Mode + Expert Mode) wiring the M1-foundation service layer to real HTTP routes/Server Actions for the first time (Master Spec §50-51)."
 }

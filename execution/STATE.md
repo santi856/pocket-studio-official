@@ -6,8 +6,9 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 - **Phase:** Phase 1 — Intelligence, Business Foundation, Trust Architecture, and Premium Experience
 - **Phase status:** active
-- **Milestone:** M1-foundation — repository/project foundation, durable multi-tenant state, provider abstraction
-- **Active implementation unit:** P1-09 (Plans/entitlements/billing-state architecture — no live billing)
+- **Milestone:** M1-foundation is complete (P1-01..P1-09); now in **M2-studio-shell** — wiring the
+  foundation service layer to real customer-facing surfaces (Master Spec §51 first customer flow)
+- **Active implementation unit:** P1-10 (Premium landing, auth/onboarding, dashboard, Studio shell)
 
 ## Completed
 
@@ -122,11 +123,25 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
   only, no generation logic yet (drafting is optional per §34, not a Phase 1 requirement). 23 new tests
   plus a 5-test crypto suite (145 total). Runtime-verified: `npm run build && npm run start` still boots
   and `/api/health` still reaches Postgres with the new required env var. Evidence: `EV-0030`..`EV-0034`.
+- **P1-09 — Plans, entitlements, billing-state architecture.** `PlanDefinition` is platform-wide,
+  versioned per `planKey` (same pattern as the Capability Registry) — only Free/Explore has a real,
+  known price (0); every paid plan's price is left unset rather than invented (Master Spec §36).
+  `OrganizationSubscription` is one row per organization (billing is account-level, not project-level);
+  every organization gets a Free/Explore, TRIALING subscription at creation so entitlement checks never
+  special-case "no subscription." `billingState` changes only through `nextBillingState`, a deterministic
+  state machine mirroring §37's failed-payment workflow exactly — full access persists through
+  PAST_DUE/PAYMENT_RETRYING/GRACE_PERIOD (nonpayment must not trigger immediate restriction), only
+  RESTRICTED/SUSPENDED/CANCELED/etc. drop to "restricted" (never fully blocked — login, billing access,
+  payment updates, read-only projects, portability export, support, and cancellation stay available per
+  §37), and only actual `DELETED` has no access. Every transition is recorded as an immutable
+  `BillingEvent` (`D-0013`). 22 new tests, including a full walk of the entire failed-payment sequence
+  and rejection of invalid transitions (167 total). Evidence: `EV-0035`..`EV-0038`.
 
 ## Active
 
-- P1-09: plans, entitlements, and billing-state architecture (Master Spec §36-37) using mock/test state
-  only — live Pocket Studio billing is explicitly Phase 3 scope (§62).
+- P1-10: premium landing page, authentication/onboarding UI, project dashboard, and the Studio workspace
+  shell (Simple Mode + Expert Mode) — the first unit to wire the M1-foundation service layer to real HTTP
+  routes/Server Actions (Master Spec §50-51).
 
 ## Deferred
 
@@ -139,11 +154,10 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 ## Known Limitations (truthful, current)
 
-- Everything through P1-08 exists only as a service/library layer — no UI, Server Actions, or HTTP
-  routes wire it up yet (that is P1-10/P1-11). Tenant isolation is proven at the service+authz layer
-  against a real database, not yet at the HTTP boundary.
-- No real integration provider (Stripe etc.) is connected — the credential vault is proven correct in
-  isolation but has no live caller until Phase 2/3 wire an actual provider connection flow.
+- Everything through P1-09 exists only as a service/library layer — no UI, Server Actions, or HTTP
+  routes wire it up yet. That is P1-10, active now.
+- No real payment provider webhooks exist to drive the billing state machine in production — Phase 3
+  scope (§62). No real integration provider (Stripe etc.) is connected to the credential vault yet.
 - Policy documents are durable/versioned but not yet generated from real Product State content.
 - AI provider is mock-only; Requirements Engine, Business Model Brief, and unit economics are
   deterministic/template-based, not real product or market intelligence.
@@ -156,9 +170,10 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 ## Next Action
 
-Implement P1-09: plans, entitlements, and billing-state architecture (Master Spec §36-37) and
-billing-enforcement policy architecture, using mock/test state only — live Pocket Studio billing,
-webhooks, and real charges are explicitly Phase 3 scope (§62).
+Implement P1-10: premium landing page, authentication/onboarding, project dashboard, and the Studio
+workspace shell with Simple Mode and Expert Mode sharing identical underlying state (Master Spec §50-51,
+§6-7) — the first unit to expose the M1-foundation service layer through real Next.js routes and Server
+Actions instead of direct function calls in tests.
 
 ## Decision Ledger Pointer
 

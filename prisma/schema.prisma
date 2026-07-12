@@ -52,8 +52,9 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships Membership[]
-  projects    Project[]
+  memberships  Membership[]
+  projects     Project[]
+  subscription OrganizationSubscription?
 
   @@map("organizations")
 }
@@ -618,4 +619,110 @@ model PolicyDocument {
   @@unique([projectId, type, language, version])
   @@index([projectId])
   @@map("policy_documents")
+}
+
+// ---------------------------------------------------------------------------
+// Plans, entitlements, and billing-state architecture (Master Spec §36-37).
+// Architecture only in Phase 1 — no live billing, webhooks, or real
+// charges (explicit Phase 3 scope, §62). Billing is an organization-level
+// concern (the account/workspace subscribes), not project-level.
+// ---------------------------------------------------------------------------
+
+enum PlanKey {
+  FREE_EXPLORE
+  BUILDER
+  LAUNCH
+  MANAGED
+  AGENCY
+}
+
+// Platform-wide (like CapabilityRegistryEntry), append-only versioned per
+// planKey. `monthlyPriceCents`/`annualPriceCents` are nullable and only
+// ever set from an explicit, supplied value — Master Spec §36: "final
+// prices remain configurable and must not be invented when not supplied."
+model PlanDefinition {
+  id      String  @id @default(cuid())
+  planKey PlanKey
+  version Int
+
+  name              String
+  monthlyPriceCents Int?
+  annualPriceCents  Int?
+  currency          String @default("usd")
+  entitlements      Json
+
+  createdAt       DateTime @default(now())
+  createdByUserId String?
+
+  @@unique([planKey, version])
+  @@index([planKey])
+  @@map("plan_definitions")
+}
+
+// Mirrors Master Spec §37's supported billing-provider states exactly.
+enum BillingState {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  PAYMENT_RETRYING
+  GRACE_PERIOD
+  RESTRICTED
+  SUSPENDED
+  CANCELED
+  EXPIRED
+  RETENTION_PERIOD
+  DELETION_SCHEDULED
+  DELETED
+}
+
+// One row per organization — "billing provider state is authoritative"
+// (§37). Mutable in place (current state), with BillingEvent as the
+// append-only history of how it got there.
+model OrganizationSubscription {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planKey        PlanKey      @default(FREE_EXPLORE)
+  billingState   BillingState @default(TRIALING)
+
+  trialEndsAt       DateTime?
+  currentPeriodEnd  DateTime?
+  gracePeriodEndsAt DateTime?
+  canceledAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events BillingEvent[]
+
+  @@map("organization_subscriptions")
+}
+
+enum BillingEventType {
+  SUBSCRIPTION_CREATED
+  STATE_TRANSITIONED
+  PAYMENT_FAILED
+  PAYMENT_RETRY_SCHEDULED
+  PAYMENT_RECOVERED
+  RESTRICTED
+  SUSPENDED
+  RESTORED
+  CANCELED
+}
+
+// Append-only audit trail of billing-state transitions — same pattern as
+// ProductEvent, scoped to a subscription instead of a project.
+model BillingEvent {
+  id                         String                   @id @default(cuid())
+  organizationSubscriptionId String
+  organizationSubscription   OrganizationSubscription @relation(fields: [organizationSubscriptionId], references: [id], onDelete: Cascade)
+  type                       BillingEventType
+  fromState                  BillingState?
+  toState                    BillingState?
+  summary                    String
+  data                       Json?
+  createdAt                  DateTime                 @default(now())
+
+  @@index([organizationSubscriptionId])
+  @@map("billing_events")
 }
