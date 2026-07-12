@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-11 (Security/privacy/governance impact + legal draft generation)
+- **Active implementation unit:** P2-12 (Migration planning for generated-app data model changes)
 
 ## Phase 2 Decomposition
 
@@ -33,7 +33,7 @@ says otherwise.
 | P2-08 ✅ | Conversational editing + Change Sets + selective regeneration                                                              | §27, §57                 | P2-07, Phase 1 Orchestration Contract       |
 | P2-09 ✅ | Version history and restore                                                                                                | §27                      | P2-08                                       |
 | P2-10 ✅ | Quality Gate — unit/integration/authorization/tenant/accessibility/e2e tests for the generated product                     | §55, §59                 | P2-07                                       |
-| P2-11    | Security/privacy/governance impact + legal/policy draft generation from real state                                         | §31, §32, §34            | P2-07, Phase 1 PolicyDocument               |
+| P2-11 ✅ | Security/privacy/governance impact + legal/policy draft generation from real state                                         | §31, §32, §34            | P2-07, Phase 1 PolicyDocument               |
 | P2-12    | Migration planning for generated-app data model changes                                                                    | §28                      | P2-08                                       |
 | P2-13    | Export foundation + durable jobs/retries/checkpoints/idempotency                                                           | §25, §29                 | P2-07                                       |
 | P2-14    | Web and PWA output                                                                                                         | §39, §40                 | P2-05                                       |
@@ -286,6 +286,24 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
   corrupted Build Plan proving the form-field check independently catches the exact defect class the
   P2-07 fix already prevents at generation time. Full suite green (310/310 unit+integration, 9/9 e2e,
   clean typecheck/lint/format, production build). See `D-0031`, `EV-0069`, `EV-0070`.
+- **P2-11 — Security/privacy/governance impact + legal draft generation (Master Spec §31, §32,
+  §34).** Closes a gap Phase 1 (P1-08) deliberately left open: `GovernanceProfile`/`PolicyDocument` had
+  durable, versioned storage but no real content derivation. `src/lib/orchestration/governance-and-legal.ts`:
+  `deriveGovernanceProfile`/`syncGovernanceProfile` derive `dataCategories`, `monetizationModel`, and
+  `relevantGovernanceDomains` entirely from a project's real Blueprint content — facts no Blueprint
+  content can imply (business/user locations, product category, user age range, distribution channels)
+  are deliberately left unset rather than guessed. `deriveSecurityPrivacyRequirements`/
+  `recordSecurityPrivacyGovernanceAssessment` derive a narrowed (not the full §31 list verbatim) set of
+  security/privacy requirements grounded in what the Blueprint actually contains, recorded as a ROUTINE
+  Decision reusing the existing Product-facing Decision Ledger rather than new schema.
+  `generatePolicyDraft` generates real Terms of Service/Privacy Policy/AI Disclosure content from actual
+  Blueprint/Product DNA state; facts §34 explicitly forbids inventing (company identity, jurisdiction,
+  contact details) are bracketed placeholders in the content itself plus a recorded Product Memory
+  `OPEN_QUESTION` — never fabricated — and every draft carries an explicit not-legal-advice/
+  requires-professional-review notice. 11 new integration tests. Full suite green (321/321
+  unit+integration, 9/9 e2e, clean typecheck/lint/format, production build). Honest limitation: only 3
+  of 13 `PolicyDocumentType` values have a real content generator; no professional-review/publication
+  workflow exists yet. See `D-0032`, `EV-0071`, `EV-0072`.
 
 ## Completed
 
