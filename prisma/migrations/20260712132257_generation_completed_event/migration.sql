@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "ProductEventType" ADD VALUE 'GENERATION_COMPLETED';

@@ -6,11 +6,13 @@ import { getLatestProductDNA } from "@/lib/product/product-dna";
 import { listDecisions } from "@/lib/product/decisions";
 import { listLatestTruthStatuses } from "@/lib/product/truth-status";
 import { listProductMemoryEntries } from "@/lib/product/product-memory";
+import { getLatestBuildPlan } from "@/lib/generation/build-plan";
 import {
   submitIdeaAction,
   respondToDecisionAction,
   updateUnitEconomicsAction,
 } from "@/lib/actions/studio-actions";
+import { generateApplicationAction } from "@/lib/actions/generation-actions";
 import { AppNav } from "@/components/app-nav";
 import { TruthBadge } from "@/components/truth-badge";
 import type { UnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
@@ -27,13 +29,14 @@ export default async function StudioSimpleModePage({
   const { error } = await searchParams;
   const { organization, project } = await resolveProjectForRoute(user.id, orgSlug, projectSlug);
 
-  const [productState, productDNA, pendingDecisions, truthStatuses, openQuestions] =
+  const [productState, productDNA, pendingDecisions, truthStatuses, openQuestions, buildPlan] =
     await Promise.all([
       getLatestProductState(user.id, project.id),
       getLatestProductDNA(user.id, project.id),
       listDecisions(user.id, project.id, { approvalStatus: "PENDING_APPROVAL" }),
       listLatestTruthStatuses(user.id, project.id),
       listProductMemoryEntries(user.id, project.id, { type: "OPEN_QUESTION" }),
+      getLatestBuildPlan(user.id, project.id),
     ]);
 
   const businessModelBrief = productState?.businessModelBrief as Record<string, unknown> | null;
@@ -147,10 +150,66 @@ export default async function StudioSimpleModePage({
               <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-500">
                 Preview
               </h2>
-              <div className="mt-3 flex h-40 items-center justify-center rounded-lg border border-dashed border-zinc-300 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-500">
-                Full-stack generation is not yet available (Phase 2). Nothing has been built for
-                this product yet.
-              </div>
+              {buildPlan ? (
+                <div className="mt-3 flex flex-col gap-4 rounded-lg border border-zinc-200 p-5 dark:border-zinc-800">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-black dark:text-white">
+                      Build Plan v{buildPlan.version} —{" "}
+                      <span
+                        className={
+                          buildPlan.planStatus === "READY"
+                            ? "text-green-700 dark:text-green-400"
+                            : "text-orange-700 dark:text-orange-400"
+                        }
+                      >
+                        {buildPlan.planStatus === "READY" ? "Ready" : "Blocked"}
+                      </span>
+                    </span>
+                    <form action={generateApplicationAction}>
+                      <input type="hidden" name="orgSlug" value={orgSlug} />
+                      <input type="hidden" name="projectSlug" value={projectSlug} />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium text-black hover:bg-zinc-50 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-900"
+                      >
+                        Regenerate
+                      </button>
+                    </form>
+                  </div>
+                  {buildPlan.planStatus === "BLOCKED" && (
+                    <ul className="flex flex-col gap-1 text-xs text-orange-700 dark:text-orange-400">
+                      {(buildPlan.blockers as string[]).map((blocker, index) => (
+                        <li key={index}>{blocker}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {(buildPlan.screenOrder as string[]).map((screen) => (
+                      <Link
+                        key={screen}
+                        href={`/org/${orgSlug}/${projectSlug}/preview/${encodeURIComponent(screen)}`}
+                        className="rounded-full bg-black px-3 py-1 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                      >
+                        Preview: {screen}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-zinc-300 p-8 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-500">
+                  <p>Nothing has been built for this product yet.</p>
+                  <form action={generateApplicationAction}>
+                    <input type="hidden" name="orgSlug" value={orgSlug} />
+                    <input type="hidden" name="projectSlug" value={projectSlug} />
+                    <button
+                      type="submit"
+                      className="rounded-full bg-black px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                    >
+                      Generate app
+                    </button>
+                  </form>
+                </div>
+              )}
             </section>
 
             <section className="mt-10">

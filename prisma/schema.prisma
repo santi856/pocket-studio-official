@@ -388,6 +388,7 @@ enum ProductEventType {
   TRUTH_STATUS_UPDATED
   BLUEPRINT_VERSION_CREATED
   BUILD_PLAN_VERSION_CREATED
+  GENERATION_COMPLETED
 }
 
 // Append-only audit trail of state-changing actions on a project. Never

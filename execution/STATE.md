@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-06 (Full-stack generation orchestration)
+- **Active implementation unit:** P2-07 (Demonstration product)
 
 ## Phase 2 Decomposition
 
@@ -28,7 +28,7 @@ says otherwise.
 | P2-03 ✅ | Build Planner — versioned Build Plan derived from a validated Blueprint                                                    | §24                      | P2-01                                       |
 | P2-04 ✅ | Generated-app data layer — generic multi-tenant store for a generated product's own data + end users                       | §25                      | Phase 1 tenancy                             |
 | P2-05 ✅ | Structured Renderer + Interactive Runtime — real, working UI interpreted from Blueprint screens, not hardcoded             | §25, §26                 | P2-01, P2-02                                |
-| P2-06    | Full-stack generation orchestration — ties Blueprint+BuildPlan+Registry+data layer+renderer into one generation call       | §25                      | P2-01..P2-05                                |
+| P2-06 ✅ | Full-stack generation orchestration — ties Blueprint+BuildPlan+Registry+data layer+renderer into one generation call       | §25                      | P2-01..P2-05                                |
 | P2-07    | Demonstration product — booking app for mobile detailers: concrete Blueprint content, screens, data models, business logic | §56                      | P2-06                                       |
 | P2-08    | Conversational editing + Change Sets + selective regeneration                                                              | §27, §57                 | P2-07, Phase 1 Orchestration Contract       |
 | P2-09    | Version history and restore                                                                                                | §27                      | P2-08                                       |
@@ -180,6 +180,30 @@ says otherwise.
   unit+integration, 7/7 e2e re-verified after the shared setup change, clean typecheck/lint/format,
   production build). Honest limitation: not wired into a live, customer-facing route yet — that
   orchestration is P2-06. See `D-0026`, `EV-0059`, `EV-0060`.
+- **P2-06 — Full-stack generation orchestration.** `generateApplication()`
+  (`src/lib/generation/generation-orchestrator.ts`) is the single generation call: regenerates a fresh
+  Blueprint, plans a Build Plan from it, and syncs Truth Status for `generation.full_stack_web_app` to
+  _this project's_ real `GENERATED`/`BLOCKED` outcome — a per-project fact, distinct from the
+  platform-wide roadmap claim that a generation pipeline exists at all. A new live route,
+  `/org/[orgSlug]/[projectSlug]/preview/[screen]`, gated by the same platform session/tenant checks as
+  every other Studio page, loads the current Build Plan's `componentStructure` for a screen, binds real
+  data via `loadScreenData`+`bindScreenData` (P2-05), and renders it with `ComponentRenderer`, with Form
+  submission wired to a real Server Action (`submitGeneratedRecordAction`, using Next.js's bound-arguments
+  pattern to carry `orgSlug`/`projectSlug`/`screenName`). `authenticateGeneratedAppUser`
+  (`generated-app-auth.ts`) verifies real credentials for a generated product's own end user — no
+  session/cookie of its own yet. The Studio page's placeholder Preview section is now a real
+  "Generate app"/"Regenerate" action plus real per-screen Preview links reflecting the actual Build
+  Plan. Also fixed a real gap: `submitGeneratedRecordAction` now gracefully handles
+  `InvalidRecordDataError`/`UnknownDataModelError` — a Build Plan's placeholder Form doesn't yet name its
+  Input after a data model's real required fields, so a genuine submission through the DOM will
+  legitimately fail today, and it must fail gracefully (redirect with an honest message), the same
+  discipline already established for `createProjectAction` (D-0018). 17 new tests (11 integration against
+  a real database, 1 new e2e test driving Generate → Preview → a real data-bound `EmptyState` through an
+  actual browser). Full suite green (279/279 unit+integration, 8/8 e2e, clean typecheck/lint/format,
+  production build — new route confirmed in build output). Honest limitations: the live preview requires
+  the existing platform session, not a separate customer-facing route; the Form/data-model field mismatch
+  means a real write through the DOM isn't provable yet, only the read/list-binding path. See `D-0027`,
+  `EV-0061`, `EV-0062`.
 
 ## Completed
 
