@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-12 (Migration planning for generated-app data model changes)
+- **Active implementation unit:** P2-13 (Export foundation + durable jobs)
 
 ## Phase 2 Decomposition
 
@@ -34,7 +34,7 @@ says otherwise.
 | P2-09 ✅ | Version history and restore                                                                                                | §27                      | P2-08                                       |
 | P2-10 ✅ | Quality Gate — unit/integration/authorization/tenant/accessibility/e2e tests for the generated product                     | §55, §59                 | P2-07                                       |
 | P2-11 ✅ | Security/privacy/governance impact + legal/policy draft generation from real state                                         | §31, §32, §34            | P2-07, Phase 1 PolicyDocument               |
-| P2-12    | Migration planning for generated-app data model changes                                                                    | §28                      | P2-08                                       |
+| P2-12 ✅ | Migration planning for generated-app data model changes                                                                    | §28                      | P2-08                                       |
 | P2-13    | Export foundation + durable jobs/retries/checkpoints/idempotency                                                           | §25, §29                 | P2-07                                       |
 | P2-14    | Web and PWA output                                                                                                         | §39, §40                 | P2-05                                       |
 | P2-15    | Mobile architecture selection + generated mobile project                                                                   | §41                      | P2-01, P2-04                                |
@@ -304,6 +304,25 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
   unit+integration, 9/9 e2e, clean typecheck/lint/format, production build). Honest limitation: only 3
   of 13 `PolicyDocumentType` values have a real content generator; no professional-review/publication
   workflow exists yet. See `D-0032`, `EV-0071`, `EV-0072`.
+- **P2-12 — Migration planning for generated-app data model changes (Master Spec §28).**
+  `src/lib/generation/migration-planning.ts`, scoped to a generated product's own data models
+  (Blueprint `dataModels` / P2-04's `GeneratedRecord` store), not this platform's own Postgres schema
+  (already migrated through Prisma). `planDataModelMigration(fromVersion, toVersion)` performs the full
+  §28 sequence: schema diff (`diffDataModels`, a pure function classifying each data model as
+  added/removed/changed/unchanged with field-level detail); a real data-loss analysis that queries
+  actual `GeneratedRecord` rows for each removed field rather than guessing structurally; compatibility
+  notes for added fields (existing records will need them backfilled on next update); an ordered
+  migration plan; and an honest backup requirement (no automated backup mechanism exists yet —
+  disclosed, not glossed over) and rollback plan (referencing P2-09's append-only
+  `restoreBlueprintVersion`). Never mutates any `GeneratedRecord` row — Preview only.
+  `recordMigrationPlanDecision` records the plan as CONSEQUENTIAL when destructive or ROUTINE
+  otherwise, reusing the existing Decision Ledger rather than a new one-off approval gate. 12 new tests
+  (4 pure unit, 8 integration against a real database, including a genuine data-loss scenario built by
+  creating a real record then a Blueprint version that drops the field it uses). Full suite green
+  (333/333 unit+integration, 9/9 e2e, clean typecheck/lint/format, production build). Honest
+  limitation: not wired into `applyChangeSet`'s auto-apply path — a destructive Change Set still
+  regenerates automatically today; no backup mechanism exists (deferred to P2-13). See `D-0033`,
+  `EV-0073`, `EV-0074`.
 
 ## Completed
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "generatedBy": "execution-protocol-v1.0-session-init",
-  "lastUpdated": "2026-07-12T13:00:00Z",
+  "lastUpdated": "2026-07-12T14:00:00Z",
   "governanceCommit": "25a33f0",
   "phase": {
     "current": "phase-2",
@@ -16,7 +16,7 @@
     "previousMilestone": "M4-editing (P2-08, P2-09, complete)",
     "description": "Quality Gate, security/privacy/governance impact, legal drafts, migration planning (P2-10..P2-12) — verifying and disclosing what a generation actually is, not just producing it."
   },
-  "activeImplementationUnit": "P2-12",
+  "activeImplementationUnit": "P2-13",
   "architecturalStandards": [
     {
       "id": "AS-0001",
@@ -44,9 +44,10 @@
       "P2-08: Conversational editing, Change Sets, selective regeneration — new ChangeSet model (1:1 with its governing Decision) computing addedCategories by diffing requirements derived from the prior idea vs. the combined (never-discarded) idea text; edit_request intents now generate a Change Set and apply it immediately (non-consequential) or hold it PENDING until Decision approval (consequential); regeneration only happens when addedCategories is non-empty. Also fixed a real regression this work surfaced live in the e2e suite: generateProductIntelligence silently reset a customer's edited unitEconomicsAssumptions on a second call, since ProductState is full-replace — now carries that one customer-editable field forward (EV-0065, EV-0066, D-0029)",
       "P2-09: Version history and restore — getProjectVersionHistory aggregates ProductState/Blueprint/BuildPlan/ChangeSet into one chronological, immutable-by-construction timeline; previewBlueprintRestore computes a real screens/dataModels diff; validateBlueprintRestore re-validates a target version's stored content before restoring; restoreBlueprintVersion creates a new top version with the target's content, never mutating history in between. Restore scoped to Blueprint only (Build Plan is cheaply regenerable; Product State restore has no established use case yet) (EV-0067, EV-0068, D-0030)",
       "P2-10: Quality Gate for the generated product — runQualityGate() runs 8 real checks against a project's current Blueprint/Build Plan (structural validity, no blockers, well-formed Interaction Contracts, list-view screens actually data-bound, form-submission Inputs matching their bound data model's real fields, screen reachability, image alt text, and a real server-side data-binding smoke check), recording Product Evidence and syncing Truth Status for a new quality.gate subject key — never a self-report (EV-0069, EV-0070, D-0031)",
-      "P2-11: Security/privacy/governance impact + legal draft generation — GovernanceProfile fields (dataCategories, monetizationModel, relevantGovernanceDomains) and security/privacy requirements now derived entirely from a project's real Blueprint content (never guessing jurisdiction/location facts); Terms of Service/Privacy Policy/AI Disclosure drafts generated from real Blueprint/Product DNA state with facts §34 forbids inventing (company identity, jurisdiction, contact) left as bracketed placeholders + recorded Open Questions, never fabricated; every draft carries an explicit not-legal-advice/requires-professional-review notice. 10 of 13 PolicyDocumentType values still have no content generator (EV-0071, EV-0072, D-0032)"
+      "P2-11: Security/privacy/governance impact + legal draft generation — GovernanceProfile fields (dataCategories, monetizationModel, relevantGovernanceDomains) and security/privacy requirements now derived entirely from a project's real Blueprint content (never guessing jurisdiction/location facts); Terms of Service/Privacy Policy/AI Disclosure drafts generated from real Blueprint/Product DNA state with facts §34 forbids inventing (company identity, jurisdiction, contact) left as bracketed placeholders + recorded Open Questions, never fabricated; every draft carries an explicit not-legal-advice/requires-professional-review notice. 10 of 13 PolicyDocumentType values still have no content generator (EV-0071, EV-0072, D-0032)",
+      "P2-12: Migration planning for generated-app data model changes — planDataModelMigration performs the full §28 sequence (schema diff, real data-loss analysis querying actual GeneratedRecord rows per removed field rather than guessing, compatibility notes, ordered migration plan, honest backup requirement disclosing no automated backup mechanism exists, rollback plan referencing P2-09's restore) between any two Blueprint versions; recordMigrationPlanDecision records it as CONSEQUENTIAL when destructive or ROUTINE otherwise, reusing the existing Decision Ledger. Standalone/explicitly-invoked, not wired into applyChangeSet's auto-apply path (EV-0073, EV-0074, D-0033)"
     ],
-    "active": ["P2-12: Migration planning for generated-app data model changes"],
+    "active": ["P2-13: Export foundation + durable jobs"],
     "deferred": [],
     "blocked": []
   },
@@ -82,7 +83,8 @@
     "D-0029",
     "D-0030",
     "D-0031",
-    "D-0032"
+    "D-0032",
+    "D-0033"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -105,8 +107,8 @@
     "typecheck": "pass",
     "lint": "pass",
     "formatCheck": "pass",
-    "unit": "pass (106/106)",
-    "integration": "pass (215/215)",
+    "unit": "pass (110/110)",
+    "integration": "pass (223/223)",
     "e2e": "pass (9/9)",
     "productionBuild": "pass"
   },
@@ -182,7 +184,9 @@
     "EV-0069",
     "EV-0070",
     "EV-0071",
-    "EV-0072"
+    "EV-0072",
+    "EV-0073",
+    "EV-0074"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories — not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (§61).",
@@ -193,6 +197,7 @@
     "Version history (P2-09) aggregates Product State/Blueprint/Build Plan/Change Set into one read-only timeline, and restore exists for Blueprint only — Build Plan and Product State have no restore function yet (Build Plan is cheaply regenerable from a Blueprint; Product State restore has no established use case). No Studio UI surface exists yet for browsing version history or triggering a restore (P2-17).",
     "The Quality Gate (P2-10) runs 8 real structural/server-side checks but does not run a per-generation browser e2e test or live authorization/tenant fuzzing — tenant isolation is verified structurally (by construction, via P2-04's own tests), not re-tested per Quality Gate invocation. No Studio UI surface exists yet for viewing Quality Gate results (P2-17).",
     "Legal draft generation (P2-11) only has real content generators for 3 of 13 PolicyDocumentType values (Terms of Service, Privacy Policy, AI Disclosure) — the other 10 (Acceptable Use Policy, Cookie Notice, subscription/cancellation terms, data-retention policy, support policy, accessibility statement, communications consent, mobile-permission explanations, marketplace terms) still have no content generator. No professional legal review workflow exists (Master Spec §34's publication requirement) — drafts are generated only, never marked reviewed or published. No Studio UI surface exists yet for viewing/generating these (P2-17).",
+    "Migration planning (P2-12) is a standalone, explicitly-invoked tool, not wired into applyChangeSet's auto-apply path — a Change Set that would be destructive to existing GeneratedRecord data still regenerates automatically today (P2-08's existing consequential-decision gate covers Impact Analysis categories, not data-loss risk specifically). No automated backup/snapshot mechanism exists for GeneratedRecord data — every migration plan discloses this honestly rather than implementing it (deferred to P2-13's export/durable-jobs scope). No Studio UI surface exists yet (P2-17).",
     "The Build Planner's planStatus deliberately does not treat the platform's own SUPPORTED_LATER_PHASE generation capability as a blocker (see D-0024) — a Build Plan can be READY today even though nothing yet executes it; that gap is disclosed via Truth Status and this list, not via planStatus.",
     "Blueprint has no Studio UI surface yet (P2-17 wires this up); it is currently reachable only via the service layer and its integration tests.",
     "The Product Pattern and Interaction Contract System (src/lib/generation/interaction-contracts.ts) validates that an interaction contract is declared and structurally complete, not that a generated screen actually implements the required states — no component tree or renderer exists until the Structured Renderer (P2-05) and generation pipeline (P2-06). Pattern inference is a fixed, hand-authored deterministic mapping (5 patterns, 7 states), not semantic understanding.",
@@ -202,5 +207,5 @@
   ],
   "requiredCustomerActions": [],
   "requiredExternalActions": [],
-  "nextAction": "Begin P2-12: Migration planning for generated-app data model changes (Master Spec §28). Every generated data model change today (a Blueprint restore, or a Change Set that regenerates dataModels with different fields) silently produces a new Blueprint version with no schema diff, data-loss analysis, compatibility analysis, backup requirement, or rollback plan against the real GeneratedRecord rows already stored under the OLD field set (P2-04). §28 explicitly requires: 'AI may not silently perform destructive production changes.' Concretely: a function that diffs two Blueprint versions' dataModels (fields added/removed/renamed), classifies removed/renamed fields as potentially destructive (existing GeneratedRecord rows still have the old field, now unreferenced by generation but not deleted), and requires that classification be surfaced before a Change Set applies rather than silently proceeding."
+  "nextAction": "Begin P2-13: Export foundation + durable jobs (Master Spec §25, §29). Two related capabilities: (1) an export foundation that packages a project's current Blueprint/Build Plan/generated-app data into a downloadable, inspectable artifact (e.g. a structured JSON bundle — real code-file export is a much larger scope this unit should not overclaim); (2) durable jobs: §29 requires handling model timeouts, invalid output, partial generation, failed validation/tests/builds/exports, and job interruption via durable jobs, checkpoints, retries, idempotency, resumability, and clear status — none of which exist yet, since every generation call today (generateApplication, applyChangeSet) is a single synchronous request/response with no persisted job record, no retry, and no resumability if interrupted mid-way. A minimal, honest starting point: a JobRun model recording status (PENDING/RUNNING/SUCCEEDED/FAILED) and checkpoints for the generation pipeline specifically, since that is the longest-running, most failure-prone operation that exists today."
 }
