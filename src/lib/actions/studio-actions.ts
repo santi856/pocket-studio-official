@@ -3,8 +3,8 @@
 import { redirect } from "next/navigation";
 import { requireCurrentUser } from "@/lib/auth/current-user";
 import { resolveProjectForRoute } from "@/lib/web/resolve-project";
-import { beginChangeFlow } from "@/lib/orchestration/change-flow";
-import { respondToDecision, DecisionNotPendingError } from "@/lib/product/decisions";
+import { beginChangeFlow, respondToChangeSetDecision } from "@/lib/orchestration/change-flow";
+import { DecisionNotPendingError } from "@/lib/product/decisions";
 import { getLatestProductState, updateUnitEconomicsAssumptions } from "@/lib/product/product-state";
 import { defaultUnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
 import type { UnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
@@ -40,7 +40,7 @@ export async function respondToDecisionAction(formData: FormData): Promise<void>
   // back to the Studio page, not crash, the same discipline already
   // applied to createProjectAction for a forged cross-tenant slug.
   try {
-    await respondToDecision(user.id, project.id, decisionId, { approve });
+    await respondToChangeSetDecision(user.id, project.id, decisionId, { approve });
   } catch (error) {
     if (error instanceof DecisionNotPendingError) {
       redirect(

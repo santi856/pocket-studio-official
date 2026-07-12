@@ -1,6 +1,6 @@
 import "server-only";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
-import { createProductStateVersion } from "@/lib/product/product-state";
+import { createProductStateVersion, getLatestProductState } from "@/lib/product/product-state";
 import { updateProductDNA } from "@/lib/product/product-dna";
 import { addProductMemoryEntry } from "@/lib/product/product-memory";
 import { createKnowledgeNode } from "@/lib/product/product-knowledge";
@@ -40,6 +40,17 @@ export type ProductIntelligenceResult = {
  * provider (Requirements/Business Intelligence derivation) and the
  * Supported Capability Registry (Feasibility) — nothing here is invented
  * beyond what those two sources actually support.
+ *
+ * ProductState is full-replace versioned (like Blueprint), not
+ * carry-forward like ProductDNA — every field this function computes is
+ * genuinely re-derived on each call. `unitEconomicsAssumptions` is the one
+ * exception: it is the one field a customer can directly edit
+ * (updateUnitEconomicsAssumptions), so calling this function again later —
+ * e.g. from an applied Change Set (P2-08) — must carry it forward from the
+ * latest existing Product State rather than silently resetting it to
+ * defaults. Discovered as a real regression while wiring Change Sets: the
+ * only prior caller of this function (describe_idea) never had a second
+ * call with a prior customer edit to lose.
  */
 export async function generateProductIntelligence(
   actorUserId: string,
@@ -48,6 +59,8 @@ export async function generateProductIntelligence(
 ): Promise<ProductIntelligenceResult> {
   await requireProjectAccess(actorUserId, projectId, "MEMBER");
 
+  const previousState = await getLatestProductState(actorUserId, projectId);
+
   const requirements = deriveRequirements(rawIdea);
   const openQuestions = deriveOpenQuestions(rawIdea, requirements);
   const targetCustomer = extractTargetCustomer(rawIdea);
@@ -55,7 +68,8 @@ export async function generateProductIntelligence(
   const feasibilityReport = await assessFeasibility(capabilityKeys);
   const businessModelBrief = deriveBusinessModelBrief(rawIdea, requirements);
   const monetizationRecommendations = deriveMonetizationRecommendations(requirements);
-  const unitEconomicsAssumptions = defaultUnitEconomicsAssumptions();
+  const unitEconomicsAssumptions =
+    previousState?.unitEconomicsAssumptions ?? defaultUnitEconomicsAssumptions();
   const operationalComplexity = {
     level: businessModelBrief.operationalComplexity,
     supportBurden: businessModelBrief.supportBurden,

@@ -7,7 +7,9 @@ import { createOrganization } from "@/lib/services/organizations";
 import { createProject } from "@/lib/services/projects";
 import { listDecisions } from "@/lib/product/decisions";
 import { seedCapabilityRegistry } from "@/lib/registry/seed-data";
-import { beginChangeFlow } from "./change-flow";
+import { getLatestBlueprint } from "@/lib/generation/blueprint";
+import { listEvents } from "@/lib/product/events";
+import { beginChangeFlow, respondToChangeSetDecision } from "./change-flow";
 
 describe("beginChangeFlow", () => {
   beforeEach(async () => {
@@ -80,5 +82,115 @@ describe("beginChangeFlow", () => {
 
     const decisions = await listDecisions(owner.id, project.id);
     expect(decisions).toHaveLength(1);
+  });
+
+  it("immediately applies a non-consequential edit's Change Set and regenerates when it adds a new category", async () => {
+    const { owner, project } = await seedProject();
+    await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Build a premium booking app for mobile detailers.",
+    );
+
+    const result = await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Add a database of customer records.",
+    );
+
+    expect(result.decision.disclosureTier).toBe("IMPORTANT");
+    expect(result.decision.approvalStatus).toBe("RECOMMENDED");
+    expect(result.changeSet?.status).toBe("APPLIED");
+    expect(result.changeSet?.requiresRegeneration).toBe(true);
+    expect(result.changeSet?.resultingBlueprintVersion).toBe(1);
+
+    const blueprint = await getLatestBlueprint(owner.id, project.id);
+    expect(blueprint?.dataModels).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "Record" })]),
+    );
+  });
+
+  it("applies a Change Set with no new signal without creating a no-op Blueprint version", async () => {
+    const { owner, project } = await seedProject();
+    await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Build a premium booking app for mobile detailers.",
+    );
+
+    const result = await beginChangeFlow(owner.id, project.id, "Please make it nice.");
+
+    expect(result.changeSet?.status).toBe("APPLIED");
+    expect(result.changeSet?.requiresRegeneration).toBe(false);
+    expect(result.changeSet?.resultingBlueprintVersion).toBeNull();
+    expect(result.changeSet?.resultSummary).toContain("No structural change was needed");
+
+    const blueprint = await getLatestBlueprint(owner.id, project.id);
+    expect(blueprint).toBeNull();
+  });
+
+  it("leaves a CONSEQUENTIAL edit's Change Set PENDING until approved, then applies and regenerates it", async () => {
+    const { owner, project } = await seedProject();
+    await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Build a premium booking app for mobile detailers.",
+    );
+    const first = await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Add appointment deposits and monthly memberships.",
+    );
+
+    expect(first.changeSet?.status).toBe("PENDING");
+    expect(await getLatestBlueprint(owner.id, project.id)).toBeNull();
+
+    await respondToChangeSetDecision(owner.id, project.id, first.decision.id, { approve: true });
+
+    const blueprint = await getLatestBlueprint(owner.id, project.id);
+    expect(blueprint?.version).toBe(1);
+    const events = await listEvents(owner.id, project.id, { type: "CHANGE_SET_APPLIED" });
+    expect(events).toHaveLength(1);
+  });
+
+  it("rejects a CONSEQUENTIAL edit's Change Set without regenerating when declined", async () => {
+    const { owner, project } = await seedProject();
+    await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Build a premium booking app for mobile detailers.",
+    );
+    const first = await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Add appointment deposits and monthly memberships.",
+    );
+
+    await respondToChangeSetDecision(owner.id, project.id, first.decision.id, { approve: false });
+
+    expect(await getLatestBlueprint(owner.id, project.id)).toBeNull();
+    const events = await listEvents(owner.id, project.id, { type: "CHANGE_SET_REJECTED" });
+    expect(events).toHaveLength(1);
+  });
+
+  it("preserves every prior Decision untouched when responding to a later Change Set decision", async () => {
+    const { owner, project } = await seedProject();
+    const initial = await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Build a premium booking app for mobile detailers.",
+    );
+    const edit = await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Add appointment deposits and monthly memberships.",
+    );
+
+    await respondToChangeSetDecision(owner.id, project.id, edit.decision.id, { approve: true });
+
+    const decisions = await listDecisions(owner.id, project.id);
+    const initialDecision = decisions.find((d) => d.id === initial.decision.id);
+    expect(initialDecision?.approvalStatus).toBe("AUTO_APPLIED");
+    expect(initialDecision?.summary).toBe(initial.decision.summary);
   });
 });

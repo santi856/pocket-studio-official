@@ -100,6 +100,7 @@ model Project {
   buildPlans              BuildPlan[]
   generatedAppUsers       GeneratedAppUser[]
   generatedRecords        GeneratedRecord[]
+  changeSets              ChangeSet[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -150,6 +151,8 @@ model Decision {
 
   createdByUserId String?
   createdAt       DateTime @default(now())
+
+  changeSet ChangeSet?
 
   @@index([projectId])
   @@index([projectId, approvalStatus])
@@ -389,6 +392,8 @@ enum ProductEventType {
   BLUEPRINT_VERSION_CREATED
   BUILD_PLAN_VERSION_CREATED
   GENERATION_COMPLETED
+  CHANGE_SET_APPLIED
+  CHANGE_SET_REJECTED
 }
 
 // Append-only audit trail of state-changing actions on a project. Never
@@ -919,4 +924,45 @@ model GeneratedRecord {
   @@index([projectId])
   @@index([projectId, modelKey])
   @@map("generated_records")
+}
+
+// ---------------------------------------------------------------------------
+// Conversational editing / Change Sets (Master Spec §27, §57, Phase 2).
+// ---------------------------------------------------------------------------
+
+enum ChangeSetStatus {
+  PENDING
+  APPLIED
+  REJECTED
+}
+
+// One Change Set per governing Decision (1:1) — a Change Set is the
+// structured record of *what an edit_request would change*, computed at
+// the same time the Decision is recorded; applying it is a separate step
+// gated by that Decision's approval status (Master Spec §15), never
+// silently applied ahead of it.
+model ChangeSet {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  decisionId String   @unique
+  decision   Decision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+
+  sourceText           String
+  priorIdea            String
+  combinedIdea         String
+  impactCategories     Json
+  addedCategories      Json
+  requiresRegeneration Boolean
+
+  status                    ChangeSetStatus
+  resultSummary             String?
+  resultingBlueprintVersion Int?
+  resultingBuildPlanVersion Int?
+
+  createdAt DateTime  @default(now())
+  appliedAt DateTime?
+
+  @@index([projectId])
+  @@map("change_sets")
 }

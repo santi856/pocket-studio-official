@@ -1,12 +1,18 @@
 import "server-only";
 import { resolveIntent } from "@/lib/orchestration/intent-resolver";
 import { analyzeImpact } from "@/lib/orchestration/impact-analysis";
-import { recordDecision } from "@/lib/product/decisions";
+import { recordDecision, respondToDecision } from "@/lib/product/decisions";
 import { generateProductIntelligence } from "@/lib/orchestration/product-intelligence";
+import {
+  applyChangeSet,
+  createChangeSet,
+  getChangeSetByDecisionId,
+  rejectChangeSet,
+} from "@/lib/orchestration/change-set";
 import type { ProductIntelligenceResult } from "@/lib/orchestration/product-intelligence";
 import type { ResolvedIntent } from "@/lib/ai/provider";
 import type { ImpactAnalysisResult } from "@/lib/orchestration/impact-analysis";
-import type { Decision } from "@/generated/prisma/client";
+import type { ChangeSet, Decision } from "@/generated/prisma/client";
 
 export type ChangeFlowResult = {
   intent: ResolvedIntent;
@@ -14,6 +20,8 @@ export type ChangeFlowResult = {
   decision: Decision;
   /** Only present when intent.type === "describe_idea" — see Master Spec §51. */
   productIntelligence?: ProductIntelligenceResult;
+  /** Only present when intent.type === "edit_request" — see Master Spec §27, §57. */
+  changeSet?: ChangeSet;
 };
 
 /**
@@ -30,11 +38,14 @@ export type ChangeFlowResult = {
  *
  * A first-time idea (`describe_idea`) runs Feasibility and Generate
  * Structured Proposals via `generateProductIntelligence`, which itself
- * updates Product State atomically and creates a version — Phase 1's
- * customer flow (§51) never requires an edit, so `edit_request` intents
- * only reach the disclosure/approval decision for now; full conversational
- * editing with impact-aware regeneration is Phase 2 scope (§55, §57).
- * Truth Status (P1-07) will extend this function rather than duplicate it.
+ * updates Product State atomically and creates a version. An `edit_request`
+ * (Master Spec §27, §57) generates a structured Change Set (P2-08) in
+ * addition to the disclosure/approval decision every intent already
+ * receives — and, when the governing decision does not require explicit
+ * approval (ROUTINE/IMPORTANT, not CONSEQUENTIAL), applies it immediately.
+ * A CONSEQUENTIAL edit's Change Set stays `PENDING` until
+ * `respondToChangeSetDecision` records an approval — never silently
+ * applied ahead of it.
  */
 export async function beginChangeFlow(
   actorUserId: string,
@@ -68,5 +79,39 @@ export async function beginChangeFlow(
       ? await generateProductIntelligence(actorUserId, projectId, rawText)
       : undefined;
 
-  return { intent, impact, decision, productIntelligence };
+  let changeSet: ChangeSet | undefined;
+  if (intent.type === "edit_request") {
+    changeSet = await createChangeSet(actorUserId, projectId, { decisionId: decision.id, rawText });
+    if (decision.approvalStatus !== "PENDING_APPROVAL") {
+      changeSet = await applyChangeSet(actorUserId, projectId, changeSet.id);
+    }
+  }
+
+  return { intent, impact, decision, productIntelligence, changeSet };
+}
+
+/**
+ * Wraps `respondToDecision` so a decision governing a Change Set drives it
+ * through the same apply/reject lifecycle on approval — a plain decision
+ * with no linked Change Set (e.g. from `describe_idea`) behaves exactly as
+ * `respondToDecision` alone always has.
+ */
+export async function respondToChangeSetDecision(
+  actorUserId: string,
+  projectId: string,
+  decisionId: string,
+  input: { approve: boolean; customerResponse?: string },
+): Promise<Decision> {
+  const decision = await respondToDecision(actorUserId, projectId, decisionId, input);
+
+  const changeSet = await getChangeSetByDecisionId(actorUserId, projectId, decisionId);
+  if (changeSet && changeSet.status === "PENDING") {
+    if (input.approve) {
+      await applyChangeSet(actorUserId, projectId, changeSet.id);
+    } else {
+      await rejectChangeSet(actorUserId, projectId, changeSet.id);
+    }
+  }
+
+  return decision;
 }

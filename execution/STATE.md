@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-08 (Conversational editing, Change Sets, selective regeneration)
+- **Active implementation unit:** P2-09 (Version history and restore)
 
 ## Phase 2 Decomposition
 
@@ -30,7 +30,7 @@ says otherwise.
 | P2-05 ✅ | Structured Renderer + Interactive Runtime — real, working UI interpreted from Blueprint screens, not hardcoded             | §25, §26                 | P2-01, P2-02                                |
 | P2-06 ✅ | Full-stack generation orchestration — ties Blueprint+BuildPlan+Registry+data layer+renderer into one generation call       | §25                      | P2-01..P2-05                                |
 | P2-07 ✅ | Demonstration product — booking app for mobile detailers: concrete Blueprint content, screens, data models, business logic | §56                      | P2-06                                       |
-| P2-08    | Conversational editing + Change Sets + selective regeneration                                                              | §27, §57                 | P2-07, Phase 1 Orchestration Contract       |
+| P2-08 ✅ | Conversational editing + Change Sets + selective regeneration                                                              | §27, §57                 | P2-07, Phase 1 Orchestration Contract       |
 | P2-09    | Version history and restore                                                                                                | §27                      | P2-08                                       |
 | P2-10    | Quality Gate — unit/integration/authorization/tenant/accessibility/e2e tests for the generated product                     | §55, §59                 | P2-07                                       |
 | P2-11    | Security/privacy/governance impact + legal/policy draft generation from real state                                         | §31, §32, §34            | P2-07, Phase 1 PolicyDocument               |
@@ -222,6 +222,35 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
   not silently implied to be complete. 4 new integration tests (1 regression for the Input-naming fix +
   3 for the official demonstration), 1 new e2e test. Full suite green (283/283 unit+integration, 9/9
   e2e, clean typecheck/lint/format, production build). See `D-0028`, `EV-0063`, `EV-0064`.
+- **P2-08 — Conversational editing, Change Sets, selective regeneration (Master Spec §27, §57).**
+  New `ChangeSet` Prisma model (1:1 with its governing `Decision`, migration `20260712143138_change_sets`)
+  plus `src/lib/orchestration/change-set.ts`. Every `edit_request` intent (`beginChangeFlow`) now
+  generates a structured Change Set alongside its Decision: `combinedIdea` always appends the edit to
+  the prior idea text rather than replacing it (never discarding what was already said), and
+  `addedCategories` is computed by diffing `deriveRequirements(priorIdea)` against
+  `deriveRequirements(combinedIdea)` — the categories genuinely new to this edit. "Selective
+  regeneration" means exactly that: `generateProductIntelligence` + `generateApplication`
+  (P1-06/P2-06) only run when `addedCategories` is non-empty; an edit with no new structural signal is
+  honestly recorded `APPLIED` with no new Blueprint/Build Plan version, not a no-op version. A
+  ROUTINE/IMPORTANT edit's Change Set applies immediately; a CONSEQUENTIAL edit's stays `PENDING` until
+  approved, via a new `respondToChangeSetDecision` wrapper (now used by `respondToDecisionAction`) that
+  only drives apply/reject for decisions with a linked Change Set — a plain decision (e.g. from
+  `describe_idea`) behaves exactly as before.
+
+  Building this live (not just with unit tests) surfaced a real regression, fixed in the same unit:
+  `generateProductIntelligence`'s `ProductState` is full-replace, and calling it a second time from an
+  applied Change Set silently reset a customer's already-edited `unitEconomicsAssumptions` back to
+  defaults — Phase 1 never exercised a second call to that function, so this never surfaced before.
+  `golden-path.spec.ts` caught it live in a real browser. Fixed by carrying `unitEconomicsAssumptions`
+  forward from the latest existing Product State unless there is none yet, the same "must not silently
+  erase" principle already applied to Product DNA (D-0006), now correctly extended to the one
+  Product-State field a customer can directly edit. 12 new integration tests (5 in
+  `change-flow.integration.test.ts`, 6 in `change-set.integration.test.ts`, 1 regression test in
+  `product-intelligence.integration.test.ts`). Full suite green (295/295 unit+integration, 9/9 e2e
+  including the test that caught the regression, clean typecheck/lint/format, production build).
+  Honest limitation: "selective regeneration" is category-level, not screen/field-level; version
+  history and restore (§27's other half) is P2-09, not delivered here. See `D-0029`, `EV-0065`,
+  `EV-0066`.
 
 ## Completed
 

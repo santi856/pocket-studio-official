@@ -10,6 +10,9 @@ import { listProductMemoryEntries } from "@/lib/product/product-memory";
 import { listKnowledgeNodes } from "@/lib/product/product-knowledge";
 import { listEvents } from "@/lib/product/events";
 import { listLatestTruthStatuses } from "@/lib/product/truth-status";
+import { updateUnitEconomicsAssumptions } from "@/lib/product/product-state";
+import { defaultUnitEconomicsAssumptions } from "./unit-economics";
+import type { UnitEconomicsAssumptions } from "./unit-economics";
 import { generateProductIntelligence } from "./product-intelligence";
 
 describe("generateProductIntelligence", () => {
@@ -121,5 +124,24 @@ describe("generateProductIntelligence", () => {
       "generation.full_stack_web_app",
     );
     expect(result.feasibilityReport.overallSupported).toBe(false);
+  });
+
+  it("carries forward a customer's edited unit-economics assumptions on a later call, never silently resetting them", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(owner.id, project.id, "Build a booking app.");
+    await updateUnitEconomicsAssumptions(owner.id, project.id, {
+      ...defaultUnitEconomicsAssumptions(),
+      price: { value: 75, source: "user_provided" },
+    });
+
+    const result = await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build a booking app. Add appointment deposits.",
+    );
+
+    expect(
+      (result.productState.unitEconomicsAssumptions as UnitEconomicsAssumptions).price.value,
+    ).toBe(75);
   });
 });
