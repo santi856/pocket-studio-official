@@ -4,13 +4,11 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 ## Current Position
 
-- **Phase:** Phase 1 — Intelligence, Business Foundation, Trust Architecture, and Premium Experience
-- **Phase status:** active
-- **Milestone:** M1-foundation is complete (P1-01..P1-09); now in **M2-studio-shell** — wiring the
-  foundation service layer to real customer-facing surfaces (Master Spec §51 first customer flow)
-- **Phase 1 status:** verification active — all 11 implementation units complete, awaiting the Level 3
-  independent phase-exit review (the one designed pause in continuous execution).
-- **Active implementation unit:** P1-EXIT (assemble evidence, checkpoint, Level 3 review)
+- **Phase:** Phase 1 — Intelligence, Business Foundation, Trust Architecture, and Premium Experience —
+  **COMPLETE**. Level 3 independent phase-exit review accepted the phase (round 2, EV-0047) against
+  commit `3739836`. See `execution/reviews/level3/phase-1/PHASE_1_COMPLETION_REPORT.md`.
+- **Now on:** Phase 2 — Full-Stack Generation, Editing, Mobile Output, Business Operations, and
+  Verification (Master Spec §54-59), not yet started.
 
 ## Completed
 
@@ -173,26 +171,44 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
   write (intent resolution + impact analysis + decision recording) exceeded the default 5s timeout under
   load (fixed with an explicit longer timeout, not a blind sleep — root-caused per Execution Protocol §9,
   `D-0017`). Verified stable across 5/5 and 3/3 repeated runs after the fix. Evidence: `EV-0041`..`EV-0043`.
+- **P1-EXIT — Phase 1 evidence assembly and Level 3 independent review.** Two review rounds. **Round 1**
+  (commit `890d38d`): verdict **revise**. The independent reviewer reproduced 3 DEFECTs live against a
+  genuinely wiped-and-remigrated environment: the e2e suite failed from an unseeded database (nothing
+  ran `prisma/seed.ts` automatically); `createProjectAction` crashed on a forged cross-tenant
+  `organizationSlug` instead of failing gracefully; `registerUser` had no server-side minimum password
+  length (the HTML `minLength` was client-side only). Plus one IMPROVEMENT: D-0014's fix was real but
+  had no automated regression test. **Fixes** (commit `3739836`, `D-0018`): `e2e/global-setup.ts` wires
+  `npm run db:seed` into Playwright's startup; `project-actions.ts` now catches `ForbiddenError`
+  gracefully; `registerUser` now enforces an 8-character minimum server-side; `e2e/auth-guard.spec.ts`
+  and `e2e/tenant-isolation.spec.ts` added as regression coverage. Each fix verified by reproducing the
+  reviewer's own steps. **Round 2** (commit `3739836`): verdict **accept** — the same reviewer
+  independently re-verified every fix, including authoring its own separate adversarial script for the
+  cross-tenant finding rather than trusting the shipped test, and found nothing new introduced by the
+  fixes. **Phase 1 is complete.** Evidence: `EV-0044`..`EV-0047`. Full report:
+  `execution/reviews/level3/phase-1/PHASE_1_COMPLETION_REPORT.md`.
 
 ## Active
 
-- P1-EXIT: assemble the Phase 1 evidence package, create a stable phase commit/checkpoint, and spawn the
-  independent fresh-context Level 3 phase-exit reviewer (Review Protocol §2) against Master Spec §53 exit
-  criteria — the one designed pause in continuous execution. Do not self-certify.
+- Phase 2 planning has not yet started. Next session/turn should begin with Phase 2 decomposition
+  (Master Spec §54-59) before any implementation.
 
 ## Deferred
 
-- Nothing yet deferred.
+- All of Phase 2 (full-stack generation, Blueprint Engine, Build Planner, Component Registry, structured
+  renderer, conversational editing, mobile output) and Phase 3 (live billing, real AI provider
+  connections, production deployment, store submission, continuous governance monitoring) — per Master
+  Spec's own phase structure, not a scope-reduction decision.
 
 ## Blocked
 
-- None. No credential or customer-decision blockers exist yet; Phase 1 runs on the mock AI provider per
-  Master Spec §8 / Execution Protocol §8 and does not require live AI, Stripe, Apple, or Google credentials.
+- None. Phase 1 required no live credentials; Phase 2 likewise does not require them for its core
+  generation architecture (mock/deterministic generation remains valid per Execution Protocol §8) — real
+  AI provider connections are Phase 3 scope (§61).
 
-## Known Limitations (truthful, current)
+## Known Limitations (truthful, current — Phase 1 scope)
 
 - No settings page, integrations-connection UI, or policy-document UI yet — not required by §51's first
-  customer flow, deferred to later iteration.
+  customer flow.
 - No real payment provider webhooks exist to drive the billing state machine in production — Phase 3
   scope (§62). No real integration provider (Stripe etc.) is connected to the credential vault yet.
 - Policy documents are durable/versioned but not yet generated from real Product State content.
@@ -211,11 +227,12 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 ## Next Action
 
-P1-EXIT: assemble the Phase 1 evidence package from the Evidence Ledger, Decision Ledger, and test/build
-results (Execution Protocol §11), create a stable phase commit and checkpoint, then spawn the independent
-fresh-context Level 3 phase-exit reviewer (Review Protocol §2) against Master Spec §53 exit criteria. The
-exit gate passes only on that review's evidence-backed acceptance — never on this document's own
-self-assessment.
+Begin Phase 2 — "Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification"
+(Master Spec §54-59). First required demonstration: "Build a premium booking app for mobile detailers,"
+generating a real, working full-stack application from Canonical Product State, a versioned Blueprint,
+and a Build Plan — not a mockup (Master Spec §54's explicit standard). Start with Phase 2 decomposition
+into dependency-aware implementation units (Execution Protocol §6), traceable to §55 required
+capabilities and the §59 exit criteria, before any implementation begins.
 
 ## Decision Ledger Pointer
 
