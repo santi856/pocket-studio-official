@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-03 (Build Planner)
+- **Active implementation unit:** P2-04 (Generated-app data layer)
 
 ## Phase 2 Decomposition
 
@@ -25,7 +25,7 @@ says otherwise.
 | -------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------- |
 | P2-01 ✅ | Blueprint Engine — versioned, validated Blueprint model + generator from Product State/DNA/Requirements                    | §23                      | Phase 1 Product State, DNA, Knowledge graph |
 | P2-02 ✅ | Component Registry — closed set of UI primitives, Zod-validated, unknown-component-fails-safely                            | §26                      | —                                           |
-| P2-03    | Build Planner — versioned Build Plan derived from a validated Blueprint                                                    | §24                      | P2-01                                       |
+| P2-03 ✅ | Build Planner — versioned Build Plan derived from a validated Blueprint                                                    | §24                      | P2-01                                       |
 | P2-04    | Generated-app data layer — generic multi-tenant store for a generated product's own data + end users                       | §25                      | Phase 1 tenancy                             |
 | P2-05    | Structured Renderer + Interactive Runtime — real, working UI interpreted from Blueprint screens, not hardcoded             | §25, §26                 | P2-01, P2-02                                |
 | P2-06    | Full-stack generation orchestration — ties Blueprint+BuildPlan+Registry+data layer+renderer into one generation call       | §25                      | P2-01..P2-05                                |
@@ -124,6 +124,26 @@ says otherwise.
   per-component prop contract (deferred to the renderer, P2-05). 15 new unit tests. Full suite green
   (219/219 unit+integration, clean typecheck/lint/format, production build). See `D-0023`, `EV-0053`,
   `EV-0054`.
+- **P2-03 — Build Planner.** New append-only, full-replace versioned `BuildPlan` Prisma model
+  (migration `20260712124517_build_planner`) covering every Master Spec §24 facet. `generateBuildPlan()`
+  (`src/lib/generation/build-planner.ts`) derives every field structurally from a project's latest
+  Blueprint and its embedded Feasibility Report: screen order and navigation graph come straight from the
+  Blueprint; component structure is built using only Component Registry (P2-02) primitives and run through
+  `validateComponentTree` so an unrecognized type fails safely rather than corrupting the plan;
+  implementation phases are sequenced (Data layer → Screens & navigation → Workflows & business logic →
+  Integrations & monetization → Testing & evidence, each gated on whether the Blueprint actually has that
+  content) with a `dependencies` map chaining each phase to its immediate predecessor; `tests` are derived
+  directly from each screen's Interaction Contract required states (P2-01's Product Pattern system).
+  `planStatus` is `BLOCKED` — never silently `READY` — whenever the Blueprint is `INVALID`, requests a
+  capability the Supported Capability Registry doesn't recognize or rates
+  NOT_CURRENTLY_SUPPORTED/UNSAFE_OR_PROHIBITED/INSUFFICIENT_INFORMATION/PROFESSIONAL_REVIEW_REQUIRED/
+  EXTERNAL_APPROVAL_REQUIRED, or has an unresolved consequential interaction decision. A capability merely
+  rated `SUPPORTED_LATER_PHASE` (e.g. Pocket Studio's own full-stack generation pipeline, which doesn't
+  exist until P2-06) is deliberately _not_ a plan-level blocker — see `D-0024` for why. Exported
+  `CHECKOUT_SCREEN_NAME`/`LIST_LIKE_SCREEN_NAMES` from `interaction-contracts.ts` (backward-compatible) so
+  the Build Planner reuses the same screen-name conventions instead of duplicating them. 11 new integration
+  tests against a real database. Full suite green (230/230 unit+integration, clean typecheck/lint/format,
+  production build). See `D-0024`, `EV-0055`, `EV-0056`.
 
 ## Completed
 

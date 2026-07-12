@@ -200,8 +200,11 @@ function mergeContract(patterns: ProductPattern[]): InteractionContract {
   return { patterns: uniquePatterns, requiredStates, stateClassifications, consequentialStates };
 }
 
-const CHECKOUT_SCREEN_NAME = "Checkout";
-const LIST_LIKE_SCREEN_NAMES = new Set(["Home", "Browse"]);
+// Exported so other Blueprint-derived systems (e.g. the Build Planner,
+// P2-03) can reuse the exact same screen-name conventions instead of
+// re-declaring their own copy.
+export const CHECKOUT_SCREEN_NAME = "Checkout";
+export const LIST_LIKE_SCREEN_NAMES = new Set(["Home", "Browse"]);
 
 /**
  * Deterministic pattern inference for a Blueprint screen, grounded in the

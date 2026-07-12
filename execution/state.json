@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "generatedBy": "execution-protocol-v1.0-session-init",
-  "lastUpdated": "2026-07-12T04:00:00Z",
+  "lastUpdated": "2026-07-12T05:00:00Z",
   "governanceCommit": "25a33f0",
   "phase": {
     "current": "phase-2",
@@ -15,7 +15,7 @@
     "current": "M3-generation-foundation",
     "description": "Blueprint Engine, Component Registry, Build Planner, generated-app data layer, structured renderer — the technical foundation Phase 2's demonstration product is built on"
   },
-  "activeImplementationUnit": "P2-03",
+  "activeImplementationUnit": "P2-04",
   "architecturalStandards": [
     {
       "id": "AS-0001",
@@ -34,9 +34,10 @@
       "Phase 1 regression audit + fix: graceful failure on double-responding to a decision (EV-0050, D-0020) — forward-committed on top of the accepted phase-1-complete checkpoint, does not reopen Phase 1",
       "Product Pattern and Interaction Contract System — closed vocabulary of interaction states + recognized product patterns, wired into the Blueprint Engine so every screen/workflow carries a required-states contract and validateBlueprint enforces it (EV-0051, D-0021)",
       "Inference Boundaries clarification — per-state classification (required/conventionally_implied/consequential_decision) added to the Interaction Contract System; consequential states now surfaced in Blueprint.openDecisions rather than silently assumed approved (EV-0052, D-0022)",
-      "P2-02: Component Registry — closed set of the 29 Master Spec §26 UI primitives, Zod-validated recursive component-tree schema, unknown components fail safely (substituted with ErrorState + a reported warning) (EV-0053, EV-0054, D-0023)"
+      "P2-02: Component Registry — closed set of the 29 Master Spec §26 UI primitives, Zod-validated recursive component-tree schema, unknown components fail safely (substituted with ErrorState + a reported warning) (EV-0053, EV-0054, D-0023)",
+      "P2-03: Build Planner — versioned Build Plan derived structurally from a project's latest Blueprint and Feasibility Report (phases, dependencies, screen order, component structure built from Component Registry primitives, navigation graph, data dependencies, backend/business logic, admin requirements, integrations, monetization, platform requirements, persistence, tests, acceptance criteria, evidence requirements, risk, blockers); planStatus is BLOCKED whenever the Blueprint is invalid, requests an unsafe/unrecognized capability, or has an unresolved consequential decision (EV-0055, EV-0056, D-0024)"
     ],
-    "active": ["P2-03: Build Planner"],
+    "active": ["P2-04: Generated-app data layer"],
     "deferred": [],
     "blocked": []
   },
@@ -63,7 +64,8 @@
     "D-0020",
     "D-0021",
     "D-0022",
-    "D-0023"
+    "D-0023",
+    "D-0024"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -74,14 +76,15 @@
     "20260711145046_integrations_credentials_governance_policy",
     "20260711145846_plans_entitlements_billing_state",
     "20260712094937_blueprint_engine",
-    "20260712120533_blueprint_interaction_contracts"
+    "20260712120533_blueprint_interaction_contracts",
+    "20260712124517_build_planner"
   ],
   "testStatus": {
     "typecheck": "pass",
     "lint": "pass",
     "formatCheck": "pass",
     "unit": "pass (90/90)",
-    "integration": "pass (129/129)",
+    "integration": "pass (140/140)",
     "e2e": "pass (7/7)",
     "productionBuild": "pass"
   },
@@ -139,18 +142,21 @@
     "EV-0051",
     "EV-0052",
     "EV-0053",
-    "EV-0054"
+    "EV-0054",
+    "EV-0055",
+    "EV-0056"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories — not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (§61).",
-    "No Build Planner, renderer, or generation pipeline exists yet — a Blueprint is a structured document only; nothing yet turns it into a running application (P2-03..P2-06). The Component Registry (P2-02) is a validated vocabulary/schema only, with no renderer to interpret it yet.",
+    "No renderer or generation pipeline exists yet — a Build Plan is a structured document only; nothing yet turns it into a running application (P2-05, P2-06). The Component Registry (P2-02) is a validated vocabulary/schema only, with no renderer to interpret it yet. Build Plan component trees (P2-03) are minimal pattern-driven placeholders, not real layouts.",
+    "The Build Planner's planStatus deliberately does not treat the platform's own SUPPORTED_LATER_PHASE generation capability as a blocker (see D-0024) — a Build Plan can be READY today even though nothing yet executes it; that gap is disclosed via Truth Status and this list, not via planStatus.",
     "Blueprint has no Studio UI surface yet (P2-17 wires this up); it is currently reachable only via the service layer and its integration tests.",
     "The Product Pattern and Interaction Contract System (src/lib/generation/interaction-contracts.ts) validates that an interaction contract is declared and structurally complete, not that a generated screen actually implements the required states — no component tree or renderer exists until the Structured Renderer (P2-05) and generation pipeline (P2-06). Pattern inference is a fixed, hand-authored deterministic mapping (5 patterns, 7 states), not semantic understanding.",
-    "The 'practical product completeness' standard (D-0022, AS-0001) is only partially implemented: per-state inference classification exists and consequential states are surfaced in Blueprint.openDecisions, but implied-requirement identification in Product Intelligence, explicit-vs-inferred recording throughout the full Blueprint, Build Planner conversion of behavior into implementation work, renderer implementation, workflow-derived generated tests, Quality Gate runtime verification, and Truth Status reporting of unverified behavior do not exist yet. P2-02's contribution to AS-0001 is structural only: the registry's own failure mode (unknown components fail safely, never silently) is itself a completeness behavior, and COMPONENT_CATEGORIES gives the Build Planner a structural vocabulary to reason with — but no per-component interaction-state contract (e.g. a Button's pressed/disabled states) exists yet; that is deferred to P2-05 (the renderer), per D-0023. The designated 'Example App Ideas' first vertical proof is not delivered — that UI pattern does not currently exist in the product, and proving it requires systems not yet built.",
+    "The 'practical product completeness' standard (D-0022, AS-0001) is only partially implemented: per-state inference classification exists and consequential states are surfaced in Blueprint.openDecisions, but implied-requirement identification in Product Intelligence, explicit-vs-inferred recording throughout the full Blueprint, Build Planner conversion of behavior into implementation work, renderer implementation, workflow-derived generated tests, Quality Gate runtime verification, and Truth Status reporting of unverified behavior do not exist yet. P2-02's contribution to AS-0001 is structural only: the registry's own failure mode (unknown components fail safely, never silently) is itself a completeness behavior, and COMPONENT_CATEGORIES gives the Build Planner a structural vocabulary to reason with — but no per-component interaction-state contract (e.g. a Button's pressed/disabled states) exists yet; that is deferred to P2-05 (the renderer), per D-0023. P2-03's contribution to AS-0001: the Build Planner's `tests` facet is derived directly from each screen's Interaction Contract required states (not invented separately), and `blockers` treats an unresolved consequential decision as a hard blocker — but Build Planner cannot yet verify a generated implementation actually satisfies those states, since no renderer or generated application exists (P2-05, P2-06). The designated 'Example App Ideas' first vertical proof is not delivered — that UI pattern does not currently exist in the product, and proving it requires systems not yet built.",
     "The Phase 1 regression audit (D-0020) was bounded, not exhaustive — it read every page in src/app for missing implied behavior but is not a substitute for a full UX review. It does not reopen or invalidate the accepted Phase 1 Level 3 review (round 2, EV-0047).",
     "Every Phase 1 known limitation not resolved by Phase 2's scope still applies (see PHASE_1_COMPLETION_REPORT.md)."
   ],
   "requiredCustomerActions": [],
   "requiredExternalActions": [],
-  "nextAction": "Begin P2-03: Build Planner — a versioned Build Plan (Master Spec §24: implementation phases, dependencies, screen order, component structure, navigation graph, data dependencies, backend/business logic, administrative requirements, integrations, monetization, platform requirements, persistence, tests, acceptance criteria, evidence requirements, risk, blockers) derived from a validated Blueprint, using the Component Registry's closed vocabulary to describe component structure."
+  "nextAction": "Begin P2-04: Generated-app data layer — a generic multi-tenant data store (Master Spec §25) for a generated product's own data and its own end users, distinct from Pocket Studio's platform User/Membership, that a future generation pipeline (P2-06) can persist Build Plan data models against without dynamically generating per-customer Postgres schema/migrations."
 }

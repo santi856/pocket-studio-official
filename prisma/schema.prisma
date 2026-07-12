@@ -97,6 +97,7 @@ model Project {
   governanceProfile       GovernanceProfile?
   policyDocuments         PolicyDocument[]
   blueprints              Blueprint[]
+  buildPlans              BuildPlan[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -384,6 +385,7 @@ enum ProductEventType {
   DECISION_RESPONDED
   TRUTH_STATUS_UPDATED
   BLUEPRINT_VERSION_CREATED
+  BUILD_PLAN_VERSION_CREATED
 }
 
 // Append-only audit trail of state-changing actions on a project. Never
@@ -802,4 +804,53 @@ model Blueprint {
   @@unique([projectId, version])
   @@index([projectId])
   @@map("blueprints")
+}
+
+// ---------------------------------------------------------------------------
+// Build Planner (Master Spec §24, Phase 2). Derives a versioned Build Plan
+// structurally from the latest Blueprint — full-replace versioned, like
+// Blueprint itself, since a plan is generated fresh from the Blueprint it is
+// based on rather than patched incrementally.
+// ---------------------------------------------------------------------------
+
+enum BuildPlanStatus {
+  READY
+  BLOCKED
+}
+
+model BuildPlan {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version   Int
+
+  basedOnBlueprintVersion Int
+  planStatus              BuildPlanStatus
+
+  implementationPhases       Json
+  dependencies               Json
+  screenOrder                Json
+  componentStructure         Json
+  navigationGraph            Json
+  dataDependencies           Json
+  backendAndBusinessLogic    Json
+  administrativeRequirements Json
+  integrations               Json
+  monetization               Json
+  platformRequirements       Json
+  persistence                Json
+  tests                      Json
+  acceptanceCriteria         Json
+  evidenceRequirements       Json
+  risk                       Json
+  blockers                   Json
+
+  generationMetadata Json?
+
+  createdAt       DateTime @default(now())
+  createdByUserId String
+
+  @@unique([projectId, version])
+  @@index([projectId])
+  @@map("build_plans")
 }
