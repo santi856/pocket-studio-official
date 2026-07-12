@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-05 (Structured Renderer + Interactive Runtime)
+- **Active implementation unit:** P2-06 (Full-stack generation orchestration)
 
 ## Phase 2 Decomposition
 
@@ -27,7 +27,7 @@ says otherwise.
 | P2-02 ✅ | Component Registry — closed set of UI primitives, Zod-validated, unknown-component-fails-safely                            | §26                      | —                                           |
 | P2-03 ✅ | Build Planner — versioned Build Plan derived from a validated Blueprint                                                    | §24                      | P2-01                                       |
 | P2-04 ✅ | Generated-app data layer — generic multi-tenant store for a generated product's own data + end users                       | §25                      | Phase 1 tenancy                             |
-| P2-05    | Structured Renderer + Interactive Runtime — real, working UI interpreted from Blueprint screens, not hardcoded             | §25, §26                 | P2-01, P2-02                                |
+| P2-05 ✅ | Structured Renderer + Interactive Runtime — real, working UI interpreted from Blueprint screens, not hardcoded             | §25, §26                 | P2-01, P2-02                                |
 | P2-06    | Full-stack generation orchestration — ties Blueprint+BuildPlan+Registry+data layer+renderer into one generation call       | §25                      | P2-01..P2-05                                |
 | P2-07    | Demonstration product — booking app for mobile detailers: concrete Blueprint content, screens, data models, business logic | §56                      | P2-06                                       |
 | P2-08    | Conversational editing + Change Sets + selective regeneration                                                              | §27, §57                 | P2-07, Phase 1 Orchestration Contract       |
@@ -161,6 +161,25 @@ says otherwise.
   end-user-facing session/login flow exists yet — only the Pocket-Studio-side project member can read/write
   this data today; real end-user authentication for a generated product is P2-06 scope. See `D-0025`,
   `EV-0057`, `EV-0058`.
+- **P2-05 — Structured Renderer + Interactive Runtime.** Three separated pieces, mirroring the same
+  layering used for Blueprint/Build Plan generation. `src/components/renderer/component-renderer.tsx`
+  (Client Component) recursively renders a validated `ComponentNode` tree into real, interactive DOM
+  using only Component Registry (P2-02) primitives — Button clicks fire a real callback, Form submission
+  uses React's native `<form action={fn}>` (the same pattern every Server-Action-backed form in this
+  codebase already uses, e.g. `src/app/sign-up/page.tsx`), Tabs/Modal/Drawer hold real local
+  open/active state. `src/lib/generation/screen-data-binding.ts` is a pure, DOM-free function that swaps
+  a screen's `List` node for real record data or a matching `LoadingState`/`EmptyState`/`ErrorState`
+  node given a `ScreenDataState` — never silently rendering an empty list when data hasn't loaded.
+  `src/lib/generation/render-runtime.ts` is the server-only read/write binding to the P2-04
+  generated-app data layer, keyed off the current Build Plan's `dataDependencies` (P2-03). Also fixed a
+  real, previously-latent bug: added a global `afterEach(cleanup)` to `vitest.setup.ts`, since
+  `@testing-library/react`'s own auto-cleanup never registers without `test.globals: true` (which this
+  project deliberately does not set) — the first `.tsx` test file in the repo surfaced a cross-test DOM
+  leak this fixes for every future component test, not just this unit's. 22 new tests (9 Testing
+  Library/jsdom, 7 pure unit, 6 integration against a real database). Full suite green (268/268
+  unit+integration, 7/7 e2e re-verified after the shared setup change, clean typecheck/lint/format,
+  production build). Honest limitation: not wired into a live, customer-facing route yet — that
+  orchestration is P2-06. See `D-0026`, `EV-0059`, `EV-0060`.
 
 ## Completed
 
