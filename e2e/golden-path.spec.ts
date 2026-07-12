@@ -10,7 +10,9 @@ import { test, expect } from "@playwright/test";
  * clients (curl) cannot drive.
  */
 test("golden path: sign up through Product Intelligence generation", async ({ page }) => {
-  const unique = Date.now();
+  // Date.now() alone collides under rapid repeated runs (same millisecond);
+  // crypto.randomUUID() guarantees a fresh identity every run.
+  const unique = crypto.randomUUID();
   const email = `smoketest-${unique}@example.com`;
   const workspaceName = `Detailer Co ${unique}`;
   const projectName = `Booking App ${unique}`;
@@ -57,4 +59,57 @@ test("golden path: sign up through Product Intelligence generation", async ({ pa
   await expect(page.getByText("Decision Ledger")).toBeVisible();
   await expect(page.getByText("Event Ledger")).toBeVisible();
   await expect(page.getByText("PRODUCT_STATE_VERSION_CREATED")).toBeVisible();
+
+  // --- Back to Simple Mode: edit unit-economics assumptions (§20, §51 step 10) ---
+  await page.getByRole("link", { name: "Switch to Simple Mode" }).click();
+  await expect(page.getByLabel("Price")).toHaveAttribute("placeholder", "Unknown");
+  await page.getByLabel("Price").fill("75");
+  await page.getByRole("button", { name: "Save assumptions" }).click();
+  await expect(page).toHaveURL(/\/org\/[^/]+\/[^/]+$/);
+  // Next.js Server Action form submissions are a client-side (fetch-based)
+  // transition, not a full document navigation — Playwright's automatic
+  // "wait for navigation on click" does not apply here, so the network
+  // must be explicitly settled before the next form interaction or a
+  // .fill() can race the in-flight DOM swap and land on a stale node.
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByLabel("Price")).toHaveValue("75");
+  // A field never touched must survive the edit untouched (Master Spec §10's
+  // "must not silently erase" principle applies to every edited artifact).
+  await expect(page.getByLabel("Payment fees (%)")).toHaveValue("2.9");
+
+  // --- Launch section reflects real Feasibility output, not invented data (§51 step 13) ---
+  await expect(page.getByText("Output targets")).toBeVisible();
+  await expect(page.getByText("web", { exact: true })).toBeVisible();
+
+  const ideaBox = page.getByPlaceholder("Describe your product idea...");
+  await expect(ideaBox).toBeEditable();
+  await expect(ideaBox).toHaveValue("");
+
+  // --- A monetization follow-up requires explicit approval (§15 CONSEQUENTIAL) ---
+  await ideaBox.fill("Add appointment deposits and monthly memberships.");
+  await expect(ideaBox).toHaveValue("Add appointment deposits and monthly memberships.");
+  await page.getByRole("button", { name: "Send" }).click();
+  // This round-trip runs the full beginChangeFlow pipeline (intent
+  // resolution + impact analysis + decision recording, each a real DB
+  // write) — allow more time than the default 5s under load.
+  await expect(page.getByText("Needs your approval")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Change requested against an existing project.")).toBeVisible();
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(page).toHaveURL(/\/org\/[^/]+\/[^/]+$/);
+  await expect(page.getByText("Needs your approval")).toBeHidden();
+
+  // --- Returning later must not lose project state or repeat onboarding (§51 step 16) ---
+  const projectUrl = page.url();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL("/");
+
+  await page.getByRole("link", { name: "Sign in" }).first().click();
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill("correcthorsebatterystaple");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.goto(projectUrl);
+  await expect(page.getByRole("heading", { name: "Build a premium booking app" })).toBeVisible();
+  await expect(page.getByLabel("Price")).toHaveValue("75");
 });

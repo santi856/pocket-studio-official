@@ -78,3 +78,43 @@ export async function listProductStateVersions(
     orderBy: { version: "desc" },
   });
 }
+
+export class NoProductStateError extends Error {
+  constructor() {
+    super("This project has no Product State yet — describe an idea first.");
+    this.name = "NoProductStateError";
+  }
+}
+
+/**
+ * Master Spec §20: unit-economics assumptions must be "editable." Carries
+ * every other field of the latest version forward unchanged and creates a
+ * new version with only unitEconomicsAssumptions replaced — the same
+ * append-only pattern as every other write to Product State, so a prior
+ * assumption set remains inspectable evidence rather than being lost.
+ */
+export async function updateUnitEconomicsAssumptions(
+  actorUserId: string,
+  projectId: string,
+  unitEconomicsAssumptions: Prisma.InputJsonValue,
+): Promise<ProductState> {
+  await requireProjectAccess(actorUserId, projectId, "MEMBER");
+
+  const latest = await getLatestProductState(actorUserId, projectId);
+  if (!latest) {
+    throw new NoProductStateError();
+  }
+
+  return createProductStateVersion(actorUserId, projectId, {
+    originalIdea: latest.originalIdea,
+    productIntelligence: latest.productIntelligence ?? undefined,
+    feasibilityReport: latest.feasibilityReport ?? undefined,
+    businessModelBrief: latest.businessModelBrief ?? undefined,
+    monetizationRecommendations: latest.monetizationRecommendations ?? undefined,
+    unitEconomicsAssumptions,
+    operationalComplexity: latest.operationalComplexity ?? undefined,
+    requiredIntegrations: latest.requiredIntegrations ?? undefined,
+    outputTargets: latest.outputTargets ?? undefined,
+    governanceRequirements: latest.governanceRequirements ?? undefined,
+  });
+}

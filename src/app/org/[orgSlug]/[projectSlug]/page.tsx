@@ -6,9 +6,14 @@ import { getLatestProductDNA } from "@/lib/product/product-dna";
 import { listDecisions } from "@/lib/product/decisions";
 import { listLatestTruthStatuses } from "@/lib/product/truth-status";
 import { listProductMemoryEntries } from "@/lib/product/product-memory";
-import { submitIdeaAction, respondToDecisionAction } from "@/lib/actions/studio-actions";
+import {
+  submitIdeaAction,
+  respondToDecisionAction,
+  updateUnitEconomicsAction,
+} from "@/lib/actions/studio-actions";
 import { AppNav } from "@/components/app-nav";
 import { TruthBadge } from "@/components/truth-badge";
+import type { UnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
 
 export default async function StudioSimpleModePage({
   params,
@@ -32,6 +37,13 @@ export default async function StudioSimpleModePage({
   const monetizationRecommendations = productState?.monetizationRecommendations as Array<{
     option: string;
     tradeoff: string;
+  }> | null;
+  const unitEconomics = productState?.unitEconomicsAssumptions as UnitEconomicsAssumptions | null;
+  const requiredIntegrations = productState?.requiredIntegrations as string[] | null;
+  const outputTargets = productState?.outputTargets as string[] | null;
+  const governanceRequirements = productState?.governanceRequirements as Array<{
+    capabilityKey: string;
+    label: string;
   }> | null;
 
   return (
@@ -173,6 +185,61 @@ export default async function StudioSimpleModePage({
 
             <section className="mt-10">
               <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-500">
+                Unit economics
+              </h2>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                Editable assumptions. Anything you haven&rsquo;t provided is marked unknown — Pocket
+                Studio never invents a number.
+              </p>
+              {unitEconomics && (
+                <UnitEconomicsForm
+                  orgSlug={orgSlug}
+                  projectSlug={projectSlug}
+                  assumptions={unitEconomics}
+                />
+              )}
+            </section>
+
+            <section className="mt-10">
+              <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-500">
+                Launch
+              </h2>
+              <div className="mt-3 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="text-xs text-zinc-500 dark:text-zinc-500">Output targets</dt>
+                  <dd className="mt-0.5 text-black dark:text-white">
+                    {outputTargets && outputTargets.length > 0
+                      ? outputTargets.join(", ")
+                      : "None yet"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-zinc-500 dark:text-zinc-500">
+                    Required integrations
+                  </dt>
+                  <dd className="mt-0.5 text-black dark:text-white">
+                    {requiredIntegrations && requiredIntegrations.length > 0
+                      ? requiredIntegrations.join(", ")
+                      : "None identified"}
+                  </dd>
+                </div>
+              </div>
+              {governanceRequirements && governanceRequirements.length > 0 && (
+                <div className="mt-4">
+                  <dt className="text-xs text-zinc-500 dark:text-zinc-500">
+                    Governance requirements
+                  </dt>
+                  <ul className="mt-1 flex flex-col gap-1 text-sm text-black dark:text-white">
+                    {governanceRequirements.map((requirement) => (
+                      <li key={requirement.capabilityKey}>{requirement.label}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+
+            <section className="mt-10">
+              <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-500">
                 Trust
               </h2>
               <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -223,6 +290,64 @@ function Field({ label, value }: { label: string; value: string }) {
       <dt className="text-xs text-zinc-500 dark:text-zinc-500">{label}</dt>
       <dd className="mt-0.5 text-black dark:text-white">{value}</dd>
     </div>
+  );
+}
+
+const UNIT_ECONOMICS_LABELS: Record<keyof UnitEconomicsAssumptions, string> = {
+  price: "Price",
+  revenuePerCustomer: "Revenue per customer",
+  transactionValue: "Transaction value",
+  transactionFrequencyPerMonth: "Transactions per month",
+  paymentFeesPercent: "Payment fees (%)",
+  hostingCostPerMonth: "Hosting cost / month",
+  aiCostPerMonth: "AI cost / month",
+  storageCostPerMonth: "Storage cost / month",
+  supportCostPerMonth: "Support cost / month",
+  grossMarginPercent: "Gross margin (%)",
+  breakEvenCustomerCount: "Break-even customer count",
+};
+
+function UnitEconomicsForm({
+  orgSlug,
+  projectSlug,
+  assumptions,
+}: {
+  orgSlug: string;
+  projectSlug: string;
+  assumptions: UnitEconomicsAssumptions;
+}) {
+  return (
+    <form action={updateUnitEconomicsAction} className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <input type="hidden" name="orgSlug" value={orgSlug} />
+      <input type="hidden" name="projectSlug" value={projectSlug} />
+      {(Object.keys(UNIT_ECONOMICS_LABELS) as Array<keyof UnitEconomicsAssumptions>).map(
+        (field) => {
+          const assumption = assumptions[field];
+          return (
+            <label key={field} className="flex flex-col gap-1 text-sm">
+              <span className="text-black dark:text-white">{UNIT_ECONOMICS_LABELS[field]}</span>
+              <input
+                name={field}
+                type="number"
+                step="any"
+                defaultValue={assumption.value ?? ""}
+                placeholder={assumption.value === null ? "Unknown" : undefined}
+                className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              />
+              <span className="text-xs text-zinc-500 dark:text-zinc-500">
+                {assumption.source === "unknown" ? "Not yet provided" : assumption.source}
+              </span>
+            </label>
+          );
+        },
+      )}
+      <button
+        type="submit"
+        className="col-span-full self-start rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+      >
+        Save assumptions
+      </button>
+    </form>
   );
 }
 

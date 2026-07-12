@@ -8,7 +8,9 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase status:** active
 - **Milestone:** M1-foundation is complete (P1-01..P1-09); now in **M2-studio-shell** — wiring the
   foundation service layer to real customer-facing surfaces (Master Spec §51 first customer flow)
-- **Active implementation unit:** P1-11 (First customer flow end-to-end + validation suite)
+- **Phase 1 status:** verification active — all 11 implementation units complete, awaiting the Level 3
+  independent phase-exit review (the one designed pause in continuous execution).
+- **Active implementation unit:** P1-EXIT (assemble evidence, checkpoint, Level 3 review)
 
 ## Completed
 
@@ -157,11 +159,26 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
   not mocks. curl could not have validated any of this: React Server Actions use their own RPC protocol,
   not a plain form POST a generic HTTP client can drive. Evidence: `EV-0039`..`EV-0040`.
 
+- **P1-11 — First customer flow end-to-end + validation suite.** Closed the last two real gaps against
+  Master Spec §51: unit-economics assumptions are now genuinely editable (`updateUnitEconomicsAssumptions`
+  merges only explicitly-submitted fields onto the latest Product State version, carrying everything else
+  forward — `D-0016`), and a new "Launch" section surfaces output targets, required integrations, and
+  governance requirements that existed in the data since P1-06 but had no UI. Expanded
+  `e2e/golden-path.spec.ts` to drive every Phase-1-scoped §51 step in one real-browser run: decision
+  approval on a CONSEQUENTIAL monetization follow-up, the unit-economics edit round-trip (including proof
+  that an untouched field survives), the Launch section, and sign-out/sign-in persistence. Stress-tested
+  the suite with `--repeat-each=5` under artificial parallel load and found two genuine flakiness sources
+  before they could cause false CI failures: `Date.now()`-based test-data uniqueness collided under rapid
+  repeated runs (fixed with `crypto.randomUUID()`), and one assertion depending on a real multi-step DB
+  write (intent resolution + impact analysis + decision recording) exceeded the default 5s timeout under
+  load (fixed with an explicit longer timeout, not a blind sleep — root-caused per Execution Protocol §9,
+  `D-0017`). Verified stable across 5/5 and 3/3 repeated runs after the fix. Evidence: `EV-0041`..`EV-0043`.
+
 ## Active
 
-- P1-11: run the complete Official §51 customer flow end to end, broaden e2e coverage beyond the single
-  golden-path test (decision approval buttons, billing page, the flow's remaining steps), and assemble
-  Phase 1's full validation suite as one evidence-backed pass ahead of the Level 3 phase-exit review.
+- P1-EXIT: assemble the Phase 1 evidence package, create a stable phase commit/checkpoint, and spawn the
+  independent fresh-context Level 3 phase-exit reviewer (Review Protocol §2) against Master Spec §53 exit
+  criteria — the one designed pause in continuous execution. Do not self-certify.
 
 ## Deferred
 
@@ -174,32 +191,31 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 ## Known Limitations (truthful, current)
 
-- Only the `describe_idea` path (first idea submission) has e2e coverage; edit_request, the billing
-  page, and decision-approval buttons are unit/integration-tested and manually reviewed but not yet
-  e2e-covered — P1-11, active now.
+- No settings page, integrations-connection UI, or policy-document UI yet — not required by §51's first
+  customer flow, deferred to later iteration.
 - No real payment provider webhooks exist to drive the billing state machine in production — Phase 3
   scope (§62). No real integration provider (Stripe etc.) is connected to the credential vault yet.
 - Policy documents are durable/versioned but not yet generated from real Product State content.
 - AI provider is mock-only; Requirements Engine, Business Model Brief, and unit economics are
   deterministic/template-based, not real product or market intelligence — correctly disclosed via
-  Truth Status in the UI now, not just in code comments.
-- Phase 1's own customer flow (§51) never requires an edit; full conversational editing is Phase 2
-  scope (§55, §57).
+  Truth Status in the UI.
+- Phase 1's own customer flow (§51) never requires generating a Blueprint/Build Plan or a full-stack
+  application; that is explicitly Phase 2 scope (§54-59) and is not implemented.
+- Steps of the Official V1 Acceptance Test (§67) beyond Phase 1's own exit criteria (export, deployment,
+  store submission, billing-failure simulation, governance-change workflow) are correctly out of scope
+  for Phase 1 and not tested here.
 - Visual design is functional but not pixel-polished "premium" — clean typography/spacing, no custom
   illustration or animation.
-- No settings page, integrations UI, or policy-document UI yet — not required by §51's first customer
-  flow, deferred to later iteration.
 - Product Knowledge graph only exercises REQUIREMENT/WORKFLOW node types so far; no generation system
   yet produces Screen/Action/DataModel nodes (Phase 2 concern).
-- No billing/entitlement architecture yet — P1-09, active now.
-- No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end.
 
 ## Next Action
 
-Implement P1-11: run the full Official §51 customer flow end to end (steps 1-17), broaden Playwright
-coverage beyond the single golden-path test (decision approval/decline, billing page, return-without-
-losing-state), and assemble the complete Phase 1 validation suite (typecheck, lint, unit, integration,
-e2e, production build) as one evidence-backed pass before requesting the Level 3 phase-exit review.
+P1-EXIT: assemble the Phase 1 evidence package from the Evidence Ledger, Decision Ledger, and test/build
+results (Execution Protocol §11), create a stable phase commit and checkpoint, then spawn the independent
+fresh-context Level 3 phase-exit reviewer (Review Protocol §2) against Master Spec §53 exit criteria. The
+exit gate passes only on that review's evidence-backed acceptance — never on this document's own
+self-assessment.
 
 ## Decision Ledger Pointer
 
