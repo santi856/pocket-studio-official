@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { requireCurrentUser } from "@/lib/auth/current-user";
 import { resolveProjectForRoute } from "@/lib/web/resolve-project";
 import { beginChangeFlow } from "@/lib/orchestration/change-flow";
-import { respondToDecision } from "@/lib/product/decisions";
+import { respondToDecision, DecisionNotPendingError } from "@/lib/product/decisions";
 import { getLatestProductState, updateUnitEconomicsAssumptions } from "@/lib/product/product-state";
 import { defaultUnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
 import type { UnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
@@ -32,7 +32,23 @@ export async function respondToDecisionAction(formData: FormData): Promise<void>
   const approve = formData.get("approve") === "true";
 
   const { project } = await resolveProjectForRoute(user.id, orgSlug, projectSlug);
-  await respondToDecision(user.id, project.id, decisionId, { approve });
+
+  // A double-click (or a slow connection racing a second submit) can send
+  // this form twice before the first response navigates the page away.
+  // respondToDecision() already guards against double-responding at the
+  // service layer (DecisionNotPendingError) — this must fail gracefully
+  // back to the Studio page, not crash, the same discipline already
+  // applied to createProjectAction for a forged cross-tenant slug.
+  try {
+    await respondToDecision(user.id, project.id, decisionId, { approve });
+  } catch (error) {
+    if (error instanceof DecisionNotPendingError) {
+      redirect(
+        `/org/${orgSlug}/${projectSlug}?error=${encodeURIComponent("This decision was already responded to.")}`,
+      );
+    }
+    throw error;
+  }
 
   redirect(`/org/${orgSlug}/${projectSlug}`);
 }

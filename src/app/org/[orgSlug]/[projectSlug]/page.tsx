@@ -17,11 +17,14 @@ import type { UnitEconomicsAssumptions } from "@/lib/orchestration/unit-economic
 
 export default async function StudioSimpleModePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orgSlug: string; projectSlug: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const user = await requireUserForPage();
   const { orgSlug, projectSlug } = await params;
+  const { error } = await searchParams;
   const { organization, project } = await resolveProjectForRoute(user.id, orgSlug, projectSlug);
 
   const [productState, productDNA, pendingDecisions, truthStatuses, openQuestions] =
@@ -65,6 +68,11 @@ export default async function StudioSimpleModePage({
       </div>
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10 sm:px-10">
+        {error && (
+          <p className="mb-6 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-400">
+            {error}
+          </p>
+        )}
         {!productState ? (
           <section>
             <h1 className="text-xl font-semibold text-black dark:text-white">
