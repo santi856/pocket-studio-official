@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-01 (Blueprint Engine)
+- **Active implementation unit:** P2-02 (Component Registry)
 
 ## Phase 2 Decomposition
 
@@ -21,26 +21,45 @@ Orchestration Contract, Decision/Event/Evidence Ledgers, Truth Status, Capabilit
 recreating them — every unit below reuses the corresponding Phase 1 primitive unless a decision record
 says otherwise.
 
-| Unit    | Scope                                                                                                                      | Master Spec              | Depends on                                  |
-| ------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------- |
-| P2-01   | Blueprint Engine — versioned, validated Blueprint model + generator from Product State/DNA/Requirements                    | §23                      | Phase 1 Product State, DNA, Knowledge graph |
-| P2-02   | Component Registry — closed set of UI primitives, Zod-validated, unknown-component-fails-safely                            | §26                      | —                                           |
-| P2-03   | Build Planner — versioned Build Plan derived from a validated Blueprint                                                    | §24                      | P2-01                                       |
-| P2-04   | Generated-app data layer — generic multi-tenant store for a generated product's own data + end users                       | §25                      | Phase 1 tenancy                             |
-| P2-05   | Structured Renderer + Interactive Runtime — real, working UI interpreted from Blueprint screens, not hardcoded             | §25, §26                 | P2-01, P2-02                                |
-| P2-06   | Full-stack generation orchestration — ties Blueprint+BuildPlan+Registry+data layer+renderer into one generation call       | §25                      | P2-01..P2-05                                |
-| P2-07   | Demonstration product — booking app for mobile detailers: concrete Blueprint content, screens, data models, business logic | §56                      | P2-06                                       |
-| P2-08   | Conversational editing + Change Sets + selective regeneration                                                              | §27, §57                 | P2-07, Phase 1 Orchestration Contract       |
-| P2-09   | Version history and restore                                                                                                | §27                      | P2-08                                       |
-| P2-10   | Quality Gate — unit/integration/authorization/tenant/accessibility/e2e tests for the generated product                     | §55, §59                 | P2-07                                       |
-| P2-11   | Security/privacy/governance impact + legal/policy draft generation from real state                                         | §31, §32, §34            | P2-07, Phase 1 PolicyDocument               |
-| P2-12   | Migration planning for generated-app data model changes                                                                    | §28                      | P2-08                                       |
-| P2-13   | Export foundation + durable jobs/retries/checkpoints/idempotency                                                           | §25, §29                 | P2-07                                       |
-| P2-14   | Web and PWA output                                                                                                         | §39, §40                 | P2-05                                       |
-| P2-15   | Mobile architecture selection + generated mobile project                                                                   | §41                      | P2-01, P2-04                                |
-| P2-16   | Mobile-commerce classification + Store Readiness Engine                                                                    | §42, §44                 | P2-15                                       |
-| P2-17   | Studio UI wiring — Blueprint/Build Plan viewer, Generate action, Preview link, Change Set review, restore UI               | §6, §7                   | P2-01..P2-16                                |
-| P2-EXIT | Assemble Phase 2 evidence, checkpoint, Level 3 independent review against §59                                              | §16 (Execution Protocol) | all above                                   |
+| Unit     | Scope                                                                                                                      | Master Spec              | Depends on                                  |
+| -------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------- |
+| P2-01 ✅ | Blueprint Engine — versioned, validated Blueprint model + generator from Product State/DNA/Requirements                    | §23                      | Phase 1 Product State, DNA, Knowledge graph |
+| P2-02    | Component Registry — closed set of UI primitives, Zod-validated, unknown-component-fails-safely                            | §26                      | —                                           |
+| P2-03    | Build Planner — versioned Build Plan derived from a validated Blueprint                                                    | §24                      | P2-01                                       |
+| P2-04    | Generated-app data layer — generic multi-tenant store for a generated product's own data + end users                       | §25                      | Phase 1 tenancy                             |
+| P2-05    | Structured Renderer + Interactive Runtime — real, working UI interpreted from Blueprint screens, not hardcoded             | §25, §26                 | P2-01, P2-02                                |
+| P2-06    | Full-stack generation orchestration — ties Blueprint+BuildPlan+Registry+data layer+renderer into one generation call       | §25                      | P2-01..P2-05                                |
+| P2-07    | Demonstration product — booking app for mobile detailers: concrete Blueprint content, screens, data models, business logic | §56                      | P2-06                                       |
+| P2-08    | Conversational editing + Change Sets + selective regeneration                                                              | §27, §57                 | P2-07, Phase 1 Orchestration Contract       |
+| P2-09    | Version history and restore                                                                                                | §27                      | P2-08                                       |
+| P2-10    | Quality Gate — unit/integration/authorization/tenant/accessibility/e2e tests for the generated product                     | §55, §59                 | P2-07                                       |
+| P2-11    | Security/privacy/governance impact + legal/policy draft generation from real state                                         | §31, §32, §34            | P2-07, Phase 1 PolicyDocument               |
+| P2-12    | Migration planning for generated-app data model changes                                                                    | §28                      | P2-08                                       |
+| P2-13    | Export foundation + durable jobs/retries/checkpoints/idempotency                                                           | §25, §29                 | P2-07                                       |
+| P2-14    | Web and PWA output                                                                                                         | §39, §40                 | P2-05                                       |
+| P2-15    | Mobile architecture selection + generated mobile project                                                                   | §41                      | P2-01, P2-04                                |
+| P2-16    | Mobile-commerce classification + Store Readiness Engine                                                                    | §42, §44                 | P2-15                                       |
+| P2-17    | Studio UI wiring — Blueprint/Build Plan viewer, Generate action, Preview link, Change Set review, restore UI               | §6, §7                   | P2-01..P2-16                                |
+| P2-EXIT  | Assemble Phase 2 evidence, checkpoint, Level 3 independent review against §59                                              | §16 (Execution Protocol) | all above                                   |
+
+## Phase 2 Completed
+
+- **P2-01 — Blueprint Engine.** New append-only, full-replace versioned `Blueprint` Prisma model
+  (migration `20260712094937_blueprint_engine`) covering every Master Spec §23 facet (schema version,
+  product type, target users, roles, requirements, workflows, screens, navigation, data models,
+  permissions, actions, integrations, business rules, monetization, subscriptions, owner operations,
+  output targets, theme/style, assumptions, open decisions, memory, security, privacy, accessibility,
+  governance, feasibility, generation metadata). `generateInitialBlueprint()`
+  (`src/lib/generation/blueprint-generator.ts`) deterministically derives an initial Blueprint from a
+  project's latest Product State, Product DNA, and the Requirements Engine's re-derived Impact Analysis
+  categories, using a fixed category → template map (`blueprint-templates.ts`) that reuses P1-06's exact
+  category taxonomy rather than inventing new domain concepts — honestly labeled via
+  `generationMetadata` as deterministic, never AI-authored design (real AI generation is Phase 3, §61).
+  `validateBlueprint()` enforces §23's "Invalid Blueprints may not proceed as successful builds"
+  structurally; every Blueprint is persisted with its `validationStatus`/`validationErrors` regardless of
+  outcome. Populates SCREEN/WORKFLOW/DATA_MODEL/ACTION Product Knowledge nodes for the first time. 20 new
+  tests (9 unit, 11 integration against a real database), full validation suite green (190/190
+  unit+integration, clean typecheck/lint/format, production build). See `D-0019`, `EV-0048`, `EV-0049`.
 
 ## Completed
 

@@ -96,6 +96,7 @@ model Project {
   credentialReferences    CredentialReference[]
   governanceProfile       GovernanceProfile?
   policyDocuments         PolicyDocument[]
+  blueprints              Blueprint[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -382,6 +383,7 @@ enum ProductEventType {
   DECISION_RECORDED
   DECISION_RESPONDED
   TRUTH_STATUS_UPDATED
+  BLUEPRINT_VERSION_CREATED
 }
 
 // Append-only audit trail of state-changing actions on a project. Never
@@ -725,4 +727,71 @@ model BillingEvent {
 
   @@index([organizationSubscriptionId])
   @@map("billing_events")
+}
+
+// ---------------------------------------------------------------------------
+// Blueprint Engine (Master Spec §23, Phase 2). A versioned, validated
+// Blueprint is the structured artifact the Build Planner and full-stack
+// generation pipeline consume — never a hardcoded preview screen (§26).
+// Full-replace versioned, like ProductState: each new version is generated
+// fresh from the current Product State/DNA (P2-01) or a validated Change Set
+// (P2-08), never a partial patch onto the previous version.
+// ---------------------------------------------------------------------------
+
+enum BlueprintValidationStatus {
+  VALID
+  INVALID
+}
+
+model Blueprint {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version   Int
+
+  // Blueprint's own document-schema version (Master Spec §23 "schema
+  // version"), distinct from `version` (this row's position in the
+  // project's append-only Blueprint history).
+  schemaVersion String
+
+  productType     String?
+  targetUsers     Json?
+  roles           Json?
+  requirements    Json?
+  workflows       Json?
+  screens         Json?
+  navigation      Json?
+  dataModels      Json?
+  permissions     Json?
+  actions         Json?
+  integrations    Json?
+  businessRules   Json?
+  monetization    Json?
+  subscriptions   Json?
+  ownerOperations Json?
+  outputTargets   Json?
+  themeAndStyle   Json?
+  assumptions     Json?
+  openDecisions   Json?
+  memory          Json?
+  security        Json?
+  privacy         Json?
+  accessibility   Json?
+  governance      Json?
+  feasibility     Json?
+
+  generationMetadata Json?
+
+  validationStatus BlueprintValidationStatus
+  validationErrors Json?
+
+  basedOnProductStateVersion Int?
+  basedOnProductDnaVersion   Int?
+
+  createdAt       DateTime @default(now())
+  createdByUserId String
+
+  @@unique([projectId, version])
+  @@index([projectId])
+  @@map("blueprints")
 }
