@@ -6,6 +6,7 @@ import {
   authenticateUser,
   EmailAlreadyRegisteredError,
   InvalidCredentialsError,
+  WeakPasswordError,
 } from "@/lib/services/users";
 import { createSession, deleteSessionByToken } from "@/lib/auth/session";
 import {
@@ -23,7 +24,7 @@ export async function signUpAction(formData: FormData): Promise<void> {
   try {
     user = await registerUser({ email, password, name });
   } catch (error) {
-    if (error instanceof EmailAlreadyRegisteredError) {
+    if (error instanceof EmailAlreadyRegisteredError || error instanceof WeakPasswordError) {
       redirect(`/sign-up?error=${encodeURIComponent(error.message)}`);
     }
     throw error;

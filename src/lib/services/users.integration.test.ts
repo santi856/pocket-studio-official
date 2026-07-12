@@ -7,6 +7,7 @@ import {
   EmailAlreadyRegisteredError,
   InvalidCredentialsError,
   registerUser,
+  WeakPasswordError,
 } from "@/lib/services/users";
 
 describe("registerUser / authenticateUser", () => {
@@ -29,6 +30,15 @@ describe("registerUser / authenticateUser", () => {
     expect(user.email).toBe("founder@example.com");
     expect(user.passwordHash).not.toBe("correct-horse-battery-staple");
     expect(user.passwordHash).toContain(":");
+  });
+
+  it("rejects a password shorter than 8 characters even though the client-side minLength is bypassable", async () => {
+    await expect(
+      registerUser({ email: "weak@example.com", password: "short1" }),
+    ).rejects.toBeInstanceOf(WeakPasswordError);
+
+    const stored = await db.user.findUnique({ where: { email: "weak@example.com" } });
+    expect(stored).toBeNull();
   });
 
   it("rejects registering the same email twice", async () => {
