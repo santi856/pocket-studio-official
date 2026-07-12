@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "generatedBy": "execution-protocol-v1.0-session-init",
-  "lastUpdated": "2026-07-12T05:00:00Z",
+  "lastUpdated": "2026-07-12T06:00:00Z",
   "governanceCommit": "25a33f0",
   "phase": {
     "current": "phase-2",
@@ -15,7 +15,7 @@
     "current": "M3-generation-foundation",
     "description": "Blueprint Engine, Component Registry, Build Planner, generated-app data layer, structured renderer — the technical foundation Phase 2's demonstration product is built on"
   },
-  "activeImplementationUnit": "P2-04",
+  "activeImplementationUnit": "P2-05",
   "architecturalStandards": [
     {
       "id": "AS-0001",
@@ -35,9 +35,10 @@
       "Product Pattern and Interaction Contract System — closed vocabulary of interaction states + recognized product patterns, wired into the Blueprint Engine so every screen/workflow carries a required-states contract and validateBlueprint enforces it (EV-0051, D-0021)",
       "Inference Boundaries clarification — per-state classification (required/conventionally_implied/consequential_decision) added to the Interaction Contract System; consequential states now surfaced in Blueprint.openDecisions rather than silently assumed approved (EV-0052, D-0022)",
       "P2-02: Component Registry — closed set of the 29 Master Spec §26 UI primitives, Zod-validated recursive component-tree schema, unknown components fail safely (substituted with ErrorState + a reported warning) (EV-0053, EV-0054, D-0023)",
-      "P2-03: Build Planner — versioned Build Plan derived structurally from a project's latest Blueprint and Feasibility Report (phases, dependencies, screen order, component structure built from Component Registry primitives, navigation graph, data dependencies, backend/business logic, admin requirements, integrations, monetization, platform requirements, persistence, tests, acceptance criteria, evidence requirements, risk, blockers); planStatus is BLOCKED whenever the Blueprint is invalid, requests an unsafe/unrecognized capability, or has an unresolved consequential decision (EV-0055, EV-0056, D-0024)"
+      "P2-03: Build Planner — versioned Build Plan derived structurally from a project's latest Blueprint and Feasibility Report (phases, dependencies, screen order, component structure built from Component Registry primitives, navigation graph, data dependencies, backend/business logic, admin requirements, integrations, monetization, platform requirements, persistence, tests, acceptance criteria, evidence requirements, risk, blockers); planStatus is BLOCKED whenever the Blueprint is invalid, requests an unsafe/unrecognized capability, or has an unresolved consequential decision (EV-0055, EV-0056, D-0024)",
+      "P2-04: Generated-app data layer — GeneratedAppUser (a generated product's own project-scoped end-user identity, reusing the platform's password hashing) and GeneratedRecord (a generic {projectId, modelKey, data} store validated at write time against the project's current Blueprint dataModels) rather than dynamic per-customer schema migrations (EV-0057, EV-0058, D-0025)"
     ],
-    "active": ["P2-04: Generated-app data layer"],
+    "active": ["P2-05: Structured Renderer + Interactive Runtime"],
     "deferred": [],
     "blocked": []
   },
@@ -65,7 +66,8 @@
     "D-0021",
     "D-0022",
     "D-0023",
-    "D-0024"
+    "D-0024",
+    "D-0025"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -77,14 +79,15 @@
     "20260711145846_plans_entitlements_billing_state",
     "20260712094937_blueprint_engine",
     "20260712120533_blueprint_interaction_contracts",
-    "20260712124517_build_planner"
+    "20260712124517_build_planner",
+    "20260712125631_generated_app_data_layer"
   ],
   "testStatus": {
     "typecheck": "pass",
     "lint": "pass",
     "formatCheck": "pass",
     "unit": "pass (90/90)",
-    "integration": "pass (140/140)",
+    "integration": "pass (156/156)",
     "e2e": "pass (7/7)",
     "productionBuild": "pass"
   },
@@ -144,11 +147,14 @@
     "EV-0053",
     "EV-0054",
     "EV-0055",
-    "EV-0056"
+    "EV-0056",
+    "EV-0057",
+    "EV-0058"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories — not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (§61).",
     "No renderer or generation pipeline exists yet — a Build Plan is a structured document only; nothing yet turns it into a running application (P2-05, P2-06). The Component Registry (P2-02) is a validated vocabulary/schema only, with no renderer to interpret it yet. Build Plan component trees (P2-03) are minimal pattern-driven placeholders, not real layouts.",
+    "The generated-app data layer (P2-04) has no end-user-facing session/login flow — GeneratedAppUser/GeneratedRecord can only be read/written today by the Pocket-Studio-side project member via requireProjectAccess. Real end-user authentication for a generated product (the person actually booking an appointment) is P2-06 scope.",
     "The Build Planner's planStatus deliberately does not treat the platform's own SUPPORTED_LATER_PHASE generation capability as a blocker (see D-0024) — a Build Plan can be READY today even though nothing yet executes it; that gap is disclosed via Truth Status and this list, not via planStatus.",
     "Blueprint has no Studio UI surface yet (P2-17 wires this up); it is currently reachable only via the service layer and its integration tests.",
     "The Product Pattern and Interaction Contract System (src/lib/generation/interaction-contracts.ts) validates that an interaction contract is declared and structurally complete, not that a generated screen actually implements the required states — no component tree or renderer exists until the Structured Renderer (P2-05) and generation pipeline (P2-06). Pattern inference is a fixed, hand-authored deterministic mapping (5 patterns, 7 states), not semantic understanding.",
@@ -158,5 +164,5 @@
   ],
   "requiredCustomerActions": [],
   "requiredExternalActions": [],
-  "nextAction": "Begin P2-04: Generated-app data layer — a generic multi-tenant data store (Master Spec §25) for a generated product's own data and its own end users, distinct from Pocket Studio's platform User/Membership, that a future generation pipeline (P2-06) can persist Build Plan data models against without dynamically generating per-customer Postgres schema/migrations."
+  "nextAction": "Begin P2-05: Structured Renderer + Interactive Runtime — a real, working UI interpreted at request time from a Build Plan's component structure via the Component Registry (Master Spec §25, §26), not hardcoded preview screens; must read/write through the P2-04 generated-app data layer for any screen whose interaction contract implies data (list-view, form-submission)."
 }

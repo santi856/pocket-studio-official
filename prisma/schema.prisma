@@ -98,6 +98,8 @@ model Project {
   policyDocuments         PolicyDocument[]
   blueprints              Blueprint[]
   buildPlans              BuildPlan[]
+  generatedAppUsers       GeneratedAppUser[]
+  generatedRecords        GeneratedRecord[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -853,4 +855,67 @@ model BuildPlan {
   @@unique([projectId, version])
   @@index([projectId])
   @@map("build_plans")
+}
+
+// ---------------------------------------------------------------------------
+// Generated-app data layer (Master Spec §25, Phase 2). A generated product
+// needs its own end-user identity and its own data records, distinct from
+// Pocket Studio's own platform User/Membership/Organization — the person
+// booking a detailing appointment is not a Pocket Studio account holder.
+// Rather than dynamically generating and running arbitrary per-customer
+// Postgres schema migrations (which Master Spec §28's migration-safety
+// requirements make risky to do blindly), every generated product's data
+// lives in a generic, project-scoped store: GeneratedAppUser for its end
+// users, GeneratedRecord for everything else, keyed by the Build Plan's
+// `modelKey` (a Blueprint data model's name). Mutable in place — a
+// generated product's own data is live application state, not a versioned
+// intelligence artifact like Blueprint/BuildPlan.
+// ---------------------------------------------------------------------------
+
+// Project-scoped, not globally unique — two different generated products
+// may legitimately have end users who share an email address, since they
+// are unrelated products with unrelated user bases.
+model GeneratedAppUser {
+  id           String  @id @default(cuid())
+  projectId    String
+  project      Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  email        String
+  passwordHash String
+  name         String?
+  // A Blueprint role name (e.g. "customer", "owner") — not a fixed enum,
+  // since a Blueprint's roles are themselves derived, product-specific data
+  // (src/lib/generation/blueprint-templates.ts), not a platform-wide set.
+  role         String
+
+  ownedRecords GeneratedRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, email])
+  @@index([projectId])
+  @@map("generated_app_users")
+}
+
+// Generic per-project record store. `modelKey` corresponds to a name in the
+// project's Blueprint `dataModels` (e.g. "Record", "Payment") — validated
+// against the Blueprint at write time by the service layer, not by a
+// database constraint, since the set of valid keys is itself
+// project-specific and versioned.
+model GeneratedRecord {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  modelKey  String
+  data      Json
+
+  ownerGeneratedAppUserId String?
+  ownerGeneratedAppUser   GeneratedAppUser? @relation(fields: [ownerGeneratedAppUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([projectId, modelKey])
+  @@map("generated_records")
 }

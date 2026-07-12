@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-04 (Generated-app data layer)
+- **Active implementation unit:** P2-05 (Structured Renderer + Interactive Runtime)
 
 ## Phase 2 Decomposition
 
@@ -26,7 +26,7 @@ says otherwise.
 | P2-01 ✅ | Blueprint Engine — versioned, validated Blueprint model + generator from Product State/DNA/Requirements                    | §23                      | Phase 1 Product State, DNA, Knowledge graph |
 | P2-02 ✅ | Component Registry — closed set of UI primitives, Zod-validated, unknown-component-fails-safely                            | §26                      | —                                           |
 | P2-03 ✅ | Build Planner — versioned Build Plan derived from a validated Blueprint                                                    | §24                      | P2-01                                       |
-| P2-04    | Generated-app data layer — generic multi-tenant store for a generated product's own data + end users                       | §25                      | Phase 1 tenancy                             |
+| P2-04 ✅ | Generated-app data layer — generic multi-tenant store for a generated product's own data + end users                       | §25                      | Phase 1 tenancy                             |
 | P2-05    | Structured Renderer + Interactive Runtime — real, working UI interpreted from Blueprint screens, not hardcoded             | §25, §26                 | P2-01, P2-02                                |
 | P2-06    | Full-stack generation orchestration — ties Blueprint+BuildPlan+Registry+data layer+renderer into one generation call       | §25                      | P2-01..P2-05                                |
 | P2-07    | Demonstration product — booking app for mobile detailers: concrete Blueprint content, screens, data models, business logic | §56                      | P2-06                                       |
@@ -144,6 +144,23 @@ says otherwise.
   the Build Planner reuses the same screen-name conventions instead of duplicating them. 11 new integration
   tests against a real database. Full suite green (230/230 unit+integration, clean typecheck/lint/format,
   production build). See `D-0024`, `EV-0055`, `EV-0056`.
+- **P2-04 — Generated-app data layer.** Two new mutable, project-scoped Prisma models (migration
+  `20260712125631_generated_app_data_layer`) rather than dynamically generated per-customer Postgres
+  schema/migrations (which would conflict with Master Spec §28's migration-safety requirements applied to
+  infrastructure Pocket Studio itself would be generating unsupervised). `GeneratedAppUser`
+  (`src/lib/generation/generated-app-users.ts`) is a generated product's own end-user identity — e.g. the
+  person booking a detailing appointment — distinct from Pocket Studio's platform `User`/`Membership`,
+  project-scoped email uniqueness (two unrelated generated products may share an end user's email without
+  conflict), reusing the platform's existing scrypt password hashing and 8-character minimum-length policy
+  rather than a second implementation. `GeneratedRecord` (`generated-records.ts`) is a generic
+  `{projectId, modelKey, data}` store; `modelKey` and required fields are validated at write time against
+  the project's current Blueprint `dataModels`, so a record can never silently reference a data model the
+  Blueprint doesn't define. Both models cascade-delete from `Project`, so `test/reset-db.ts` needed no
+  change. 16 new integration tests against a real database, including cross-project isolation. Full suite
+  green (246/246 unit+integration, clean typecheck/lint/format, production build). Honest limitation: no
+  end-user-facing session/login flow exists yet — only the Pocket-Studio-side project member can read/write
+  this data today; real end-user authentication for a generated product is P2-06 scope. See `D-0025`,
+  `EV-0057`, `EV-0058`.
 
 ## Completed
 
