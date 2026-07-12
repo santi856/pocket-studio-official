@@ -8,7 +8,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase status:** active
 - **Milestone:** M1-foundation is complete (P1-01..P1-09); now in **M2-studio-shell** — wiring the
   foundation service layer to real customer-facing surfaces (Master Spec §51 first customer flow)
-- **Active implementation unit:** P1-10 (Premium landing, auth/onboarding, dashboard, Studio shell)
+- **Active implementation unit:** P1-11 (First customer flow end-to-end + validation suite)
 
 ## Completed
 
@@ -137,11 +137,31 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
   `BillingEvent` (`D-0013`). 22 new tests, including a full walk of the entire failed-payment sequence
   and rejection of invalid transitions (167 total). Evidence: `EV-0035`..`EV-0038`.
 
+- **P1-10 — Premium landing, auth/onboarding, dashboard, Studio shell (Simple + Expert Mode).** Server
+  Actions (`src/lib/actions/`) wrap the entire M1-foundation service layer for the first time: sign-up/
+  sign-in/sign-out, organization + project creation (creating an org also calls `createSubscription`, so
+  every workspace has real billing state from birth), idea submission (`beginChangeFlow`), and decision
+  approval/decline. Simple Mode renders Product DNA, pending-decision approval cards, a Business section
+  from the real Business Model Brief, and a Trust section listing real `TruthStatusEntry` rows with
+  color-coded badges. Expert Mode renders the same underlying state structurally: Product State version
+  history, the full Decision Ledger, and the Event Ledger. Caught two real bugs by actually running the
+  app in a browser rather than trusting unit tests alone: (1) an unauthenticated visitor hitting a
+  protected page got an uncaught 500, not a redirect — fixed with a dedicated `requireUserForPage` page
+  guard, `requireCurrentUser` kept as-is for service/API contexts (`D-0014`); (2) the dev database's
+  Capability Registry was never seeded outside of tests, so every Feasibility assessment showed
+  "Not evaluated" instead of the real "Planned" status — fixed with `prisma/seed.ts` (`npm run db:seed`,
+  requires `NODE_OPTIONS=--conditions=react-server` to bypass `server-only`'s bundler-only guard under
+  plain Node) (`D-0015`). Verified with `e2e/golden-path.spec.ts`, a real Playwright/Chromium test that
+  drives the actual §51 flow — landing → sign-up → onboarding → project creation → idea submission →
+  generated Product Intelligence visible in both modes — against a real production build and Postgres,
+  not mocks. curl could not have validated any of this: React Server Actions use their own RPC protocol,
+  not a plain form POST a generic HTTP client can drive. Evidence: `EV-0039`..`EV-0040`.
+
 ## Active
 
-- P1-10: premium landing page, authentication/onboarding UI, project dashboard, and the Studio workspace
-  shell (Simple Mode + Expert Mode) — the first unit to wire the M1-foundation service layer to real HTTP
-  routes/Server Actions (Master Spec §50-51).
+- P1-11: run the complete Official §51 customer flow end to end, broaden e2e coverage beyond the single
+  golden-path test (decision approval buttons, billing page, the flow's remaining steps), and assemble
+  Phase 1's full validation suite as one evidence-backed pass ahead of the Level 3 phase-exit review.
 
 ## Deferred
 
@@ -154,15 +174,21 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 ## Known Limitations (truthful, current)
 
-- Everything through P1-09 exists only as a service/library layer — no UI, Server Actions, or HTTP
-  routes wire it up yet. That is P1-10, active now.
+- Only the `describe_idea` path (first idea submission) has e2e coverage; edit_request, the billing
+  page, and decision-approval buttons are unit/integration-tested and manually reviewed but not yet
+  e2e-covered — P1-11, active now.
 - No real payment provider webhooks exist to drive the billing state machine in production — Phase 3
   scope (§62). No real integration provider (Stripe etc.) is connected to the credential vault yet.
 - Policy documents are durable/versioned but not yet generated from real Product State content.
 - AI provider is mock-only; Requirements Engine, Business Model Brief, and unit economics are
-  deterministic/template-based, not real product or market intelligence.
+  deterministic/template-based, not real product or market intelligence — correctly disclosed via
+  Truth Status in the UI now, not just in code comments.
 - Phase 1's own customer flow (§51) never requires an edit; full conversational editing is Phase 2
   scope (§55, §57).
+- Visual design is functional but not pixel-polished "premium" — clean typography/spacing, no custom
+  illustration or animation.
+- No settings page, integrations UI, or policy-document UI yet — not required by §51's first customer
+  flow, deferred to later iteration.
 - Product Knowledge graph only exercises REQUIREMENT/WORKFLOW node types so far; no generation system
   yet produces Screen/Action/DataModel nodes (Phase 2 concern).
 - No billing/entitlement architecture yet — P1-09, active now.
@@ -170,10 +196,10 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 
 ## Next Action
 
-Implement P1-10: premium landing page, authentication/onboarding, project dashboard, and the Studio
-workspace shell with Simple Mode and Expert Mode sharing identical underlying state (Master Spec §50-51,
-§6-7) — the first unit to expose the M1-foundation service layer through real Next.js routes and Server
-Actions instead of direct function calls in tests.
+Implement P1-11: run the full Official §51 customer flow end to end (steps 1-17), broaden Playwright
+coverage beyond the single golden-path test (decision approval/decline, billing page, return-without-
+losing-state), and assemble the complete Phase 1 validation suite (typecheck, lint, unit, integration,
+e2e, production build) as one evidence-backed pass before requesting the Level 3 phase-exit review.
 
 ## Decision Ledger Pointer
 

@@ -12,7 +12,7 @@
     "current": "M2-studio-shell",
     "description": "Customer-facing surfaces wiring the M1-foundation service layer together into the §51 first customer flow"
   },
-  "activeImplementationUnit": "P1-10",
+  "activeImplementationUnit": "P1-11",
   "requirements": {
     "completed": [
       "P1-01: Repo/app foundation",
@@ -23,17 +23,29 @@
       "P1-06: Requirements Engine, Business Model Brief, unit economics, generateProductIntelligence",
       "P1-07: Product-facing Event Ledger, Evidence Ledger, Truth Status",
       "P1-08: Integration Requirements, AES-256-GCM credential vault, Governance Profile, Policy Document scaffolding",
-      "P1-09: Plan Registry (versioned, truthful pricing), OrganizationSubscription + deterministic billing-state machine mirroring Master Spec §37 exactly, BillingEvent audit trail, entitlement resolution"
+      "P1-09: Plan Registry, OrganizationSubscription + deterministic billing-state machine, BillingEvent audit trail",
+      "P1-10: Premium landing page, sign-up/sign-in, onboarding, dashboard, project creation, Studio workspace (Simple Mode + Expert Mode) wired to the full M1-foundation service layer via Server Actions; prisma/seed.ts for platform registries; real browser (Playwright) golden-path e2e test verifying the actual Master Spec §51 flow works, which caught and fixed two real bugs (unauthenticated 500 instead of redirect; unseeded dev registry causing false Not-Evaluated status)"
     ],
-    "active": [
-      "P1-10: Premium landing, auth/onboarding, dashboard, Studio workspace shell (Simple Mode + Expert Mode)"
-    ],
+    "active": ["P1-11: First customer flow end-to-end (§51) + validation suite"],
     "deferred": [],
     "blocked": []
   },
   "decisions": [
-    "D-0001", "D-0002", "D-0003", "D-0004", "D-0005", "D-0006", "D-0007",
-    "D-0008", "D-0009", "D-0010", "D-0011", "D-0012", "D-0013"
+    "D-0001",
+    "D-0002",
+    "D-0003",
+    "D-0004",
+    "D-0005",
+    "D-0006",
+    "D-0007",
+    "D-0008",
+    "D-0009",
+    "D-0010",
+    "D-0011",
+    "D-0012",
+    "D-0013",
+    "D-0014",
+    "D-0015"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -47,30 +59,63 @@
   "testStatus": {
     "typecheck": "pass",
     "lint": "pass",
-    "unit": "pass (54/54: env 4, slug 4, mock-provider 4, anthropic-provider 1, impact-analysis 6, requirements-engine 10, business-intelligence 7, unit-economics 3, crypto 5, billing-access 10)",
-    "integration": "pass (113/113: users 5, session 5, tenancy 7, product-state 5, product-dna 6, product-memory 4, product-knowledge 5, decisions 7, intent-resolver 3, change-flow 3, capability-registry 5, seed-data 3, feasibility 5, product-intelligence 6, events 3, evidence 3, truth-status 4, truth-status-sync 4, vault 6, governance-profile 4, integrations 3, policy-documents 5, plans 6, subscription 6)",
-    "e2e": "not run",
+    "unit": "pass (54/54)",
+    "integration": "pass (113/113)",
+    "e2e": "pass (1/1: golden-path.spec.ts — full §51 flow through a real browser and production build)",
     "productionBuild": "pass"
   },
   "evidenceRefs": [
-    "EV-0001", "EV-0002", "EV-0003", "EV-0004", "EV-0005", "EV-0006",
-    "EV-0007", "EV-0008", "EV-0009", "EV-0010", "EV-0011", "EV-0012",
-    "EV-0013", "EV-0014", "EV-0015", "EV-0016", "EV-0017", "EV-0018",
-    "EV-0019", "EV-0020", "EV-0021", "EV-0022", "EV-0023", "EV-0024",
-    "EV-0025", "EV-0026", "EV-0027", "EV-0028", "EV-0029", "EV-0030",
-    "EV-0031", "EV-0032", "EV-0033", "EV-0034", "EV-0035", "EV-0036",
-    "EV-0037", "EV-0038"
+    "EV-0001",
+    "EV-0002",
+    "EV-0003",
+    "EV-0004",
+    "EV-0005",
+    "EV-0006",
+    "EV-0007",
+    "EV-0008",
+    "EV-0009",
+    "EV-0010",
+    "EV-0011",
+    "EV-0012",
+    "EV-0013",
+    "EV-0014",
+    "EV-0015",
+    "EV-0016",
+    "EV-0017",
+    "EV-0018",
+    "EV-0019",
+    "EV-0020",
+    "EV-0021",
+    "EV-0022",
+    "EV-0023",
+    "EV-0024",
+    "EV-0025",
+    "EV-0026",
+    "EV-0027",
+    "EV-0028",
+    "EV-0029",
+    "EV-0030",
+    "EV-0031",
+    "EV-0032",
+    "EV-0033",
+    "EV-0034",
+    "EV-0035",
+    "EV-0036",
+    "EV-0037",
+    "EV-0038",
+    "EV-0039",
+    "EV-0040"
   ],
   "knownLimitations": [
-    "Everything through P1-09 exists only as a service/library layer — no UI, no Server Actions, no HTTP routes wire it up yet. That is P1-10/P1-11, starting now.",
-    "Tenant isolation is proven at the service+authz layer against a real database, not yet at the HTTP boundary.",
-    "No real payment provider webhooks exist to drive the billing state machine in production — Phase 3 scope (§62). Architecture is proven correct in isolation only.",
+    "Only the describe_idea path (first idea submission) has e2e coverage; edit_request, billing page, and decision-approval buttons are unit/integration-tested and manually reviewed but not yet e2e-covered — P1-11 scope.",
+    "No real payment provider webhooks exist to drive the billing state machine in production — Phase 3 scope (§62).",
     "No real integration provider (Stripe etc.) is connected to the credential vault yet.",
-    "AI provider is mock-only; Requirements Engine, Business Model Brief, and unit economics are deterministic/template-based, not real product or market intelligence.",
+    "AI provider is mock-only; Requirements Engine, Business Model Brief, and unit economics are deterministic/template-based, not real product or market intelligence — correctly disclosed via Truth Status in the UI.",
     "Phase 1's own customer flow (§51) never requires an edit; full conversational editing is Phase 2 scope.",
-    "No automated e2e (Playwright) coverage yet — nothing customer-facing exists to test end-to-end until P1-10 ships a UI."
+    "Visual design is functional but not pixel-polished 'premium' — clean typography/spacing, no custom illustration or animation work.",
+    "No settings page, no integrations UI, no policy-document UI yet — not required by §51's first customer flow, deferred to later iteration."
   ],
   "requiredCustomerActions": [],
   "requiredExternalActions": [],
-  "nextAction": "Begin P1-10: premium landing page, authentication/onboarding UI, project dashboard, and the Studio workspace shell (Simple Mode + Expert Mode) wiring the M1-foundation service layer to real HTTP routes/Server Actions for the first time (Master Spec §50-51)."
+  "nextAction": "Begin P1-11: run the full Official §51 customer flow end to end, expand e2e coverage (edit_request rejection given Phase 1 has none, decision approval buttons, billing page), and assemble the complete Phase 1 validation suite (typecheck, lint, unit, integration, e2e, production build) as a single evidence-backed pass before requesting the Level 3 phase-exit review."
 }
