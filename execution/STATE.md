@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-02 (Component Registry)
+- **Active implementation unit:** P2-03 (Build Planner)
 
 ## Phase 2 Decomposition
 
@@ -24,7 +24,7 @@ says otherwise.
 | Unit     | Scope                                                                                                                      | Master Spec              | Depends on                                  |
 | -------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------- |
 | P2-01 ✅ | Blueprint Engine — versioned, validated Blueprint model + generator from Product State/DNA/Requirements                    | §23                      | Phase 1 Product State, DNA, Knowledge graph |
-| P2-02    | Component Registry — closed set of UI primitives, Zod-validated, unknown-component-fails-safely                            | §26                      | —                                           |
+| P2-02 ✅ | Component Registry — closed set of UI primitives, Zod-validated, unknown-component-fails-safely                            | §26                      | —                                           |
 | P2-03    | Build Planner — versioned Build Plan derived from a validated Blueprint                                                    | §24                      | P2-01                                       |
 | P2-04    | Generated-app data layer — generic multi-tenant store for a generated product's own data + end users                       | §25                      | Phase 1 tenancy                             |
 | P2-05    | Structured Renderer + Interactive Runtime — real, working UI interpreted from Blueprint screens, not hardcoded             | §25, §26                 | P2-01, P2-02                                |
@@ -109,6 +109,21 @@ says otherwise.
   capabilities, renderer implementation, workflow-derived generated tests, Quality Gate runtime
   verification, Truth Status reporting of unverified behavior, and the designated "Example App Ideas"
   first vertical proof (that UI pattern does not currently exist in the product). See `D-0022`, `EV-0052`.
+- **P2-02 — Component Registry.** New static, code-level module (`src/lib/generation/component-registry.ts`,
+  no persistence layer — unlike the Capability Registry, this vocabulary only changes when a developer
+  adds a new primitive to the actual renderer). `COMPONENT_TYPES` is the exact, ordered closed set of all
+  29 Master Spec §26 primitives (Screen, Stack, Grid, Heading, Text, Image, Icon, Button, Card, List,
+  Form, Input, Textarea, Select, Checkbox, Radio, Switch, DatePicker, TimePicker, Badge, Tabs, Modal,
+  Drawer, BottomNavigation, TopNavigation, Divider, LoadingState, EmptyState, ErrorState).
+  `COMPONENT_CATEGORIES` gives each a structural category (layout/typography/media/action/content/
+  form/navigation/state) for the Build Planner to reason with. `ComponentNodeSchema` is a recursive Zod
+  schema for a well-formed component tree. `validateComponentTree()` walks an untrusted raw tree and
+  replaces any node with an unrecognized `type` with a safe `ErrorState` placeholder plus a
+  path-qualified warning, rather than throwing — satisfying §26's literal "unknown components fail
+  safely" requirement without failing an entire render over one bad node. Structural validation only, no
+  per-component prop contract (deferred to the renderer, P2-05). 15 new unit tests. Full suite green
+  (219/219 unit+integration, clean typecheck/lint/format, production build). See `D-0023`, `EV-0053`,
+  `EV-0054`.
 
 ## Completed
 
