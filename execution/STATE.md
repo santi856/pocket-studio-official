@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-13 (Export foundation + durable jobs)
+- **Active implementation unit:** P2-14 (Web and PWA output)
 
 ## Phase 2 Decomposition
 
@@ -35,7 +35,7 @@ says otherwise.
 | P2-10 ✅ | Quality Gate — unit/integration/authorization/tenant/accessibility/e2e tests for the generated product                     | §55, §59                 | P2-07                                       |
 | P2-11 ✅ | Security/privacy/governance impact + legal/policy draft generation from real state                                         | §31, §32, §34            | P2-07, Phase 1 PolicyDocument               |
 | P2-12 ✅ | Migration planning for generated-app data model changes                                                                    | §28                      | P2-08                                       |
-| P2-13    | Export foundation + durable jobs/retries/checkpoints/idempotency                                                           | §25, §29                 | P2-07                                       |
+| P2-13 ✅ | Export foundation + durable jobs/retries/checkpoints/idempotency                                                           | §25, §29                 | P2-07                                       |
 | P2-14    | Web and PWA output                                                                                                         | §39, §40                 | P2-05                                       |
 | P2-15    | Mobile architecture selection + generated mobile project                                                                   | §41                      | P2-01, P2-04                                |
 | P2-16    | Mobile-commerce classification + Store Readiness Engine                                                                    | §42, §44                 | P2-15                                       |
@@ -323,6 +323,22 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
   limitation: not wired into `applyChangeSet`'s auto-apply path — a destructive Change Set still
   regenerates automatically today; no backup mechanism exists (deferred to P2-13). See `D-0033`,
   `EV-0073`, `EV-0074`.
+- **P2-13 — Export foundation + durable jobs (Master Spec §25, §29).** `exportProject()`
+  (`src/lib/generation/export.ts`) bundles Product State/DNA, the latest Blueprint/Build Plan, every
+  `GeneratedRecord`, generated-app users (allowlisted fields only — id/email/name/role/createdAt, never
+  `passwordHash`), policy drafts, the Governance Profile, and Truth Status into one structured JSON
+  bundle, with explicit disclosures that it is not a deployable code package or a database backup and
+  never includes any credential material. A new `JobRun` model (`src/lib/generation/job-runs.ts`;
+  PENDING/RUNNING/SUCCEEDED/FAILED, `checkpoint`, `idempotencyKey`, `attempt`) wraps — never modifies —
+  `generateApplication` (P2-06) via `runGenerationJob`: idempotent (a repeated call with the same key
+  returns the existing job without regenerating once it has succeeded), retryable (a FAILED job called
+  again with the same key increments `attempt` and genuinely retries), and gives every generation call
+  real, queryable status for the first time. Checkpointing is coarse-grained — before/after the whole
+  `generateApplication` call, not its internal sub-steps — an honest, disclosed limitation. 14 new
+  integration tests, including a genuine failure captured by omitting Product State (not a mock), a real
+  retry-after-failure, and confirmation that no serialized export ever contains `passwordHash`. Full
+  suite green (347/347 unit+integration, 9/9 e2e, clean typecheck/lint/format, production build). See
+  `D-0034`, `EV-0075`, `EV-0076`.
 
 ## Completed
 

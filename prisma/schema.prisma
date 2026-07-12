@@ -101,6 +101,7 @@ model Project {
   generatedAppUsers       GeneratedAppUser[]
   generatedRecords        GeneratedRecord[]
   changeSets              ChangeSet[]
+  jobRuns                 JobRun[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -968,4 +969,45 @@ model ChangeSet {
 
   @@index([projectId])
   @@map("change_sets")
+}
+
+// ---------------------------------------------------------------------------
+// Durable jobs (Master Spec §29, Phase 2). Every generation call today
+// (generateApplication, P2-06) is a single synchronous request/response
+// with no persisted job record — this gives the longest-running, most
+// failure-prone operation that exists so far a real status, checkpoint,
+// idempotency key, and retry count, without rewriting generateApplication
+// itself (it is wrapped, not modified — see D-0034).
+// ---------------------------------------------------------------------------
+
+enum JobType {
+  GENERATION
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model JobRun {
+  id             String   @id @default(cuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  jobType        JobType
+  status         JobStatus
+  idempotencyKey String?
+  checkpoint     Json?
+  attempt        Int      @default(1)
+  error          String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  @@unique([projectId, jobType, idempotencyKey])
+  @@index([projectId])
+  @@map("job_runs")
 }
