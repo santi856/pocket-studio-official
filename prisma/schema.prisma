@@ -771,14 +771,22 @@ model Blueprint {
   ownerOperations Json?
   outputTargets   Json?
   themeAndStyle   Json?
-  assumptions     Json?
-  openDecisions   Json?
-  memory          Json?
-  security        Json?
-  privacy         Json?
-  accessibility   Json?
-  governance      Json?
-  feasibility     Json?
+
+  // Product Pattern and Interaction Contract System
+  // (src/lib/generation/interaction-contracts.ts): per-screen/workflow
+  // inferred product patterns and the interaction states (loading, empty,
+  // error, confirmation, etc.) they imply. Optional at the schema level
+  // for forward compatibility, but the generator always populates it and
+  // `validateBlueprint` enforces completeness whenever it is present.
+  interactionContracts Json?
+  assumptions          Json?
+  openDecisions        Json?
+  memory               Json?
+  security             Json?
+  privacy              Json?
+  accessibility        Json?
+  governance           Json?
+  feasibility          Json?
 
   generationMetadata Json?
 

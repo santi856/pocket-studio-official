@@ -60,6 +60,36 @@ says otherwise.
   outcome. Populates SCREEN/WORKFLOW/DATA_MODEL/ACTION Product Knowledge nodes for the first time. 20 new
   tests (9 unit, 11 integration against a real database), full validation suite green (190/190
   unit+integration, clean typecheck/lint/format, production build). See `D-0019`, `EV-0048`, `EV-0049`.
+- **Phase 1 regression audit + fix.** In response to an architecture-critique finding, read every page
+  in `src/app` for missing implied behavior, misleading affordances, and incomplete interaction states.
+  Found one genuine defect: `respondToDecisionAction` had no handling for `DecisionNotPendingError`, so
+  answering an already-answered decision (two tabs open on the same pending decision, or a double-click)
+  crashed to Next.js's raw error page — the same bug class already fixed once for `createProjectAction`
+  (D-0018), reintroduced because this action was added later without the same review. Fixed with a
+  graceful `?error=` redirect and the error-banner display the Studio page was missing (every other
+  form-bearing page already had one). Every other page/form was verified to already fail gracefully; no
+  other defect found in this bounded pass. Forward-committed on top of the accepted Phase 1 checkpoint
+  (tag `phase-1-complete`, commit `93571b6`) — does not reopen or modify it. New e2e test
+  (`e2e/decision-double-response.spec.ts`) reproduces the scenario deterministically via two tabs sharing
+  one session. See `D-0020`, `EV-0050`.
+- **Product Pattern and Interaction Contract System.** New reusable Phase 2 capability
+  (`src/lib/generation/interaction-contracts.ts`), added in response to the same architecture-critique
+  finding: literal requirement/component compliance cannot catch a generated product that is
+  structurally present but behaviorally hollow (a list with no empty/error state, a payment step with
+  nothing to confirm). Defines a closed vocabulary of interaction states (loading, empty, error, success,
+  disabled-while-pending, confirmation, retry) and recognized product patterns (list-view, detail-view,
+  form-submission, multi-step-workflow, destructive-action), each mapped to the states it implies.
+  `inferScreenPatterns`/`inferWorkflowPatterns` deterministically infer patterns from the same Impact
+  Analysis categories the Requirements Engine and Blueprint category templates already use. Wired into
+  the Blueprint Engine: every generated screen and workflow now carries a contract (new
+  `Blueprint.interactionContracts` column, migration `20260712120533_blueprint_interaction_contracts`),
+  and `validateBlueprint` gained a backward-compatible rule enforcing completeness whenever contracts are
+  present. `validateInteractionContracts` is exported standalone for the future Quality Gate (P2-10) and
+  conversational editing (P2-08) to reuse once real component trees and Change Sets exist. Honest
+  limitation: validates that a contract is declared and well-formed, not that an implementation satisfies
+  it — no renderer or generation pipeline exists yet (P2-05/P2-06). 15 new tests (13 unit, 2 integration),
+  full suite green (205/205 unit+integration excluding concurrently in-progress P2-02 work, 7/7 e2e,
+  clean typecheck/lint/format, production build). See `D-0021`, `EV-0051`.
 
 ## Completed
 

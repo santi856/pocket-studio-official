@@ -14,6 +14,8 @@ import {
 } from "./blueprint-templates";
 import { validateBlueprint } from "./blueprint-validation";
 import { createBlueprintVersion } from "./blueprint";
+import { inferScreenPatterns, inferWorkflowPatterns } from "./interaction-contracts";
+import type { InteractionContractMap } from "./interaction-contracts";
 import type { Blueprint, Prisma } from "@/generated/prisma/client";
 
 function uniq<T>(items: T[]): T[] {
@@ -72,6 +74,20 @@ export async function generateInitialBlueprint(
   const hasPermissionsCategory = categories.includes("permissions");
   const roles = hasPermissionsCategory ? [CUSTOMER_ROLE, OWNER_ROLE] : [CUSTOMER_ROLE];
 
+  // Product Pattern and Interaction Contract System: attach the implied
+  // supporting behavior (loading/empty/error/confirmation states) every
+  // screen and workflow needs, so a later generation stage cannot produce
+  // something structurally present but behaviorally hollow without it
+  // being a recorded, checkable Blueprint violation. See
+  // src/lib/generation/interaction-contracts.ts.
+  const interactionContracts: InteractionContractMap = {};
+  for (const screen of screens) {
+    interactionContracts[screen] = inferScreenPatterns(screen, categories);
+  }
+  for (const workflow of workflows) {
+    interactionContracts[`workflow:${workflow.name}`] = inferWorkflowPatterns(categories);
+  }
+
   const targetUsersRaw = productDNA?.targetUsers;
   const targetUsers = Array.isArray(targetUsersRaw) ? (targetUsersRaw as string[]) : [];
 
@@ -112,6 +128,7 @@ export async function generateInitialBlueprint(
     outputTargets,
     dataModels,
     requirements,
+    interactionContracts,
   });
 
   const generationMetadata = {
@@ -140,6 +157,7 @@ export async function generateInitialBlueprint(
     ownerOperations: hasPermissionsCategory ? ["Manage records", "View activity"] : [],
     outputTargets,
     themeAndStyle: { style: "default", notes: "No brand direction specified yet." },
+    interactionContracts: interactionContracts as unknown as Prisma.InputJsonValue,
     assumptions,
     openDecisions,
     memory,

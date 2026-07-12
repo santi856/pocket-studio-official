@@ -1,5 +1,7 @@
 import "server-only";
 import type { BlueprintValidationStatus } from "@/generated/prisma/client";
+import { validateInteractionContracts } from "./interaction-contracts";
+import type { InteractionContractMap } from "./interaction-contracts";
 
 export type BlueprintValidationInput = {
   schemaVersion: string;
@@ -9,6 +11,11 @@ export type BlueprintValidationInput = {
   outputTargets: string[];
   dataModels: Array<{ name: string; fields: string[] }>;
   requirements: unknown[];
+  // Optional for backward compatibility (a caller that doesn't generate
+  // interaction contracts yet is not penalized for their absence) — but
+  // whenever present, every named screen must have a well-formed one. See
+  // src/lib/generation/interaction-contracts.ts.
+  interactionContracts?: InteractionContractMap;
 };
 
 export type BlueprintValidationResult = {
@@ -48,6 +55,11 @@ export function validateBlueprint(input: BlueprintValidationInput): BlueprintVal
         `Data model "${model.name || "(unnamed)"}" must have a name and at least one field.`,
       );
     }
+  }
+  if (input.interactionContracts) {
+    errors.push(
+      ...validateInteractionContracts(input.screens, input.interactionContracts).violations,
+    );
   }
 
   return { status: errors.length === 0 ? "VALID" : "INVALID", errors };

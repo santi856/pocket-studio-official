@@ -22,6 +22,7 @@ export type BlueprintInput = {
   ownerOperations?: Prisma.InputJsonValue;
   outputTargets?: Prisma.InputJsonValue;
   themeAndStyle?: Prisma.InputJsonValue;
+  interactionContracts?: Prisma.InputJsonValue;
   assumptions?: Prisma.InputJsonValue;
   openDecisions?: Prisma.InputJsonValue;
   memory?: Prisma.InputJsonValue;
@@ -80,6 +81,7 @@ export async function createBlueprintVersion(
         ownerOperations: input.ownerOperations,
         outputTargets: input.outputTargets,
         themeAndStyle: input.themeAndStyle,
+        interactionContracts: input.interactionContracts,
         assumptions: input.assumptions,
         openDecisions: input.openDecisions,
         memory: input.memory,

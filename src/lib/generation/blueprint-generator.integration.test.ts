@@ -13,6 +13,7 @@ import { listKnowledgeNodes } from "@/lib/product/product-knowledge";
 import { listEvents } from "@/lib/product/events";
 import { generateInitialBlueprint } from "./blueprint-generator";
 import { getLatestBlueprint, listBlueprintVersions } from "./blueprint";
+import type { InteractionContractMap } from "./interaction-contracts";
 
 describe("generateInitialBlueprint", () => {
   beforeEach(async () => {
@@ -189,6 +190,57 @@ describe("generateInitialBlueprint", () => {
     expect(blueprint.validationErrors).toEqual(
       expect.arrayContaining(['Output target "ios" is not currently supported for generation.']),
     );
+  });
+
+  it("attaches an interaction contract to every screen and workflow, requiring confirmation before a payment", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build a booking app with appointment deposits and a workflow for scheduling.",
+    );
+
+    const blueprint = await generateInitialBlueprint(owner.id, project.id);
+
+    const contracts = blueprint.interactionContracts as Record<
+      string,
+      { patterns: string[]; requiredStates: string[] }
+    >;
+    for (const screen of blueprint.screens as string[]) {
+      expect(contracts[screen]).toBeDefined();
+      expect(contracts[screen]!.requiredStates.length).toBeGreaterThan(0);
+    }
+    expect(contracts.Checkout?.patterns).toEqual(
+      expect.arrayContaining(["form-submission", "destructive-action"]),
+    );
+    expect(contracts.Checkout?.requiredStates).toContain("confirmation");
+    expect(contracts["workflow:Primary Workflow"]?.patterns).toContain("multi-step-workflow");
+  });
+
+  it("would mark a Blueprint INVALID if a screen's interaction contract were dropped (e.g. by a future Change Set edit)", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(owner.id, project.id, "Build a booking app.");
+
+    const blueprint = await generateInitialBlueprint(owner.id, project.id);
+    const screens = blueprint.screens as string[];
+    const contracts = { ...(blueprint.interactionContracts as Record<string, unknown>) };
+    const [firstScreen] = screens;
+    delete contracts[firstScreen!];
+
+    const { validateBlueprint } = await import("./blueprint-validation");
+    const result = validateBlueprint({
+      schemaVersion: blueprint.schemaVersion,
+      productType: blueprint.productType,
+      roles: blueprint.roles as string[],
+      screens,
+      outputTargets: blueprint.outputTargets as string[],
+      dataModels: blueprint.dataModels as Array<{ name: string; fields: string[] }>,
+      requirements: blueprint.requirements as unknown[],
+      interactionContracts: contracts as unknown as InteractionContractMap,
+    });
+
+    expect(result.status).toBe("INVALID");
+    expect(result.errors).toContain(`Screen "${firstScreen}" has no interaction contract.`);
   });
 
   it("denies generation for an actor without project access", async () => {
