@@ -21,6 +21,18 @@ import type { ImpactCategory } from "@/lib/orchestration/impact-analysis";
  * templates. Real semantic pattern recognition is Phase 3 scope (§61);
  * this is the structural foundation Phase 3 strengthens, not a substitute
  * for it.
+ *
+ * D-0022 clarification: this registry's 5 patterns and 7 states are an
+ * initial foundation for a broader "practical product completeness"
+ * standard, not the final model. Each state a pattern implies is now also
+ * classified (Inference Boundaries, below) so low-risk conventions can be
+ * inferred automatically while consequential ones are always surfaced
+ * through the product's real Decision Ledger, never assumed approved.
+ * Extending this into full requirement inference across Product
+ * Intelligence, the Build Planner, Component Registry behavioral
+ * capabilities, the renderer, generated tests, and the Quality Gate is
+ * explicitly Phase 2 work still to come (P2-03, P2-05, P2-06, P2-10) —
+ * this module does not attempt to complete that pipeline on its own.
  */
 
 export const INTERACTION_STATES = [
@@ -45,59 +57,147 @@ export const PRODUCT_PATTERNS = [
 
 export type ProductPattern = (typeof PRODUCT_PATTERNS)[number];
 
+/**
+ * Inference Boundaries (common-sense product reasoning clarification,
+ * D-0022): a state a pattern implies is not all-or-nothing — it carries a
+ * different obligation depending on risk and reversibility.
+ *
+ * - `required`: necessary for correctness or truthful operation; always
+ *   implement.
+ * - `conventionally_implied`: a low-risk behavior users normally expect;
+ *   infer and include automatically.
+ * - `consequential_decision`: affects money, legal obligations, privacy,
+ *   security, publication, or another irreversible/high-impact
+ *   consequence. Never silently assume approval — surface it through the
+ *   product's existing Decision Ledger disclosure/approval model
+ *   (src/lib/product/decisions.ts) once an actual build is being approved,
+ *   not merely inferred as a UI nicety.
+ *
+ * `recommended`/`optional`/`unsupported`/`unresolved` are not static
+ * properties of a pattern — they depend on product-specific context this
+ * fixed map cannot see, so they are not modeled here; a future
+ * context-aware layer (Build Planner, P2-03) applies them.
+ */
+export const INFERENCE_CLASSIFICATIONS = [
+  "required",
+  "conventionally_implied",
+  "consequential_decision",
+] as const;
+
+export type InferenceClassification = (typeof INFERENCE_CLASSIFICATIONS)[number];
+
+// Strictest first: when two patterns imply the same state at different
+// classifications (e.g. one pattern treats "error" as required, another
+// would only conventionally imply it), the stricter obligation wins —
+// never silently downgrade a requirement.
+const CLASSIFICATION_PRECEDENCE: readonly InferenceClassification[] = [
+  "consequential_decision",
+  "required",
+  "conventionally_implied",
+];
+
+function stricterClassification(
+  a: InferenceClassification,
+  b: InferenceClassification,
+): InferenceClassification {
+  return CLASSIFICATION_PRECEDENCE.indexOf(a) <= CLASSIFICATION_PRECEDENCE.indexOf(b) ? a : b;
+}
+
 export type PatternContract = {
   description: string;
-  requiredStates: readonly InteractionState[];
+  states: Readonly<Partial<Record<InteractionState, InferenceClassification>>>;
 };
 
 /**
  * Every entry is a deliberately conservative, hand-authored mapping from a
  * recognized pattern to the interaction states a real implementation of it
  * needs — not an exhaustive UX specification, a floor. `destructive-action`
- * (e.g. collecting a payment) requires `confirmation` because Master Spec
- * §4.2 already classifies payments as a consequential category needing
- * explicit approval; the other patterns require the base
+ * (e.g. collecting a payment) classifies `confirmation` as
+ * `consequential_decision` because Master Spec §4.2 already treats
+ * payments as a consequential category needing explicit approval — this
+ * module records that it is required, but approving it is not this
+ * module's decision to make. The other patterns require the base
  * loading/empty/error/success states a real user hitting a slow network or
  * a failed request will always eventually encounter.
  */
 export const PATTERN_CONTRACTS: Record<ProductPattern, PatternContract> = {
   "list-view": {
     description: "Displays a collection of records the user can browse.",
-    requiredStates: ["loading", "empty", "error"],
+    states: { loading: "required", empty: "required", error: "required" },
   },
   "detail-view": {
     description: "Displays a single record's full detail.",
-    requiredStates: ["loading", "error"],
+    states: { loading: "required", error: "required" },
   },
   "form-submission": {
     description: "Collects user input and submits it for processing.",
-    requiredStates: ["loading", "error", "success", "disabled-while-pending"],
+    states: {
+      loading: "required",
+      error: "required",
+      success: "required",
+      "disabled-while-pending": "conventionally_implied",
+    },
   },
   "multi-step-workflow": {
     description: "Guides a user through an ordered sequence of steps toward one outcome.",
-    requiredStates: ["loading", "error", "success", "retry"],
+    states: {
+      loading: "required",
+      error: "required",
+      success: "required",
+      retry: "conventionally_implied",
+    },
   },
   "destructive-action": {
     description:
       "An action with a real-world consequence that is hard or impossible to undo (e.g. a payment).",
-    requiredStates: ["confirmation", "loading", "error", "success"],
+    states: {
+      confirmation: "consequential_decision",
+      loading: "required",
+      error: "required",
+      success: "required",
+    },
   },
 };
 
 export type InteractionContract = {
   patterns: ProductPattern[];
+  // Every state any matched pattern implies, regardless of classification
+  // — preserved as a flat list for the structural-completeness check
+  // (validateInteractionContracts) and for backward-compatible callers.
   requiredStates: InteractionState[];
+  // Per-state classification (Inference Boundaries above). A state absent
+  // from `requiredStates` is also absent here.
+  stateClassifications: Readonly<Partial<Record<InteractionState, InferenceClassification>>>;
+  // Convenience: states classified consequential_decision, i.e. never to
+  // be silently assumed approved.
+  consequentialStates: InteractionState[];
 };
 
 function mergeContract(patterns: ProductPattern[]): InteractionContract {
   const uniquePatterns = Array.from(new Set(patterns));
-  const requiredStates = new Set<InteractionState>();
+  const classifications = new Map<InteractionState, InferenceClassification>();
+
   for (const pattern of uniquePatterns) {
-    for (const state of PATTERN_CONTRACTS[pattern].requiredStates) {
-      requiredStates.add(state);
+    for (const [state, classification] of Object.entries(
+      PATTERN_CONTRACTS[pattern].states,
+    ) as Array<[InteractionState, InferenceClassification]>) {
+      const existing = classifications.get(state);
+      classifications.set(
+        state,
+        existing ? stricterClassification(existing, classification) : classification,
+      );
     }
   }
-  return { patterns: uniquePatterns, requiredStates: Array.from(requiredStates) };
+
+  const requiredStates = Array.from(classifications.keys());
+  const stateClassifications = Object.fromEntries(classifications) as Partial<
+    Record<InteractionState, InferenceClassification>
+  >;
+  const consequentialStates = requiredStates.filter(
+    (state) => classifications.get(state) === "consequential_decision",
+  );
+
+  return { patterns: uniquePatterns, requiredStates, stateClassifications, consequentialStates };
 }
 
 const CHECKOUT_SCREEN_NAME = "Checkout";

@@ -217,6 +217,19 @@ describe("generateInitialBlueprint", () => {
     expect(contracts["workflow:Primary Workflow"]?.patterns).toContain("multi-step-workflow");
   });
 
+  it("surfaces a consequential interaction state as an open decision, never assumed approved", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(owner.id, project.id, "Add appointment deposits.");
+
+    const blueprint = await generateInitialBlueprint(owner.id, project.id);
+
+    expect(blueprint.openDecisions).toEqual(
+      expect.arrayContaining([
+        '"Checkout" implies a "confirmation" step before proceeding — this is a consequential decision and has not been approved.',
+      ]),
+    );
+  });
+
   it("would mark a Blueprint INVALID if a screen's interaction contract were dropped (e.g. by a future Change Set edit)", async () => {
     const { owner, project } = await seedProject();
     await generateProductIntelligence(owner.id, project.id, "Build a booking app.");

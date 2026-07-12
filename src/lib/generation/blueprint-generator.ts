@@ -105,6 +105,20 @@ export async function generateInitialBlueprint(
   if (dataModels.length === 0) {
     openDecisions.push("Confirm the primary data entity this product needs to persist.");
   }
+  // Inference Boundaries (D-0022): a consequential_decision-classified
+  // interaction state (e.g. payment confirmation) is never silently
+  // treated as approved. Recorded here in the same place every other
+  // needs-attention item on a Blueprint goes; wiring it into an actual
+  // Decision Ledger approval gate belongs to whichever unit first turns
+  // this Blueprint into a real build (P2-03/P2-06), not to generation
+  // that hasn't been approved yet.
+  for (const [key, contract] of Object.entries(interactionContracts)) {
+    for (const state of contract.consequentialStates) {
+      openDecisions.push(
+        `"${key}" implies a "${state}" step before proceeding — this is a consequential decision and has not been approved.`,
+      );
+    }
+  }
 
   const security = {
     authenticationRequired: true,

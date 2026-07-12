@@ -8,10 +8,22 @@ import {
 } from "./interaction-contracts";
 
 describe("PATTERN_CONTRACTS", () => {
-  it("defines a non-empty required-states list for every pattern", () => {
+  it("defines a non-empty, classified states map for every pattern", () => {
     for (const pattern of PRODUCT_PATTERNS) {
-      expect(PATTERN_CONTRACTS[pattern].requiredStates.length).toBeGreaterThan(0);
+      const states = PATTERN_CONTRACTS[pattern].states;
+      expect(Object.keys(states).length).toBeGreaterThan(0);
+      for (const classification of Object.values(states)) {
+        expect(["required", "conventionally_implied", "consequential_decision"]).toContain(
+          classification,
+        );
+      }
     }
+  });
+
+  it("classifies destructive-action's confirmation as a consequential_decision, never assumed approved", () => {
+    expect(PATTERN_CONTRACTS["destructive-action"].states.confirmation).toBe(
+      "consequential_decision",
+    );
   });
 });
 
@@ -88,7 +100,12 @@ describe("validateInteractionContracts", () => {
 
   it("flags a contract with zero patterns", () => {
     const result = validateInteractionContracts(["Home"], {
-      Home: { patterns: [], requiredStates: ["loading"] },
+      Home: {
+        patterns: [],
+        requiredStates: ["loading"],
+        stateClassifications: { loading: "required" },
+        consequentialStates: [],
+      },
     });
     expect(result.valid).toBe(false);
     expect(result.violations).toContain(
@@ -98,11 +115,29 @@ describe("validateInteractionContracts", () => {
 
   it("flags a contract with zero required states", () => {
     const result = validateInteractionContracts(["Home"], {
-      Home: { patterns: ["detail-view"], requiredStates: [] },
+      Home: {
+        patterns: ["detail-view"],
+        requiredStates: [],
+        stateClassifications: {},
+        consequentialStates: [],
+      },
     });
     expect(result.valid).toBe(false);
     expect(result.violations).toContain(
       'Screen "Home"\'s interaction contract has no required states.',
     );
+  });
+});
+
+describe("inference classification precedence", () => {
+  it("keeps the stricter classification when patterns disagree on the same state", () => {
+    // form-submission classifies "loading" as required; no pattern in this
+    // registry currently classifies any shared state more loosely, so this
+    // guards the merge behavior itself: destructive-action's consequential
+    // "confirmation" must survive being merged alongside form-submission's
+    // unrelated states, not get diluted.
+    const result = inferScreenPatterns("Checkout", ["monetization"]);
+    expect(result.stateClassifications.confirmation).toBe("consequential_decision");
+    expect(result.consequentialStates).toEqual(["confirmation"]);
   });
 });

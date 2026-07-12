@@ -90,6 +90,25 @@ says otherwise.
   it — no renderer or generation pipeline exists yet (P2-05/P2-06). 15 new tests (13 unit, 2 integration),
   full suite green (205/205 unit+integration excluding concurrently in-progress P2-02 work, 7/7 e2e,
   clean typecheck/lint/format, production build). See `D-0021`, `EV-0051`.
+- **Inference Boundaries clarification (AS-0001).** A user clarification defined "practical product
+  completeness" precisely: Pocket Studio must reason about the normal supporting behavior a requested
+  capability implies (affordances, workflow continuity, state completeness, data lifecycle, validation,
+  accessibility, permissions/consequences, product continuity, customer-perceived completeness), not just
+  literal requirement/component compliance — while never silently inventing consequential business,
+  legal, financial, privacy, security, or publication decisions. Recorded as `D-0022` and durable standard
+  `AS-0001` in `execution/state.json`, applying to every downstream P2 unit (P2-02, P2-03, P2-05, P2-06,
+  P2-08, P2-10, P2-17). Proportionally extended the Interaction Contract System (not a new system): every
+  state a pattern implies is now classified `required` / `conventionally_implied` /
+  `consequential_decision`, merged with the stricter classification winning when patterns disagree, and
+  every `consequential_decision` state a generated Blueprint implies (e.g. a payment needing confirmation)
+  is now surfaced in `Blueprint.openDecisions` — never silently assumed approved. 3 new tests (208/208
+  unit+integration excluding concurrently in-progress P2-02 work). **Explicitly not delivered**, and
+  recorded as deferred to the units that build the systems they depend on: implied-requirement
+  identification in Product Intelligence, explicit-vs-inferred recording throughout the full Blueprint,
+  Build Planner conversion of behavior into implementation work, Component Registry behavioral
+  capabilities, renderer implementation, workflow-derived generated tests, Quality Gate runtime
+  verification, Truth Status reporting of unverified behavior, and the designated "Example App Ideas"
+  first vertical proof (that UI pattern does not currently exist in the product). See `D-0022`, `EV-0052`.
 
 ## Completed
 
