@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-10 (Quality Gate for the generated product)
+- **Active implementation unit:** P2-11 (Security/privacy/governance impact + legal draft generation)
 
 ## Phase 2 Decomposition
 
@@ -32,7 +32,7 @@ says otherwise.
 | P2-07 ✅ | Demonstration product — booking app for mobile detailers: concrete Blueprint content, screens, data models, business logic | §56                      | P2-06                                       |
 | P2-08 ✅ | Conversational editing + Change Sets + selective regeneration                                                              | §27, §57                 | P2-07, Phase 1 Orchestration Contract       |
 | P2-09 ✅ | Version history and restore                                                                                                | §27                      | P2-08                                       |
-| P2-10    | Quality Gate — unit/integration/authorization/tenant/accessibility/e2e tests for the generated product                     | §55, §59                 | P2-07                                       |
+| P2-10 ✅ | Quality Gate — unit/integration/authorization/tenant/accessibility/e2e tests for the generated product                     | §55, §59                 | P2-07                                       |
 | P2-11    | Security/privacy/governance impact + legal/policy draft generation from real state                                         | §31, §32, §34            | P2-07, Phase 1 PolicyDocument               |
 | P2-12    | Migration planning for generated-app data model changes                                                                    | §28                      | P2-08                                       |
 | P2-13    | Export foundation + durable jobs/retries/checkpoints/idempotency                                                           | §25, §29                 | P2-07                                       |
@@ -268,6 +268,24 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
   real database. Full suite green (305/305 unit+integration, 9/9 e2e, clean typecheck/lint/format,
   production build). Honest limitation: no Studio UI surface yet for browsing history or triggering a
   restore (P2-17). See `D-0030`, `EV-0067`, `EV-0068`.
+- **P2-10 — Quality Gate for the generated product (Master Spec §55, §59).** `runQualityGate()`
+  (`src/lib/generation/quality-gate.ts`) runs 8 real checks against a project's current Blueprint and
+  Build Plan: Blueprint structurally valid; Build Plan has no unresolved blockers; every screen has a
+  well-formed Interaction Contract (reusing P2-01's own `validateInteractionContracts`); list-view
+  screens actually contain a `List` node and have a real data dependency configured (the structural
+  precondition for P2-05's runtime Loading/Empty/Error binding to work — that binding only exists at
+  render time, never in the static Build Plan tree); form-submission screens' Input names match their
+  bound data model's real fields (turning the P2-06/P2-07 disclosed placeholder-Form gap into an
+  ongoing, re-checkable gate, not just a one-time fix); every screen reachable from the navigation
+  graph; every Image has alt text (the accessibility dimension); and a real server-side smoke check
+  that every screen's data binding resolves without throwing (the end-to-end dimension, honestly
+  scoped — no per-generation browser run, no live authorization/tenant fuzzing, since tenant isolation
+  is structurally guaranteed by the generated-app data layer's own query scoping, P2-04). Every run
+  records real Product Evidence (new `QUALITY_GATE_CHECK` type) and syncs Truth Status for a new
+  `quality.gate` subject key — never a self-report. 5 new integration tests, including a deliberately
+  corrupted Build Plan proving the form-field check independently catches the exact defect class the
+  P2-07 fix already prevents at generation time. Full suite green (310/310 unit+integration, 9/9 e2e,
+  clean typecheck/lint/format, production build). See `D-0031`, `EV-0069`, `EV-0070`.
 
 ## Completed
 

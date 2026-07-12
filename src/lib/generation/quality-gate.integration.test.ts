@@ -1,0 +1,152 @@
+// @vitest-environment node
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { db } from "@/lib/db";
+import { resetDatabase } from "../../../test/reset-db";
+import { registerUser } from "@/lib/services/users";
+import { createOrganization } from "@/lib/services/organizations";
+import { createProject } from "@/lib/services/projects";
+import { seedCapabilityRegistry } from "@/lib/registry/seed-data";
+import { ForbiddenError } from "@/lib/tenancy/authz";
+import { generateProductIntelligence } from "@/lib/orchestration/product-intelligence";
+import { generateInitialBlueprint } from "./blueprint-generator";
+import { generateBuildPlan } from "./build-planner";
+import { getLatestTruthStatus } from "@/lib/product/truth-status";
+import { listEvidence } from "@/lib/product/evidence";
+import { listEvents } from "@/lib/product/events";
+import { NoGenerationToCheckError, runQualityGate } from "./quality-gate";
+
+describe("runQualityGate", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    await seedCapabilityRegistry();
+  });
+
+  afterAll(async () => {
+    await resetDatabase();
+    await db.$disconnect();
+  });
+
+  async function seedProject() {
+    const owner = await registerUser({ email: "owner@example.com", password: "password123" });
+    const org = await createOrganization({ name: "Detailer Co", ownerUserId: owner.id });
+    const project = await createProject({
+      organizationId: org.id,
+      name: "Booking App",
+      createdByUserId: owner.id,
+    });
+    return { owner, project };
+  }
+
+  it("throws NoGenerationToCheckError when the project has no Blueprint or Build Plan yet", async () => {
+    const { owner, project } = await seedProject();
+
+    await expect(runQualityGate(owner.id, project.id)).rejects.toBeInstanceOf(
+      NoGenerationToCheckError,
+    );
+  });
+
+  it("passes every check for a clean, data-bound generation and records evidence + Truth Status", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build a booking app with a database of customer records.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+    await generateBuildPlan(owner.id, project.id);
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    expect(result.passed).toBe(true);
+    expect(result.checks.every((check) => check.passed)).toBe(true);
+    expect(result.checks.map((check) => check.name)).toContain(
+      "List-view screens are wired to a real data dependency",
+    );
+
+    const status = await getLatestTruthStatus(owner.id, project.id, "quality.gate");
+    expect(status?.status).toBe("IMPLEMENTED");
+
+    const evidence = await listEvidence(owner.id, project.id, { subjectKey: "quality.gate" });
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0]?.result).toContain("pass");
+
+    const events = await listEvents(owner.id, project.id, { type: "QUALITY_GATE_RUN" });
+    expect(events).toHaveLength(1);
+  });
+
+  it("fails, and syncs Truth Status to BLOCKED, when the Build Plan has real blockers", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build a booking app with appointment deposits.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+    await generateBuildPlan(owner.id, project.id);
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    expect(result.passed).toBe(false);
+    const buildPlanCheck = result.checks.find(
+      (c) => c.name === "Build Plan has no unresolved blockers",
+    );
+    expect(buildPlanCheck?.passed).toBe(false);
+
+    const status = await getLatestTruthStatus(owner.id, project.id, "quality.gate");
+    expect(status?.status).toBe("BLOCKED");
+  });
+
+  it("catches a Form Input whose name does not match its bound data model's real fields", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build a booking app with appointment deposits.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+    const plan = await generateBuildPlan(owner.id, project.id);
+
+    // Corrupt the stored Build Plan's Checkout Form to name an Input after
+    // a field the bound "Payment" data model does not have — the same
+    // defect class the P2-07 fix prevents at generation time; this
+    // confirms the Quality Gate would independently catch it if it ever
+    // recurred (e.g. from a future generator change).
+    const componentStructure = plan.componentStructure as Record<string, unknown>;
+    const checkout = componentStructure["Checkout"] as { children?: unknown[] };
+    const form = checkout.children?.find(
+      (
+        child,
+      ): child is {
+        type: string;
+        children?: Array<{ type: string; props?: Record<string, unknown> }>;
+      } => (child as { type?: string }).type === "Form",
+    );
+    const input = form?.children?.find((child) => child.type === "Input");
+    if (input) {
+      input.props = { name: "totallyUnknownField" };
+    }
+    await db.buildPlan.update({
+      where: { id: plan.id },
+      data: { componentStructure: componentStructure as never },
+    });
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    const formCheck = result.checks.find(
+      (c) => c.name === "Form-submission screens' Inputs match their bound data model's fields",
+    );
+    expect(formCheck?.passed).toBe(false);
+    expect(formCheck?.details).toContain("totallyUnknownField");
+    expect(result.passed).toBe(false);
+  });
+
+  it("denies running the Quality Gate for an actor without project access", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(owner.id, project.id, "Build a booking app.");
+    await generateInitialBlueprint(owner.id, project.id);
+    await generateBuildPlan(owner.id, project.id);
+    const outsider = await registerUser({ email: "outsider@example.com", password: "password123" });
+
+    await expect(runQualityGate(outsider.id, project.id)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+});

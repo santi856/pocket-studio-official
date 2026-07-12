@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "generatedBy": "execution-protocol-v1.0-session-init",
-  "lastUpdated": "2026-07-12T11:00:00Z",
+  "lastUpdated": "2026-07-12T12:00:00Z",
   "governanceCommit": "25a33f0",
   "phase": {
     "current": "phase-2",
@@ -12,11 +12,11 @@
     "previousPhaseCheckpoint": "phase-1-complete (commit 93571b6, Level 3 review accepted round 2, EV-0047)"
   },
   "milestone": {
-    "current": "M4-editing",
-    "previousMilestone": "M3-generation-foundation (P2-01..P2-07, complete)",
-    "description": "Conversational editing, Change Sets, selective regeneration, version history, and restore (P2-08, P2-09) — turning the one-shot generation pipeline into an editable, versioned product."
+    "current": "M5-quality-and-trust",
+    "previousMilestone": "M4-editing (P2-08, P2-09, complete)",
+    "description": "Quality Gate, security/privacy/governance impact, legal drafts, migration planning (P2-10..P2-12) — verifying and disclosing what a generation actually is, not just producing it."
   },
-  "activeImplementationUnit": "P2-10",
+  "activeImplementationUnit": "P2-11",
   "architecturalStandards": [
     {
       "id": "AS-0001",
@@ -42,9 +42,10 @@
       "P2-06: Full-stack generation orchestration — generateApplication() (single generation call: Blueprint -> Build Plan -> Truth Status sync to this project's real GENERATED/BLOCKED outcome), a live preview route at /org/[orgSlug]/[projectSlug]/preview/[screen] rendering real Build Plan component trees bound to real generated-app data, real generated-app-user credential verification (no session/cookie yet), verified end-to-end through an actual browser (EV-0061, EV-0062, D-0027)",
       "P2-07: Demonstration product — closed the P2-06 placeholder-Form gap generically (Form Inputs now named after a bound data model's real fields, benefiting every product); ran Master Spec §54's exact required sentence through the full pipeline live in a browser and honestly documented the gap between §56's full 11-screen/11-data vision and today's actual deterministic output (Home/Browse only, zero data models) as a disclosed, not-silently-implied limitation (EV-0063, EV-0064, D-0028)",
       "P2-08: Conversational editing, Change Sets, selective regeneration — new ChangeSet model (1:1 with its governing Decision) computing addedCategories by diffing requirements derived from the prior idea vs. the combined (never-discarded) idea text; edit_request intents now generate a Change Set and apply it immediately (non-consequential) or hold it PENDING until Decision approval (consequential); regeneration only happens when addedCategories is non-empty. Also fixed a real regression this work surfaced live in the e2e suite: generateProductIntelligence silently reset a customer's edited unitEconomicsAssumptions on a second call, since ProductState is full-replace — now carries that one customer-editable field forward (EV-0065, EV-0066, D-0029)",
-      "P2-09: Version history and restore — getProjectVersionHistory aggregates ProductState/Blueprint/BuildPlan/ChangeSet into one chronological, immutable-by-construction timeline; previewBlueprintRestore computes a real screens/dataModels diff; validateBlueprintRestore re-validates a target version's stored content before restoring; restoreBlueprintVersion creates a new top version with the target's content, never mutating history in between. Restore scoped to Blueprint only (Build Plan is cheaply regenerable; Product State restore has no established use case yet) (EV-0067, EV-0068, D-0030)"
+      "P2-09: Version history and restore — getProjectVersionHistory aggregates ProductState/Blueprint/BuildPlan/ChangeSet into one chronological, immutable-by-construction timeline; previewBlueprintRestore computes a real screens/dataModels diff; validateBlueprintRestore re-validates a target version's stored content before restoring; restoreBlueprintVersion creates a new top version with the target's content, never mutating history in between. Restore scoped to Blueprint only (Build Plan is cheaply regenerable; Product State restore has no established use case yet) (EV-0067, EV-0068, D-0030)",
+      "P2-10: Quality Gate for the generated product — runQualityGate() runs 8 real checks against a project's current Blueprint/Build Plan (structural validity, no blockers, well-formed Interaction Contracts, list-view screens actually data-bound, form-submission Inputs matching their bound data model's real fields, screen reachability, image alt text, and a real server-side data-binding smoke check), recording Product Evidence and syncing Truth Status for a new quality.gate subject key — never a self-report (EV-0069, EV-0070, D-0031)"
     ],
-    "active": ["P2-10: Quality Gate for the generated product"],
+    "active": ["P2-11: Security/privacy/governance impact + legal draft generation"],
     "deferred": [],
     "blocked": []
   },
@@ -78,7 +79,8 @@
     "D-0027",
     "D-0028",
     "D-0029",
-    "D-0030"
+    "D-0030",
+    "D-0031"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -94,14 +96,15 @@
     "20260712125631_generated_app_data_layer",
     "20260712132257_generation_completed_event",
     "20260712143138_change_sets",
-    "20260712145358_blueprint_restored_event"
+    "20260712145358_blueprint_restored_event",
+    "20260712150636_quality_gate_events"
   ],
   "testStatus": {
     "typecheck": "pass",
     "lint": "pass",
     "formatCheck": "pass",
     "unit": "pass (106/106)",
-    "integration": "pass (199/199)",
+    "integration": "pass (204/204)",
     "e2e": "pass (9/9)",
     "productionBuild": "pass"
   },
@@ -173,7 +176,9 @@
     "EV-0065",
     "EV-0066",
     "EV-0067",
-    "EV-0068"
+    "EV-0068",
+    "EV-0069",
+    "EV-0070"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories — not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (§61).",
@@ -182,6 +187,7 @@
     "The official Phase 2 demonstration (P2-07, Master Spec §56: 'Build a premium booking app for mobile detailers.') runs successfully end to end (GENERATED, VALID, READY, live in a browser) but its honest current output is only the base Home/Browse screens with zero data models — far short of §56's full vision (11 customer screens, 11 owner screens, 11 data types: Services, Packages, Availability, Memberships, etc.). This gap is intentionally NOT closed by hardcoding this one sentence's content, per Master Spec §26's 'not hardcoded preview screens' requirement — closing it honestly requires either a deliberately expanded, reusable domain-template vocabulary or real AI-backed generation (Phase 3, §61). See official-demonstration.integration.test.ts's module comment for the full accounting.",
     "Conversational editing (P2-08) 'selective regeneration' is category-level (regenerate the whole Blueprint/Build Plan, or don't), not screen/field-level — true incremental diffing of individual screens or data models does not exist yet.",
     "Version history (P2-09) aggregates Product State/Blueprint/Build Plan/Change Set into one read-only timeline, and restore exists for Blueprint only — Build Plan and Product State have no restore function yet (Build Plan is cheaply regenerable from a Blueprint; Product State restore has no established use case). No Studio UI surface exists yet for browsing version history or triggering a restore (P2-17).",
+    "The Quality Gate (P2-10) runs 8 real structural/server-side checks but does not run a per-generation browser e2e test or live authorization/tenant fuzzing — tenant isolation is verified structurally (by construction, via P2-04's own tests), not re-tested per Quality Gate invocation. No Studio UI surface exists yet for viewing Quality Gate results (P2-17).",
     "The Build Planner's planStatus deliberately does not treat the platform's own SUPPORTED_LATER_PHASE generation capability as a blocker (see D-0024) — a Build Plan can be READY today even though nothing yet executes it; that gap is disclosed via Truth Status and this list, not via planStatus.",
     "Blueprint has no Studio UI surface yet (P2-17 wires this up); it is currently reachable only via the service layer and its integration tests.",
     "The Product Pattern and Interaction Contract System (src/lib/generation/interaction-contracts.ts) validates that an interaction contract is declared and structurally complete, not that a generated screen actually implements the required states — no component tree or renderer exists until the Structured Renderer (P2-05) and generation pipeline (P2-06). Pattern inference is a fixed, hand-authored deterministic mapping (5 patterns, 7 states), not semantic understanding.",
@@ -191,5 +197,5 @@
   ],
   "requiredCustomerActions": [],
   "requiredExternalActions": [],
-  "nextAction": "Begin P2-10: Quality Gate for the generated product (Master Spec §55, §59) — unit/integration/authorization/tenant/accessibility/e2e tests for what a generation actually produces, not just for Pocket Studio's own build. Concretely: a function that walks a project's current Build Plan and checks every screen's Interaction Contract (P2-01/P2-05) is actually satisfied by its rendered component tree (e.g. a list-view screen's tree really contains a List/Loading/Empty/Error path), that every screen is reachable from the navigation graph, and that Blueprint validation + Build Plan blockers are both clean — recording the result as real evidence and Truth Status, not a self-report."
+  "nextAction": "Begin P2-11: Security/privacy/governance impact + legal draft generation (Master Spec §31, §32, §34). Phase 1 (P1-08) already built durable GovernanceProfile and versioned PolicyDocument models plus a service layer, but never generated real policy content from actual Product State — every policy document is empty scaffolding. This unit should: (1) derive real security/privacy requirement lists from a project's Blueprint/Build Plan content (e.g. a data model with customer fields implies a data inventory; a form-submission screen implies input validation; monetization implies payment security), never fabricated; (2) generate real Terms of Service / Privacy Policy / AI Disclosure draft content from the project's actual GovernanceProfile + Blueprint, leaving genuinely unknown facts (company name, address, jurisdiction) as explicit open decisions per §34, never invented; (3) never represent this as legal advice or guaranteed compliance, per §32's explicit prohibition."
 }

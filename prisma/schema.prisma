@@ -395,6 +395,7 @@ enum ProductEventType {
   CHANGE_SET_APPLIED
   CHANGE_SET_REJECTED
   BLUEPRINT_RESTORED
+  QUALITY_GATE_RUN
 }
 
 // Append-only audit trail of state-changing actions on a project. Never
@@ -420,6 +421,7 @@ enum ProductEvidenceType {
   FEASIBILITY_ASSESSMENT
   REQUIREMENT_DERIVATION
   STRUCTURED_MANUAL_VERIFICATION
+  QUALITY_GATE_CHECK
 }
 
 // Backs Truth Status claims with a verifiable record, mirroring the
