@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-09 (Version history and restore)
+- **Active implementation unit:** P2-10 (Quality Gate for the generated product)
 
 ## Phase 2 Decomposition
 
@@ -31,7 +31,7 @@ says otherwise.
 | P2-06 ✅ | Full-stack generation orchestration — ties Blueprint+BuildPlan+Registry+data layer+renderer into one generation call       | §25                      | P2-01..P2-05                                |
 | P2-07 ✅ | Demonstration product — booking app for mobile detailers: concrete Blueprint content, screens, data models, business logic | §56                      | P2-06                                       |
 | P2-08 ✅ | Conversational editing + Change Sets + selective regeneration                                                              | §27, §57                 | P2-07, Phase 1 Orchestration Contract       |
-| P2-09    | Version history and restore                                                                                                | §27                      | P2-08                                       |
+| P2-09 ✅ | Version history and restore                                                                                                | §27                      | P2-08                                       |
 | P2-10    | Quality Gate — unit/integration/authorization/tenant/accessibility/e2e tests for the generated product                     | §55, §59                 | P2-07                                       |
 | P2-11    | Security/privacy/governance impact + legal/policy draft generation from real state                                         | §31, §32, §34            | P2-07, Phase 1 PolicyDocument               |
 | P2-12    | Migration planning for generated-app data model changes                                                                    | §28                      | P2-08                                       |
@@ -251,6 +251,23 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
   Honest limitation: "selective regeneration" is category-level, not screen/field-level; version
   history and restore (§27's other half) is P2-09, not delivered here. See `D-0029`, `EV-0065`,
   `EV-0066`.
+
+- **P2-09 — Version history and restore (Master Spec §27's other half).** `getProjectVersionHistory`
+  (`src/lib/orchestration/version-history.ts`) assembles Product State, Blueprint, Build Plan, and
+  Change Set rows — each already append-only versioned, so every entry is an immutable version
+  identifier by construction — into one chronological, newest-first timeline, rather than inventing a
+  new unified version-numbering scheme spanning four independently-evolving tables.
+  `previewBlueprintRestore` computes a real screens/dataModels diff between a target Blueprint version
+  and the current latest. `validateBlueprintRestore` re-runs the exact same structural
+  `validateBlueprint` check every newly generated Blueprint passes through, against the target
+  version's stored content, before anything is restored. `restoreBlueprintVersion` creates a new top
+  Blueprint version whose content equals the target's, never mutating or deleting the versions in
+  between — the same append-only discipline used everywhere else in this codebase. Restore is scoped
+  to Blueprint only: Build Plan is cheaply regenerable on demand from a Blueprint (P2-03), and Product
+  State restore has no established customer-facing entry point yet. 10 new integration tests against a
+  real database. Full suite green (305/305 unit+integration, 9/9 e2e, clean typecheck/lint/format,
+  production build). Honest limitation: no Studio UI surface yet for browsing history or triggering a
+  restore (P2-17). See `D-0030`, `EV-0067`, `EV-0068`.
 
 ## Completed
 

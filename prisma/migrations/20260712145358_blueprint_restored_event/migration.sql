@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "ProductEventType" ADD VALUE 'BLUEPRINT_RESTORED';

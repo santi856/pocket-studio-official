@@ -394,6 +394,7 @@ enum ProductEventType {
   GENERATION_COMPLETED
   CHANGE_SET_APPLIED
   CHANGE_SET_REJECTED
+  BLUEPRINT_RESTORED
 }
 
 // Append-only audit trail of state-changing actions on a project. Never

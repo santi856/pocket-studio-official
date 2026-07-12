@@ -123,3 +123,13 @@ export async function listBlueprintVersions(
     orderBy: { version: "desc" },
   });
 }
+
+export async function getBlueprintVersion(
+  actorUserId: string,
+  projectId: string,
+  version: number,
+): Promise<Blueprint | null> {
+  await requireProjectAccess(actorUserId, projectId, "MEMBER");
+
+  return db.blueprint.findUnique({ where: { projectId_version: { projectId, version } } });
+}
