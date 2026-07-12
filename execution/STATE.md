@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-07 (Demonstration product)
+- **Active implementation unit:** P2-08 (Conversational editing, Change Sets, selective regeneration)
 
 ## Phase 2 Decomposition
 
@@ -29,7 +29,7 @@ says otherwise.
 | P2-04 ✅ | Generated-app data layer — generic multi-tenant store for a generated product's own data + end users                       | §25                      | Phase 1 tenancy                             |
 | P2-05 ✅ | Structured Renderer + Interactive Runtime — real, working UI interpreted from Blueprint screens, not hardcoded             | §25, §26                 | P2-01, P2-02                                |
 | P2-06 ✅ | Full-stack generation orchestration — ties Blueprint+BuildPlan+Registry+data layer+renderer into one generation call       | §25                      | P2-01..P2-05                                |
-| P2-07    | Demonstration product — booking app for mobile detailers: concrete Blueprint content, screens, data models, business logic | §56                      | P2-06                                       |
+| P2-07 ✅ | Demonstration product — booking app for mobile detailers: concrete Blueprint content, screens, data models, business logic | §56                      | P2-06                                       |
 | P2-08    | Conversational editing + Change Sets + selective regeneration                                                              | §27, §57                 | P2-07, Phase 1 Orchestration Contract       |
 | P2-09    | Version history and restore                                                                                                | §27                      | P2-08                                       |
 | P2-10    | Quality Gate — unit/integration/authorization/tenant/accessibility/e2e tests for the generated product                     | §55, §59                 | P2-07                                       |
@@ -204,6 +204,24 @@ says otherwise.
   the existing platform session, not a separate customer-facing route; the Form/data-model field mismatch
   means a real write through the DOM isn't provable yet, only the read/list-binding path. See `D-0027`,
   `EV-0061`, `EV-0062`.
+- **P2-07 — Demonstration product (Master Spec §56).** Two parts. First, a generic (not idea-specific)
+  fix to the Build Planner: a screen's `Form` now names its `Input` elements after the bound data
+  model's real fields (excluding system-managed `id`/`createdAt`) instead of one anonymous `Input` —
+  closes the placeholder-Form gap disclosed as a known limitation of P2-06, benefiting every product's
+  generated forms. Second, `official-demonstration.integration.test.ts` and
+  `e2e/official-demonstration.spec.ts` run Master Spec §54's exact required sentence — `"Build a premium
+booking app for mobile detailers."` — through the full pipeline end to end, live in a real browser,
+  and honestly assert what the deterministic pipeline actually produces today: a `VALID` Blueprint,
+  `READY` Build Plan, `GENERATED` status, with only the base recommended screens (`Home`, `Browse`) and
+  **zero** data models. This falls well short of §56's full vision (11 customer screens, 11 owner
+  screens, 11 data types — Services, Packages, Availability, Memberships, etc.), and that gap is
+  deliberately **not** closed by hardcoding this one sentence's content — doing so would violate
+  §26's "not hardcoded preview screens" requirement and the "never overstate" constraint governing this
+  entire build. Closing it honestly requires either a deliberately expanded, reusable domain-template
+  vocabulary or real AI-backed generation (Phase 3, §61); recorded as an explicit, disclosed limitation,
+  not silently implied to be complete. 4 new integration tests (1 regression for the Input-naming fix +
+  3 for the official demonstration), 1 new e2e test. Full suite green (283/283 unit+integration, 9/9
+  e2e, clean typecheck/lint/format, production build). See `D-0028`, `EV-0063`, `EV-0064`.
 
 ## Completed
 

@@ -60,17 +60,29 @@ function asRequirements(value: unknown): DerivedRequirement[] {
   return Array.isArray(value) ? (value as DerivedRequirement[]) : [];
 }
 
+// Fields a record's own lifecycle already manages — never surfaced as a
+// user-editable Input, since GeneratedRecord's own id/createdAt come from
+// the database, not from customer input.
+const SYSTEM_MANAGED_FIELDS: ReadonlySet<string> = new Set(["id", "createdAt"]);
+
 /**
  * Builds a default component tree for a screen from its interaction
  * contract's recognized patterns, using only Component Registry (P2-02)
  * primitives, then runs it through `validateComponentTree` so an
  * unrecognized type — should one ever slip in — fails safely rather than
- * corrupting the plan. Deliberately minimal: a real layout is a rendering
- * concern for P2-05, not this planning step.
+ * corrupting the plan. When the screen has a `form-submission` pattern and
+ * a bound data model, one Input is generated per non-system-managed field,
+ * named after that field, so a real submission through the Structured
+ * Renderer (P2-05) collects data `createGeneratedRecord` can actually
+ * accept — closing the placeholder-Form gap disclosed as a known
+ * limitation of P2-06. Deliberately still minimal: real layout/validation
+ * beyond field presence is a rendering concern for P2-05, not this
+ * planning step.
  */
 function buildComponentTree(
   screenName: string,
   contract: InteractionContract | undefined,
+  boundDataModel: BlueprintDataModel | undefined,
 ): ComponentNode {
   const children: RawComponentNode[] = [{ type: "Heading", props: { text: screenName } }];
   const patterns = contract?.patterns ?? [];
@@ -79,13 +91,16 @@ function buildComponentTree(
     children.push({ type: "List", props: {} });
   }
   if (patterns.includes("form-submission")) {
+    const editableFields =
+      boundDataModel?.fields.filter((field) => !SYSTEM_MANAGED_FIELDS.has(field)) ?? [];
+    const inputs: RawComponentNode[] =
+      editableFields.length > 0
+        ? editableFields.map((field) => ({ type: "Input", props: { name: field } }))
+        : [{ type: "Input", props: {} }];
     children.push({
       type: "Form",
       props: {},
-      children: [
-        { type: "Input", props: {} },
-        { type: "Button", props: { label: "Submit" } },
-      ],
+      children: [...inputs, { type: "Button", props: { label: "Submit" } }],
     });
   }
   if (
@@ -311,15 +326,19 @@ export async function generateBuildPlan(
   const primary = navigation?.primary ?? screens[0];
   const feasibility = (blueprint.feasibility ?? null) as FeasibilityReport | null;
 
+  const dataDependencies = deriveDataDependencies(screens, dataModels);
   const componentStructure = Object.fromEntries(
-    screens.map((screen) => [screen, buildComponentTree(screen, interactionContracts[screen])]),
+    screens.map((screen) => {
+      const boundModelKey = dataDependencies[screen]?.[0];
+      const boundDataModel = dataModels.find((model) => model.name === boundModelKey);
+      return [screen, buildComponentTree(screen, interactionContracts[screen], boundDataModel)];
+    }),
   );
   const navigationGraph = primary
     ? screens
         .filter((screen) => screen !== primary)
         .map((screen) => ({ from: primary, to: screen }))
     : [];
-  const dataDependencies = deriveDataDependencies(screens, dataModels);
   const phases = deriveImplementationPhases({
     screens,
     workflows,

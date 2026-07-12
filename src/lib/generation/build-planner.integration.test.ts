@@ -196,4 +196,33 @@ describe("generateBuildPlan", () => {
 
     await expect(generateBuildPlan(outsider.id, project.id)).rejects.toBeInstanceOf(ForbiddenError);
   });
+
+  it("names a Form's Inputs after the bound data model's real fields, excluding system-managed ones", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build a booking app with appointment deposits.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+
+    const plan = await generateBuildPlan(owner.id, project.id);
+
+    const componentStructure = plan.componentStructure as Record<
+      string,
+      {
+        children?: Array<{
+          type: string;
+          children?: Array<{ type: string; props?: { name?: string } }>;
+        }>;
+      }
+    >;
+    const checkout = componentStructure["Checkout"];
+    const form = checkout?.children?.find((child) => child.type === "Form");
+    const inputNames = form?.children
+      ?.filter((child) => child.type === "Input")
+      .map((child) => child.props?.name);
+
+    expect(inputNames).toEqual(["amountCents", "status"]);
+  });
 });

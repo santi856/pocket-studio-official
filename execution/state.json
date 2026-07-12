@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "generatedBy": "execution-protocol-v1.0-session-init",
-  "lastUpdated": "2026-07-12T08:00:00Z",
+  "lastUpdated": "2026-07-12T09:00:00Z",
   "governanceCommit": "25a33f0",
   "phase": {
     "current": "phase-2",
@@ -15,7 +15,7 @@
     "current": "M3-generation-foundation",
     "description": "Blueprint Engine, Component Registry, Build Planner, generated-app data layer, structured renderer — the technical foundation Phase 2's demonstration product is built on"
   },
-  "activeImplementationUnit": "P2-07",
+  "activeImplementationUnit": "P2-08",
   "architecturalStandards": [
     {
       "id": "AS-0001",
@@ -38,9 +38,10 @@
       "P2-03: Build Planner — versioned Build Plan derived structurally from a project's latest Blueprint and Feasibility Report (phases, dependencies, screen order, component structure built from Component Registry primitives, navigation graph, data dependencies, backend/business logic, admin requirements, integrations, monetization, platform requirements, persistence, tests, acceptance criteria, evidence requirements, risk, blockers); planStatus is BLOCKED whenever the Blueprint is invalid, requests an unsafe/unrecognized capability, or has an unresolved consequential decision (EV-0055, EV-0056, D-0024)",
       "P2-04: Generated-app data layer — GeneratedAppUser (a generated product's own project-scoped end-user identity, reusing the platform's password hashing) and GeneratedRecord (a generic {projectId, modelKey, data} store validated at write time against the project's current Blueprint dataModels) rather than dynamic per-customer schema migrations (EV-0057, EV-0058, D-0025)",
       "P2-05: Structured Renderer + Interactive Runtime — component-renderer.tsx (real interactive DOM from a ComponentNode tree using only Component Registry primitives, native form actions, real Tabs/Modal/Drawer state), screen-data-binding.ts (pure List-node <-> real data/Loading/Empty/Error binding), render-runtime.ts (server-only read/write binding to the P2-04 data layer via the current Build Plan's dataDependencies) (EV-0059, EV-0060, D-0026)",
-      "P2-06: Full-stack generation orchestration — generateApplication() (single generation call: Blueprint -> Build Plan -> Truth Status sync to this project's real GENERATED/BLOCKED outcome), a live preview route at /org/[orgSlug]/[projectSlug]/preview/[screen] rendering real Build Plan component trees bound to real generated-app data, real generated-app-user credential verification (no session/cookie yet), verified end-to-end through an actual browser (EV-0061, EV-0062, D-0027)"
+      "P2-06: Full-stack generation orchestration — generateApplication() (single generation call: Blueprint -> Build Plan -> Truth Status sync to this project's real GENERATED/BLOCKED outcome), a live preview route at /org/[orgSlug]/[projectSlug]/preview/[screen] rendering real Build Plan component trees bound to real generated-app data, real generated-app-user credential verification (no session/cookie yet), verified end-to-end through an actual browser (EV-0061, EV-0062, D-0027)",
+      "P2-07: Demonstration product — closed the P2-06 placeholder-Form gap generically (Form Inputs now named after a bound data model's real fields, benefiting every product); ran Master Spec §54's exact required sentence through the full pipeline live in a browser and honestly documented the gap between §56's full 11-screen/11-data vision and today's actual deterministic output (Home/Browse only, zero data models) as a disclosed, not-silently-implied limitation (EV-0063, EV-0064, D-0028)"
     ],
-    "active": ["P2-07: Demonstration product (booking app for mobile detailers)"],
+    "active": ["P2-08: Conversational editing, Change Sets, selective regeneration"],
     "deferred": [],
     "blocked": []
   },
@@ -71,7 +72,8 @@
     "D-0024",
     "D-0025",
     "D-0026",
-    "D-0027"
+    "D-0027",
+    "D-0028"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -92,8 +94,8 @@
     "lint": "pass",
     "formatCheck": "pass",
     "unit": "pass (106/106)",
-    "integration": "pass (173/173)",
-    "e2e": "pass (8/8)",
+    "integration": "pass (177/177)",
+    "e2e": "pass (9/9)",
     "productionBuild": "pass"
   },
   "evidenceRefs": [
@@ -158,12 +160,15 @@
     "EV-0059",
     "EV-0060",
     "EV-0061",
-    "EV-0062"
+    "EV-0062",
+    "EV-0063",
+    "EV-0064"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories — not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (§61).",
     "Generation (P2-06) is live at /org/[orgSlug]/[projectSlug]/preview/[screen], but that route is gated by the existing Pocket-Studio-side platform session (requireUserForPage), not a separate unauthenticated end-user-facing route. authenticateGeneratedAppUser verifies real credentials but does not yet establish a session/cookie — GeneratedAppUser/GeneratedRecord still cannot be reached by an actual customer of the generated product, only by the builder previewing it.",
-    "A Build Plan's placeholder Form (P2-03) does not yet name its Input after a data model's real required fields, so a real form submission through the live preview's DOM will legitimately fail InvalidRecordDataError today — handled gracefully (redirect with an honest error message), not silently, but genuine field-matched form generation does not exist until a later unit. Build Plan component trees remain minimal pattern-driven placeholders, not real designed layouts.",
+    "Build Plan component trees remain minimal pattern-driven placeholders, not real designed layouts. (Form Input naming was fixed in P2-07 to match a bound data model's real fields, so a genuine field-matched submission now succeeds when a data model is bound — see D-0028.)",
+    "The official Phase 2 demonstration (P2-07, Master Spec §56: 'Build a premium booking app for mobile detailers.') runs successfully end to end (GENERATED, VALID, READY, live in a browser) but its honest current output is only the base Home/Browse screens with zero data models — far short of §56's full vision (11 customer screens, 11 owner screens, 11 data types: Services, Packages, Availability, Memberships, etc.). This gap is intentionally NOT closed by hardcoding this one sentence's content, per Master Spec §26's 'not hardcoded preview screens' requirement — closing it honestly requires either a deliberately expanded, reusable domain-template vocabulary or real AI-backed generation (Phase 3, §61). See official-demonstration.integration.test.ts's module comment for the full accounting.",
     "The Build Planner's planStatus deliberately does not treat the platform's own SUPPORTED_LATER_PHASE generation capability as a blocker (see D-0024) — a Build Plan can be READY today even though nothing yet executes it; that gap is disclosed via Truth Status and this list, not via planStatus.",
     "Blueprint has no Studio UI surface yet (P2-17 wires this up); it is currently reachable only via the service layer and its integration tests.",
     "The Product Pattern and Interaction Contract System (src/lib/generation/interaction-contracts.ts) validates that an interaction contract is declared and structurally complete, not that a generated screen actually implements the required states — no component tree or renderer exists until the Structured Renderer (P2-05) and generation pipeline (P2-06). Pattern inference is a fixed, hand-authored deterministic mapping (5 patterns, 7 states), not semantic understanding.",
@@ -173,5 +178,5 @@
   ],
   "requiredCustomerActions": [],
   "requiredExternalActions": [],
-  "nextAction": "Begin P2-07: Demonstration product — 'Build a premium booking app for mobile detailers' (Master Spec §56), the first required demonstration. Give the deterministic generators concrete, non-generic content for this specific product (real screen/field names instead of placeholders like 'Record'/'input'), so the placeholder-Form/data-model field mismatch disclosed as a P2-06 limitation is resolved for this demonstration and the full read+write loop can be proven live end-to-end, not just the read path."
+  "nextAction": "Begin P2-08: Conversational editing, Change Sets, and selective regeneration (Master Spec §27, §57). The required follow-up edit is Master Spec §57's exact text: 'Add appointment deposits, monthly maintenance memberships, and recurring appointments.' Currently an edit_request intent (P1-04's beginChangeFlow) only records a Decision — it does not resolve intent into an Impact Analysis-driven, dependency-aware Change Set, regenerate the Blueprint/Build Plan selectively, preserve unrelated Product DNA, create a Preview version, or update Truth Status, all of which §57 explicitly requires. This is also the natural point to reconsider whether Blueprint/Build Plan template richness should be deliberately expanded (a reusable domain vocabulary, not a hardcode) to narrow the P2-07-disclosed gap to Master Spec §56's full demonstration vision."
 }
