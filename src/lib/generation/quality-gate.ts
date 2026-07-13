@@ -249,10 +249,19 @@ function checkListViewScreensAreDataBound(
   const dataDependencies = (buildPlan.dataDependencies ?? {}) as Record<string, string[]>;
 
   const problems: string[] = [];
-  for (const [screen, contract] of Object.entries(contracts)) {
-    if (!contract.patterns.includes("list-view")) continue;
-    const node = componentStructure[screen];
-    if (!node || !containsType(node, "List")) {
+  // Iterate real, renderable screens (componentStructure's own keys), not
+  // every interaction-contract subject — a workflow's contract has no
+  // component tree of its own (buildComponentTree runs per screen, never
+  // per workflow), so evaluating a workflow's pattern against
+  // componentStructure[workflowKey] was always a category error: every
+  // workflow always has a form-submission pattern, so this previously
+  // false-flagged "no Form node" for any Blueprint with a workflow at all
+  // (Level 3 review round 1 finding, discovered via a real, uncorrupted
+  // pipeline run, not synthetic corruption).
+  for (const [screen, node] of Object.entries(componentStructure)) {
+    const contract = contracts[screen];
+    if (!contract?.patterns.includes("list-view")) continue;
+    if (!containsType(node, "List")) {
       problems.push(`"${screen}" has a list-view pattern but no List node in its component tree.`);
       continue;
     }
@@ -285,10 +294,14 @@ function checkFormScreensMatchDataModelFields(
   const dataModels = asDataModels(blueprint.dataModels);
 
   const problems: string[] = [];
-  for (const [screen, contract] of Object.entries(contracts)) {
-    if (!contract.patterns.includes("form-submission")) continue;
-    const node = componentStructure[screen];
-    if (!node || !containsType(node, "Form")) {
+  // Same fix as checkListViewScreensAreDataBound: iterate real, renderable
+  // screens, not every interaction-contract subject — a workflow's
+  // form-submission pattern is real (Build Planner's deriveTests already
+  // consumes it) but has no component tree of its own to check here.
+  for (const [screen, node] of Object.entries(componentStructure)) {
+    const contract = contracts[screen];
+    if (!contract?.patterns.includes("form-submission")) continue;
+    if (!containsType(node, "Form")) {
       problems.push(
         `"${screen}" has a form-submission pattern but no Form node in its component tree.`,
       );

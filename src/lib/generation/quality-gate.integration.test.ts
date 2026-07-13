@@ -206,6 +206,41 @@ describe("runQualityGate", () => {
     expect(governance?.status).toBe("IMPLEMENTED");
   });
 
+  it("passes a real, uncorrupted non-monetization multi-step-workflow product — unresolved states are disclosed, never falsely flagged unsupported (regression, Level 3 review round 1 finding)", async () => {
+    // Independent review of the practical-completeness repair found this
+    // exact scenario live-reproduced a false BLOCKED verdict:
+    // computeUnsupportedStates only excluded consequential_decision states
+    // from its "renderer must implement this" check, not unresolved ones —
+    // and every non-monetization multi-step-workflow carries an unresolved
+    // "confirmation" state by design (interaction-contracts.ts). This idea
+    // triggers both the "data" category (so Home/Browse are genuinely
+    // data-bound, keeping the *other*, unrelated list-view-binding check
+    // honestly green) and the "workflows" category ("step by step") without
+    // triggering "monetization" — producing exactly the unresolved-state
+    // case through the real, uncorrupted pipeline, not a synthetic
+    // contract.
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build an app with a database of customer records that guides a customer step by step through booking an appointment.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+    await generateBuildPlan(owner.id, project.id);
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    const unsupportedCheck = result.checks.find(
+      (c) =>
+        c.name === "Every required interaction state is implementable by this build's renderer",
+    );
+    expect(unsupportedCheck?.passed).toBe(true);
+    expect(result.passed).toBe(true);
+
+    const behavioral = await getLatestTruthStatus(owner.id, project.id, "quality.behavioral");
+    expect(behavioral?.status).toBe("IMPLEMENTED");
+  });
+
   it("catches a required interaction state this build's renderer cannot actually implement (P2-EXIT check)", async () => {
     const { owner, project } = await seedProject();
     await generateProductIntelligence(

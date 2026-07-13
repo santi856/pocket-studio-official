@@ -253,16 +253,32 @@ export const RENDERER_IMPLEMENTED_STATES: ReadonlySet<InteractionState> = new Se
   "retry",
 ]);
 
+// Classifications whose obligation is "disclosed for a human decision,
+// never silently auto-rendered" rather than "this module is claiming the
+// renderer will implement it automatically." A state carrying either of
+// these is correctly and completely handled by the openDecisions
+// disclosure path (blueprint-generator.ts) — it is not a capability gap,
+// so it must never be flagged unsupported just because no renderer
+// primitive exists for it. (Round-1 Level 3 review of this module's own
+// introduction found `unresolved` states were missing from this exclusion,
+// producing a false "unsupported"/BLOCKED verdict for any ordinary
+// non-monetization multi-step workflow — every one of which carries an
+// `unresolved` `confirmation` state by design. Fixed here.)
+const DISCLOSED_NOT_AUTO_RENDERED_CLASSIFICATIONS: ReadonlySet<InferenceClassification> = new Set([
+  "consequential_decision",
+  "unresolved",
+]);
+
 /**
- * A state classified anything other than `consequential_decision` (i.e.
- * this module is claiming it will actually be implemented, not merely
- * disclosed for approval) but absent from `implementedStates` is a real
- * capability gap — surfaced here rather than silently treated as "not
- * required" just because the renderer cannot build it yet. Takes
- * `implementedStates` as a parameter (defaulting to the real
- * `RENDERER_IMPLEMENTED_STATES`) so the mechanism itself is unit-testable
- * against a deliberately smaller set without needing a live production gap
- * to exercise it.
+ * A state classified anything other than one of
+ * `DISCLOSED_NOT_AUTO_RENDERED_CLASSIFICATIONS` (i.e. this module is
+ * claiming it will actually be implemented, not merely disclosed for a
+ * human decision) but absent from `implementedStates` is a real capability
+ * gap — surfaced here rather than silently treated as "not required" just
+ * because the renderer cannot build it yet. Takes `implementedStates` as a
+ * parameter (defaulting to the real `RENDERER_IMPLEMENTED_STATES`) so the
+ * mechanism itself is unit-testable against a deliberately smaller set
+ * without needing a live production gap to exercise it.
  */
 export function computeUnsupportedStates(
   classifications: ReadonlyMap<InteractionState, InferenceClassification>,
@@ -270,7 +286,7 @@ export function computeUnsupportedStates(
 ): InteractionState[] {
   const unsupported: InteractionState[] = [];
   for (const [state, classification] of classifications) {
-    if (classification === "consequential_decision") continue;
+    if (DISCLOSED_NOT_AUTO_RENDERED_CLASSIFICATIONS.has(classification)) continue;
     if (!implementedStates.has(state)) {
       unsupported.push(state);
     }

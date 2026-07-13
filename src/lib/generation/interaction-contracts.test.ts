@@ -175,6 +175,20 @@ describe("computeUnsupportedStates", () => {
     expect(computeUnsupportedStates(classifications, emptySet)).toEqual([]);
   });
 
+  it("never flags an unresolved state as unsupported — it is disclosed, not auto-rendered, the same as consequential_decision (regression, Level 3 review round 1 finding)", () => {
+    // Every non-monetization multi-step-workflow carries confirmation:
+    // "unresolved" (interaction-contracts.ts's own PATTERN_CONTRACTS). This
+    // must never be flagged unsupported just because no renderer primitive
+    // auto-renders a confirmation UI — the round-1 reviewer of this exact
+    // module found this case falsely BLOCKED the Quality Gate for an
+    // entirely ordinary generated product before this fix.
+    const classifications = new Map<InteractionState, InferenceClassification>([
+      ["confirmation", "unresolved"],
+    ]);
+    const emptySet = new Set<InteractionState>([]);
+    expect(computeUnsupportedStates(classifications, emptySet)).toEqual([]);
+  });
+
   it("reports zero unsupported states against the real renderer-implemented set for every pattern today", () => {
     for (const pattern of PRODUCT_PATTERNS) {
       const result = inferScreenPatterns(
