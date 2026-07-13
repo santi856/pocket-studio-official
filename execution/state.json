@@ -101,7 +101,8 @@
     "D-0039",
     "D-0040",
     "D-0041",
-    "D-0042"
+    "D-0042",
+    "D-0043"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -217,7 +218,8 @@
     "EV-0084",
     "EV-0085",
     "EV-0086",
-    "EV-0087"
+    "EV-0087",
+    "EV-0088"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories \u2014 not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (\u00a761).",
@@ -246,5 +248,5 @@
   ],
   "requiredCustomerActions": [],
   "requiredExternalActions": [],
-  "nextAction": "A practical-product-completeness repair (interaction-contract pipeline: validation hardening, renderer behavior, Quality Gate strengthening, Truth Status granularity, Example App Ideas vertical proof \u2014 commit d912048) was committed forward on top of phase-2-complete (tag, commit fae0dcc), then a pre-Phase-3 forensic audit was run (execution/audits/*.md, 10 files, D-0042/EV-0087). Audit verdict: REVISE. Two named blocking items before Phase 3 may begin: (1) commit d912048 needs its own Level 3 independent, fresh-context review round (the audit fork that produced this recommendation had no subagent-spawning capability and could not perform this itself); (2) a real, reproduced test-suite isolation fragility (Vitest full-suite runs became non-deterministic \u2014 159-169 then 65 of 425 tests failing \u2014 after repeated back-to-back invocations, always with data-collision signatures, never a business-logic assertion failure; individual files and the full e2e suite remained reliable) must be root-caused and resolved or formally downgraded by someone who investigates it further than this audit's time-boxed pass did. Do not begin Phase 3 until both are resolved and explicit user authorization is given \u2014 Phase 3 also independently requires real credentials (AI provider, Stripe, Apple/Google developer accounts) and carries materially higher risk than anything auto-approved so far."
+  "nextAction": "A practical-product-completeness repair (interaction-contract pipeline: validation hardening, renderer behavior, Quality Gate strengthening, Truth Status granularity, Example App Ideas vertical proof \u2014 commit d912048) was committed forward on top of phase-2-complete (tag, commit fae0dcc), then a pre-Phase-3 forensic audit was run (execution/audits/*.md, 10 files, D-0042/EV-0087). Audit verdict: REVISE, with 2 named blocking items. Blocking item 2 (test-suite isolation fragility) is now resolved: root-caused to stale Postgres connections left by an abruptly killed manually-started dev server during earlier debugging, not a defect in fileParallelism:false, resetDatabase(), or any application code \u2014 confirmed via 3 consecutive full clean vitest runs (425/425 each) after clearing the stale connections (D-0043, EV-0088). Blocking item 1 remains: commit d912048 needs its own Level 3 independent, fresh-context review round (the audit fork that produced this recommendation had no subagent-spawning capability and could not perform this itself) \u2014 spawn it now via the Agent tool, exactly mirroring how every prior Phase 2 review round was conducted. Once that review accepts (directly or after repair), re-run the Phase 3 readiness decision to ACCEPT, re-tag phase-2-complete at the final commit, update the completion report, and only then \u2014 with explicit user authorization already given for this exact sequence \u2014 may Phase 3 begin. Phase 3 also independently requires real credentials (AI provider, Stripe, Apple/Google developer accounts) not yet configured."
 }
