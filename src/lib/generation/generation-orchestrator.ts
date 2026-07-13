@@ -2,6 +2,7 @@ import "server-only";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import { generateInitialBlueprint } from "./blueprint-generator";
 import { generateBuildPlan } from "./build-planner";
+import { syncOutputTargetStatus } from "./pwa";
 import { setTruthStatus } from "@/lib/product/truth-status";
 import { recordEvent } from "@/lib/product/events";
 import type { Blueprint, BuildPlan } from "@/generated/prisma/client";
@@ -57,6 +58,8 @@ export async function generateApplication(
       blockerCount: (buildPlan.blockers as string[]).length,
     },
   });
+
+  await syncOutputTargetStatus(actorUserId, projectId);
 
   return { blueprint, buildPlan, status };
 }

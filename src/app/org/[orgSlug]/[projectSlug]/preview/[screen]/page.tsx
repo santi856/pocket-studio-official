@@ -8,6 +8,21 @@ import { ComponentRenderer } from "@/components/renderer/component-renderer";
 import { submitGeneratedRecordAction } from "@/lib/actions/generation-actions";
 import { AppNav } from "@/components/app-nav";
 import type { ComponentNode } from "@/lib/generation/component-registry";
+import type { Metadata } from "next";
+
+/**
+ * Master Spec §40: a real PWA manifest link, per project — the manifest
+ * itself is generated from actual Product DNA/project data
+ * (src/lib/generation/pwa.ts), not a static placeholder.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ orgSlug: string; projectSlug: string }>;
+}): Promise<Metadata> {
+  const { orgSlug, projectSlug } = await params;
+  return { manifest: `/org/${orgSlug}/${projectSlug}/manifest.webmanifest` };
+}
 
 /**
  * The live route P2-06 ties everything into: a project member reaches a
@@ -103,6 +118,12 @@ export default async function GeneratedScreenPreviewPage({
         )}
         <ComponentRenderer node={boundNode} action={action} />
       </main>
+      {/* Master Spec §40: real service-worker registration, not a declared-only claim. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `if ("serviceWorker" in navigator) { navigator.serviceWorker.register(${JSON.stringify(`/org/${orgSlug}/${projectSlug}/sw.js`)}); }`,
+        }}
+      />
     </div>
   );
 }

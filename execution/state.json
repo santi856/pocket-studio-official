@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "generatedBy": "execution-protocol-v1.0-session-init",
-  "lastUpdated": "2026-07-12T15:00:00Z",
+  "lastUpdated": "2026-07-13T00:00:00Z",
   "governanceCommit": "25a33f0",
   "phase": {
     "current": "phase-2",
@@ -16,7 +16,7 @@
     "previousMilestone": "M5-quality-and-trust (P2-10, P2-11, P2-12, complete)",
     "description": "Export foundation, durable jobs, web/PWA output, mobile architecture, Store Readiness, and Studio UI wiring (P2-13..P2-17) — making the generation pipeline operable and reachable, not just correct."
   },
-  "activeImplementationUnit": "P2-14",
+  "activeImplementationUnit": "P2-15",
   "architecturalStandards": [
     {
       "id": "AS-0001",
@@ -46,9 +46,10 @@
       "P2-10: Quality Gate for the generated product — runQualityGate() runs 8 real checks against a project's current Blueprint/Build Plan (structural validity, no blockers, well-formed Interaction Contracts, list-view screens actually data-bound, form-submission Inputs matching their bound data model's real fields, screen reachability, image alt text, and a real server-side data-binding smoke check), recording Product Evidence and syncing Truth Status for a new quality.gate subject key — never a self-report (EV-0069, EV-0070, D-0031)",
       "P2-11: Security/privacy/governance impact + legal draft generation — GovernanceProfile fields (dataCategories, monetizationModel, relevantGovernanceDomains) and security/privacy requirements now derived entirely from a project's real Blueprint content (never guessing jurisdiction/location facts); Terms of Service/Privacy Policy/AI Disclosure drafts generated from real Blueprint/Product DNA state with facts §34 forbids inventing (company identity, jurisdiction, contact) left as bracketed placeholders + recorded Open Questions, never fabricated; every draft carries an explicit not-legal-advice/requires-professional-review notice. 10 of 13 PolicyDocumentType values still have no content generator (EV-0071, EV-0072, D-0032)",
       "P2-12: Migration planning for generated-app data model changes — planDataModelMigration performs the full §28 sequence (schema diff, real data-loss analysis querying actual GeneratedRecord rows per removed field rather than guessing, compatibility notes, ordered migration plan, honest backup requirement disclosing no automated backup mechanism exists, rollback plan referencing P2-09's restore) between any two Blueprint versions; recordMigrationPlanDecision records it as CONSEQUENTIAL when destructive or ROUTINE otherwise, reusing the existing Decision Ledger. Standalone/explicitly-invoked, not wired into applyChangeSet's auto-apply path (EV-0073, EV-0074, D-0033)",
-      "P2-13: Export foundation + durable jobs — exportProject() bundles Product State/DNA/Blueprint/Build Plan/GeneratedRecords/generated-app users (allowlisted, never passwordHash)/policy drafts/GovernanceProfile/Truth Status into one structured JSON bundle with honest disclosures (not a deployable package, not a backup); new JobRun model (PENDING/RUNNING/SUCCEEDED/FAILED, checkpoint, idempotencyKey, attempt) wraps (never modifies) generateApplication via runGenerationJob — idempotent, retryable, real status for the first time. Checkpointing coarse-grained (before/after, not sub-steps) (EV-0075, EV-0076, D-0034)"
+      "P2-13: Export foundation + durable jobs — exportProject() bundles Product State/DNA/Blueprint/Build Plan/GeneratedRecords/generated-app users (allowlisted, never passwordHash)/policy drafts/GovernanceProfile/Truth Status into one structured JSON bundle with honest disclosures (not a deployable package, not a backup); new JobRun model (PENDING/RUNNING/SUCCEEDED/FAILED, checkpoint, idempotencyKey, attempt) wraps (never modifies) generateApplication via runGenerationJob — idempotent, retryable, real status for the first time. Checkpointing coarse-grained (before/after, not sub-steps) (EV-0075, EV-0076, D-0034)",
+      "P2-14: Web and PWA output — syncOutputTargetStatus() tracks output.web/output.pwa/output.ios/output.android independently via the existing Truth Status mechanism (reusing rationale text for §39's richer status vocabulary rather than a new enum), wired automatically into generateApplication; a real per-project Web App Manifest (generateManifest(), derived from actual Project/Product DNA data) served at /org/[orgSlug]/[projectSlug]/manifest.webmanifest and a real minimal (pass-through, no offline caching claimed) service worker at .../sw.js, both wired into the live preview page and verified to genuinely register in a real browser (EV-0077, EV-0078, D-0035)"
     ],
-    "active": ["P2-14: Web and PWA output"],
+    "active": ["P2-15: Mobile architecture + generated mobile project"],
     "deferred": [],
     "blocked": []
   },
@@ -86,7 +87,8 @@
     "D-0031",
     "D-0032",
     "D-0033",
-    "D-0034"
+    "D-0034",
+    "D-0035"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -110,9 +112,9 @@
     "typecheck": "pass",
     "lint": "pass",
     "formatCheck": "pass",
-    "unit": "pass (110/110)",
-    "integration": "pass (237/237)",
-    "e2e": "pass (9/9)",
+    "unit": "pass (114/114)",
+    "integration": "pass (241/241)",
+    "e2e": "pass (10/10)",
     "productionBuild": "pass"
   },
   "evidenceRefs": [
@@ -191,7 +193,9 @@
     "EV-0073",
     "EV-0074",
     "EV-0075",
-    "EV-0076"
+    "EV-0076",
+    "EV-0077",
+    "EV-0078"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories — not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (§61).",
@@ -204,6 +208,7 @@
     "Legal draft generation (P2-11) only has real content generators for 3 of 13 PolicyDocumentType values (Terms of Service, Privacy Policy, AI Disclosure) — the other 10 (Acceptable Use Policy, Cookie Notice, subscription/cancellation terms, data-retention policy, support policy, accessibility statement, communications consent, mobile-permission explanations, marketplace terms) still have no content generator. No professional legal review workflow exists (Master Spec §34's publication requirement) — drafts are generated only, never marked reviewed or published. No Studio UI surface exists yet for viewing/generating these (P2-17).",
     "Migration planning (P2-12) is a standalone, explicitly-invoked tool, not wired into applyChangeSet's auto-apply path — a Change Set that would be destructive to existing GeneratedRecord data still regenerates automatically today (P2-08's existing consequential-decision gate covers Impact Analysis categories, not data-loss risk specifically). No automated backup/snapshot mechanism exists for GeneratedRecord data — disclosed honestly by every migration plan and every export bundle rather than implemented.",
     "Export (P2-13) produces a structured JSON bundle only — no real code-file/deployment export exists. Durable jobs (P2-13) only wrap the GENERATION operation, with coarse-grained (whole-call, not sub-step) checkpointing — no other long-running operation is a durable job yet, and there is no true step-by-step resumability if interrupted mid-generation. No Studio UI surface exists yet for triggering exports or viewing job status (P2-17).",
+    "Web/PWA output (P2-14) has real installability mechanics (manifest served, service worker genuinely registers) but no Lighthouse-grade installability audit and no offline caching or push architecture. §39's richer output-target status vocabulary (built/signed/uploaded/submitted/approved/released) is not populated for any target — no such pipeline exists. No Studio UI surface yet explaining web vs. PWA vs. native mobile to a customer (P2-17).",
     "The Build Planner's planStatus deliberately does not treat the platform's own SUPPORTED_LATER_PHASE generation capability as a blocker (see D-0024) — a Build Plan can be READY today even though nothing yet executes it; that gap is disclosed via Truth Status and this list, not via planStatus.",
     "Blueprint has no Studio UI surface yet (P2-17 wires this up); it is currently reachable only via the service layer and its integration tests.",
     "The Product Pattern and Interaction Contract System (src/lib/generation/interaction-contracts.ts) validates that an interaction contract is declared and structurally complete, not that a generated screen actually implements the required states — no component tree or renderer exists until the Structured Renderer (P2-05) and generation pipeline (P2-06). Pattern inference is a fixed, hand-authored deterministic mapping (5 patterns, 7 states), not semantic understanding.",
@@ -213,5 +218,5 @@
   ],
   "requiredCustomerActions": [],
   "requiredExternalActions": [],
-  "nextAction": "Begin P2-14: Web and PWA output (Master Spec §39, §40). §39 requires tracking each output target (responsive web, PWA, iOS, Android) independently with its own status (requested/supported/planned/generated/implemented/tested/built/...), never treating completion on one target as evidence for another — today Blueprint.outputTargets is just a flat string array (['web']) with no independent status tracking at all, and the live preview route (P2-06) is a plain responsive page with no PWA manifest, service worker, or installability. Concretely: (1) an OutputTargetStatus concept giving 'web' and 'pwa' their own truthful status per project (reusing the existing TruthStatusEntry pattern/subjectKey convention rather than new schema where possible); (2) real PWA output — a generated manifest.json and minimal service worker for a project's live preview, honestly scoped (offline/push are explicitly 'where appropriate'/'where supported', not required); (3) explicit, customer-facing language distinguishing web, PWA, and native mobile output, per §40's explicit requirement to 'explain the difference.'"
+  "nextAction": "Begin P2-15: Mobile architecture + generated mobile project (Master Spec §41). §41 requires Pocket Studio select and document one official supported mobile strategy — per the architectural decision already reasoned through at Phase 2 kickoff, this is React Native + Expo (Master Spec's own suggested example). Concretely: (1) record this as a Decision Ledger entry documenting the choice and rationale; (2) a deterministic generator producing a minimal, real Expo project structure (app.json/package.json/a root screen) from a project's Blueprint — screens/navigation mapped from the same Component Registry primitives already used for web (P2-02/P2-05), not a second, divergent component system; (3) 'build validation' honestly scoped to a TypeScript typecheck of the generated Expo project structure only — no real native .ipa/.apk build is possible in this environment (no Xcode/Android SDK), and must not be claimed; output.ios/output.android Truth Status (P2-14) should move from NOT_EVALUATED to a truthful status reflecting exactly what this unit delivers, not further."
 }

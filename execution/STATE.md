@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-14 (Web and PWA output)
+- **Active implementation unit:** P2-15 (Mobile architecture + generated mobile project)
 
 ## Phase 2 Decomposition
 
@@ -36,7 +36,7 @@ says otherwise.
 | P2-11 ✅ | Security/privacy/governance impact + legal/policy draft generation from real state                                         | §31, §32, §34            | P2-07, Phase 1 PolicyDocument               |
 | P2-12 ✅ | Migration planning for generated-app data model changes                                                                    | §28                      | P2-08                                       |
 | P2-13 ✅ | Export foundation + durable jobs/retries/checkpoints/idempotency                                                           | §25, §29                 | P2-07                                       |
-| P2-14    | Web and PWA output                                                                                                         | §39, §40                 | P2-05                                       |
+| P2-14 ✅ | Web and PWA output                                                                                                         | §39, §40                 | P2-05                                       |
 | P2-15    | Mobile architecture selection + generated mobile project                                                                   | §41                      | P2-01, P2-04                                |
 | P2-16    | Mobile-commerce classification + Store Readiness Engine                                                                    | §42, §44                 | P2-15                                       |
 | P2-17    | Studio UI wiring — Blueprint/Build Plan viewer, Generate action, Preview link, Change Set review, restore UI               | §6, §7                   | P2-01..P2-16                                |
@@ -339,6 +339,21 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
   retry-after-failure, and confirmation that no serialized export ever contains `passwordHash`. Full
   suite green (347/347 unit+integration, 9/9 e2e, clean typecheck/lint/format, production build). See
   `D-0034`, `EV-0075`, `EV-0076`.
+- **P2-14 — Web and PWA output (Master Spec §39, §40).** `syncOutputTargetStatus()`
+  (`src/lib/generation/pwa.ts`) tracks `output.web`/`output.pwa`/`output.ios`/`output.android`
+  independently via the existing Truth Status mechanism — §39's much richer 14-value status vocabulary
+  (requested/generated/tested/built/signed/uploaded/submitted/approved/released/...) lives in each
+  entry's free-text rationale rather than a new schema/enum this codebase cannot yet populate
+  meaningfully — wired into `generateApplication` (P2-06) as one additional sync call, not a structural
+  change. A real, per-project Web App Manifest (`generateManifest()`, deriving name/short_name/
+  start_url/scope from actual Project/Product DNA data, referencing the platform's own existing
+  favicon rather than fabricating icons) is served at `/org/[orgSlug]/[projectSlug]/manifest.webmanifest`,
+  and a real minimal service worker (activates immediately, passes every fetch straight through — no
+  offline caching claimed) at `.../sw.js`; both wired into the live preview page and verified to
+  genuinely register in a real browser. 8 new unit/integration tests, 1 new e2e test. Full suite green
+  (355/355 unit+integration, 10/10 e2e, clean typecheck/lint/format, production build). Honest
+  limitation: no Lighthouse-grade installability audit, no offline/push architecture, no Studio UI
+  explaining web vs. PWA vs. native mobile yet (P2-17). See `D-0035`, `EV-0077`, `EV-0078`.
 
 ## Completed
 
