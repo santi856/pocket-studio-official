@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import { generateApplication } from "./generation-orchestrator";
 import type { GenerationResult } from "./generation-orchestrator";
-import type { JobRun, JobType, Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
+import type { JobRun, JobType } from "@/generated/prisma/client";
 
 /**
  * Master Spec §29: "Handle: model timeouts; invalid output; ...; partial
@@ -29,11 +30,38 @@ async function findExistingJobRun(
 
 export type StartJobRunResult = { job: JobRun; alreadySucceeded: boolean };
 
+async function resolveExistingJobRun(existing: JobRun): Promise<StartJobRunResult> {
+  if (existing.status === "FAILED") {
+    const retried = await db.jobRun.update({
+      where: { id: existing.id },
+      data: {
+        status: "RUNNING",
+        attempt: existing.attempt + 1,
+        error: null,
+        startedAt: new Date(),
+      },
+    });
+    return { job: retried, alreadySucceeded: false };
+  }
+  return { job: existing, alreadySucceeded: existing.status === "SUCCEEDED" };
+}
+
 /**
  * Idempotency (§29): a caller retrying the same logical request with the
  * same `idempotencyKey` gets back the existing PENDING/RUNNING/SUCCEEDED
  * job rather than starting a duplicate — except a FAILED job, which is a
  * genuine retry: attempt count increments and status returns to RUNNING.
+ *
+ * Two concurrent callers with the same `idempotencyKey` can both pass the
+ * lookup below before either commits its `create` — the loser then hits the
+ * `(projectId, jobType, idempotencyKey)` unique constraint (Phase 2 Level 3
+ * review round 2's adversarial pass: the same race-under-concurrency class
+ * round 1 found and fixed elsewhere, missed here). Idempotency means the
+ * loser must defer to the winner's row, not crash: on that exact conflict,
+ * re-fetch and resolve the now-existing job exactly as if it had been found
+ * up front, instead of re-attempting `create` (which would only collide
+ * again — unlike a version number, this row's identity is fixed by the
+ * caller's own idempotency key, so there is nothing new to compute).
  */
 export async function startOrGetJobRun(
   actorUserId: string,
@@ -46,26 +74,29 @@ export async function startOrGetJobRun(
   if (idempotencyKey) {
     const existing = await findExistingJobRun(projectId, jobType, idempotencyKey);
     if (existing) {
-      if (existing.status === "FAILED") {
-        const retried = await db.jobRun.update({
-          where: { id: existing.id },
-          data: {
-            status: "RUNNING",
-            attempt: existing.attempt + 1,
-            error: null,
-            startedAt: new Date(),
-          },
-        });
-        return { job: retried, alreadySucceeded: false };
-      }
-      return { job: existing, alreadySucceeded: existing.status === "SUCCEEDED" };
+      return resolveExistingJobRun(existing);
     }
   }
 
-  const job = await db.jobRun.create({
-    data: { projectId, jobType, status: "RUNNING", idempotencyKey, startedAt: new Date() },
-  });
-  return { job, alreadySucceeded: false };
+  try {
+    const job = await db.jobRun.create({
+      data: { projectId, jobType, status: "RUNNING", idempotencyKey, startedAt: new Date() },
+    });
+    return { job, alreadySucceeded: false };
+  } catch (error) {
+    const isIdempotencyConflict =
+      Boolean(idempotencyKey) &&
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002";
+    if (!isIdempotencyConflict) {
+      throw error;
+    }
+    const winner = await findExistingJobRun(projectId, jobType, idempotencyKey!);
+    if (!winner) {
+      throw error;
+    }
+    return resolveExistingJobRun(winner);
+  }
 }
 
 export async function recordJobCheckpoint(

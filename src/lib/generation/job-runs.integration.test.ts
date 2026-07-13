@@ -54,6 +54,29 @@ describe("durable jobs", () => {
       expect(second.alreadySucceeded).toBe(false);
     });
 
+    it("survives concurrent calls with the same idempotency key without crashing (Phase 2 Level 3 review round 2, adversarial finding)", async () => {
+      const { owner, project } = await seedProject();
+
+      // Two callers racing to start the same idempotent job (e.g. a
+      // double-clicked "Export" or "Generate" button) can both pass the
+      // "does this job already exist" check before either commits its
+      // create — the loser previously crashed on the unique
+      // (projectId, jobType, idempotencyKey) constraint instead of
+      // deferring to the winner's row.
+      const CONCURRENT_CALLERS = 10;
+      const results = await Promise.all(
+        Array.from({ length: CONCURRENT_CALLERS }, () =>
+          startOrGetJobRun(owner.id, project.id, "GENERATION", "race-1"),
+        ),
+      );
+
+      const jobIds = new Set(results.map((r) => r.job.id));
+      expect(jobIds.size).toBe(1);
+
+      const jobs = await listJobRuns(owner.id, project.id);
+      expect(jobs).toHaveLength(1);
+    });
+
     it("denies starting a job for an actor without project access", async () => {
       const { project } = await seedProject();
       const outsider = await registerUser({
