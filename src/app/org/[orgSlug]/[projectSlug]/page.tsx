@@ -7,15 +7,25 @@ import { listDecisions } from "@/lib/product/decisions";
 import { listLatestTruthStatuses } from "@/lib/product/truth-status";
 import { listProductMemoryEntries } from "@/lib/product/product-memory";
 import { getLatestBuildPlan } from "@/lib/generation/build-plan";
+import { listPolicyDocuments } from "@/lib/product/policy-documents";
+import { getProjectVersionHistory } from "@/lib/orchestration/version-history";
 import {
   submitIdeaAction,
   respondToDecisionAction,
   updateUnitEconomicsAction,
 } from "@/lib/actions/studio-actions";
 import { generateApplicationAction } from "@/lib/actions/generation-actions";
+import {
+  runQualityGateAction,
+  assessStoreReadinessAction,
+  generateMobileProjectAction,
+  generatePolicyDraftAction,
+  restoreBlueprintVersionAction,
+} from "@/lib/actions/launch-actions";
 import { AppNav } from "@/components/app-nav";
 import { TruthBadge } from "@/components/truth-badge";
 import type { UnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
+import type { PolicyDocumentType } from "@/generated/prisma/client";
 
 export default async function StudioSimpleModePage({
   params,
@@ -29,15 +39,29 @@ export default async function StudioSimpleModePage({
   const { error } = await searchParams;
   const { organization, project } = await resolveProjectForRoute(user.id, orgSlug, projectSlug);
 
-  const [productState, productDNA, pendingDecisions, truthStatuses, openQuestions, buildPlan] =
-    await Promise.all([
-      getLatestProductState(user.id, project.id),
-      getLatestProductDNA(user.id, project.id),
-      listDecisions(user.id, project.id, { approvalStatus: "PENDING_APPROVAL" }),
-      listLatestTruthStatuses(user.id, project.id),
-      listProductMemoryEntries(user.id, project.id, { type: "OPEN_QUESTION" }),
-      getLatestBuildPlan(user.id, project.id),
-    ]);
+  const [
+    productState,
+    productDNA,
+    pendingDecisions,
+    truthStatuses,
+    openQuestions,
+    buildPlan,
+    versionHistory,
+    policyDocuments,
+  ] = await Promise.all([
+    getLatestProductState(user.id, project.id),
+    getLatestProductDNA(user.id, project.id),
+    listDecisions(user.id, project.id, { approvalStatus: "PENDING_APPROVAL" }),
+    listLatestTruthStatuses(user.id, project.id),
+    listProductMemoryEntries(user.id, project.id, { type: "OPEN_QUESTION" }),
+    getLatestBuildPlan(user.id, project.id),
+    getProjectVersionHistory(user.id, project.id),
+    listPolicyDocuments(user.id, project.id),
+  ]);
+
+  const blueprintLatestVersion = versionHistory
+    .filter((entry) => entry.kind === "BLUEPRINT")
+    .reduce((max, entry) => Math.max(max, entry.version ?? 0), 0);
 
   const businessModelBrief = productState?.businessModelBrief as Record<string, unknown> | null;
   const monetizationRecommendations = productState?.monetizationRecommendations as Array<{
@@ -214,6 +238,41 @@ export default async function StudioSimpleModePage({
 
             <section className="mt-10">
               <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-500">
+                Versions
+              </h2>
+              {versionHistory.length > 0 ? (
+                <ul className="mt-3 flex flex-col gap-2">
+                  {versionHistory.slice(0, 10).map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="flex items-center justify-between rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
+                    >
+                      <span className="text-zinc-700 dark:text-zinc-300">{entry.summary}</span>
+                      {entry.kind === "BLUEPRINT" &&
+                        entry.version !== null &&
+                        entry.version !== blueprintLatestVersion && (
+                          <form action={restoreBlueprintVersionAction}>
+                            <input type="hidden" name="orgSlug" value={orgSlug} />
+                            <input type="hidden" name="projectSlug" value={projectSlug} />
+                            <input type="hidden" name="targetVersion" value={entry.version} />
+                            <button
+                              type="submit"
+                              className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium text-black hover:bg-zinc-50 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-900"
+                            >
+                              Restore
+                            </button>
+                          </form>
+                        )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">No versions yet.</p>
+              )}
+            </section>
+
+            <section className="mt-10">
+              <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-500">
                 Business
               </h2>
               {businessModelBrief ? (
@@ -303,6 +362,85 @@ export default async function StudioSimpleModePage({
                   </ul>
                 </div>
               )}
+
+              <div className="mt-6 flex flex-wrap gap-2">
+                <form action={runQualityGateAction}>
+                  <input type="hidden" name="orgSlug" value={orgSlug} />
+                  <input type="hidden" name="projectSlug" value={projectSlug} />
+                  <button
+                    type="submit"
+                    className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-black hover:bg-zinc-50 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-900"
+                  >
+                    Run Quality Gate
+                  </button>
+                </form>
+                <form action={assessStoreReadinessAction}>
+                  <input type="hidden" name="orgSlug" value={orgSlug} />
+                  <input type="hidden" name="projectSlug" value={projectSlug} />
+                  <button
+                    type="submit"
+                    className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-black hover:bg-zinc-50 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-900"
+                  >
+                    Assess store readiness
+                  </button>
+                </form>
+                <form action={generateMobileProjectAction}>
+                  <input type="hidden" name="orgSlug" value={orgSlug} />
+                  <input type="hidden" name="projectSlug" value={projectSlug} />
+                  <button
+                    type="submit"
+                    className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-black hover:bg-zinc-50 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-900"
+                  >
+                    Generate mobile project
+                  </button>
+                </form>
+                <a
+                  href={`/org/${orgSlug}/${projectSlug}/export`}
+                  className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-black hover:bg-zinc-50 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-900"
+                >
+                  Export project
+                </a>
+              </div>
+
+              <div className="mt-6">
+                <dt className="text-xs text-zinc-500 dark:text-zinc-500">Legal drafts</dt>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+                  Generated from this product&rsquo;s real state — every fact this build cannot know
+                  is a bracketed placeholder, not an invention. Requires professional legal review
+                  before publication.
+                </p>
+                <ul className="mt-2 flex flex-col gap-2">
+                  {LEGAL_DRAFT_TYPES.map(({ type, label }) => {
+                    const draft = policyDocuments.find((doc) => doc.type === type);
+                    return (
+                      <li
+                        key={type}
+                        className="flex items-center justify-between rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
+                      >
+                        <span className="text-black dark:text-white">
+                          {label}
+                          {draft && (
+                            <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-500">
+                              draft v{draft.version}
+                            </span>
+                          )}
+                        </span>
+                        <form action={generatePolicyDraftAction}>
+                          <input type="hidden" name="orgSlug" value={orgSlug} />
+                          <input type="hidden" name="projectSlug" value={projectSlug} />
+                          <input type="hidden" name="type" value={type} />
+                          <button
+                            type="submit"
+                            className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium text-black hover:bg-zinc-50 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-900"
+                          >
+                            {draft ? "Regenerate draft" : "Generate draft"}
+                          </button>
+                        </form>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             </section>
 
             <section className="mt-10">
@@ -316,10 +454,17 @@ export default async function StudioSimpleModePage({
                 {truthStatuses.map((status) => (
                   <li
                     key={status.id}
-                    className="flex items-center justify-between rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
+                    className="rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
                   >
-                    <span className="text-black dark:text-white">{status.subjectLabel}</span>
-                    <TruthBadge status={status.status} />
+                    <div className="flex items-center justify-between">
+                      <span className="text-black dark:text-white">{status.subjectLabel}</span>
+                      <TruthBadge status={status.status} />
+                    </div>
+                    {status.rationale && (
+                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+                        {status.rationale}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -350,6 +495,12 @@ export default async function StudioSimpleModePage({
     </div>
   );
 }
+
+const LEGAL_DRAFT_TYPES: ReadonlyArray<{ type: PolicyDocumentType; label: string }> = [
+  { type: "TERMS_OF_SERVICE", label: "Terms of Service" },
+  { type: "PRIVACY_POLICY", label: "Privacy Policy" },
+  { type: "AI_DISCLOSURE", label: "AI Disclosure" },
+];
 
 function Field({ label, value }: { label: string; value: string }) {
   return (

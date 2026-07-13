@@ -9,9 +9,10 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
   commit `3739836`, checkpointed as tag `phase-1-complete` (commit `93571b6`). See
   `execution/reviews/level3/phase-1/PHASE_1_COMPLETION_REPORT.md`.
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
-  (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
+  (Master Spec §54-59) — all 17 implementation units (P2-01..P2-17) **complete**. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-16 (Mobile-commerce classification + Store Readiness Engine)
+- **Active implementation unit:** P2-EXIT (assemble Phase 2 evidence, checkpoint, Level 3 independent
+  review against §59)
 
 ## Phase 2 Decomposition
 
@@ -38,9 +39,9 @@ says otherwise.
 | P2-13 ✅ | Export foundation + durable jobs/retries/checkpoints/idempotency                                                           | §25, §29                 | P2-07                                       |
 | P2-14 ✅ | Web and PWA output                                                                                                         | §39, §40                 | P2-05                                       |
 | P2-15 ✅ | Mobile architecture selection + generated mobile project                                                                   | §41                      | P2-01, P2-04                                |
-| P2-16    | Mobile-commerce classification + Store Readiness Engine                                                                    | §42, §44                 | P2-15                                       |
-| P2-17    | Studio UI wiring — Blueprint/Build Plan viewer, Generate action, Preview link, Change Set review, restore UI               | §6, §7                   | P2-01..P2-16                                |
-| P2-EXIT  | Assemble Phase 2 evidence, checkpoint, Level 3 independent review against §59                                              | §16 (Execution Protocol) | all above                                   |
+| P2-16 ✅ | Mobile-commerce classification + Store Readiness Engine                                                                    | §42, §44                 | P2-15                                       |
+| P2-17 ✅ | Studio UI wiring — versions/restore, Quality Gate, Store Readiness, mobile project, legal drafts, export                   | §6, §7                   | P2-01..P2-16                                |
+| P2-EXIT  | Assemble Phase 2 evidence, checkpoint, Level 3 independent review against §59 — **active**                                | §16 (Execution Protocol) | all above                                   |
 
 ## Phase 2 Completed
 
@@ -373,6 +374,45 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
   build). Honest limitation: `output.ios`/`output.android` is not coupled to `generateApplication` — a
   later web regeneration resets both to `NOT_EVALUATED` until this function is called again. See
   `D-0036`, `EV-0079`, `EV-0080`.
+- **P2-16 — Mobile-commerce classification + Store Readiness Engine (Master Spec §42, §44).**
+  `classifyMobileCommerce()` (`src/lib/generation/store-readiness.ts`) deterministically derives §42's
+  transaction category (physical goods/services, digital goods/content/subscriptions, app
+  functionality, donations, marketplaces, regulated products, external account access) from a
+  project's real original idea text via the same word-boundary keyword-matching discipline already
+  established in `impact-analysis.ts` (P1-04) — not from `Blueprint.monetization`'s own text, which is
+  a fixed template string with no distinguishing signal between transaction types. An idea with
+  monetization present but no matching keyword is honestly reported `unclassified` rather than guessed
+  into the nearest category. `assessStoreReadiness()` mirrors the Quality Gate's pattern (P2-10): real
+  checks against real project state (mobile project generated/validated, mobile-commerce
+  classification resolved, Terms of Service drafted, Privacy Policy drafted, developer account
+  connected), recording Evidence and syncing a new `store.readiness` Truth Status subject key.
+  `readinessStatus` is a fixed, honest `NOT_READY` — no Apple/Google developer account integration
+  exists in this build (Phase 3 scope, §61/§65), and §44 separately requires explicit customer
+  approval before any real submission regardless. 12 new tests (6 pure unit, 6 integration against a
+  real database). Full suite green (377/377 unit+integration, 10/10 e2e, clean typecheck/lint/format,
+  production build). See `D-0037`, `EV-0081`, `EV-0082`.
+- **P2-17 — Studio UI wiring for Phase 2 (Master Spec §6 Simple Mode surfaces).** Closed the
+  repeatedly-disclosed "no Studio UI surface yet" gap for the highest-value Phase 2 capabilities: a
+  new Versions section on the Studio page lists `getProjectVersionHistory`'s real chronological
+  timeline (P2-09) with a real one-click Blueprint restore button per past version; the Launch section
+  gained real buttons wired directly to already-tested service functions — Run Quality Gate (P2-10),
+  Assess store readiness (P2-16), Generate mobile project (P2-15), and per-type legal draft generation
+  (P2-11: Terms of Service/Privacy Policy/AI Disclosure, relabeling Generate→Regenerate once a draft
+  exists); a new authenticated `GET .../export` route streams the real P2-13 export bundle as a
+  downloadable JSON file, mirroring the `manifest.webmanifest`/`sw.js` route pattern from P2-14. The
+  single highest-leverage change: the existing generic Trust section (already rendering every Truth
+  Status `subjectLabel` + badge) now also renders each entry's real `rationale` text — since every
+  P2-10/P2-14/P2-15/P2-16 function already writes a detailed, honest rationale to Truth Status, this
+  one change made all of their real results visible in the UI for the first time without inventing any
+  new state or plumbing. No new unit/integration tests were needed (every underlying function already
+  has its own coverage); instead added a new end-to-end browser test
+  (`e2e/launch-actions.spec.ts`) driving every new action through the real Studio UI, proving the
+  wiring itself works, not just the underlying functions. Full suite green (377/377 unit+integration
+  unchanged, 11/11 e2e — 10 pre-existing + 1 new, clean typecheck/lint/format, production build).
+  Honest limitation: no dedicated "Operate" surface (§6's sixth Simple Mode tab — product health, live
+  business activity, alerts — describes production monitoring systems that don't exist yet, Phase 3
+  scope); restore has no diff-preview step in the UI; migration planning (P2-12) still has no UI
+  surface at all. See `D-0038`, `EV-0083`.
 
 ## Completed
 
@@ -553,50 +593,48 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
 
 ## Active
 
-- Phase 2 planning has not yet started. Next session/turn should begin with Phase 2 decomposition
-  (Master Spec §54-59) before any implementation.
+- P2-EXIT: assembling the Phase 2 Completion Report + Exit Package under
+  `execution/reviews/level3/phase-2/` and preparing to spawn the independent Level 3 review. This is
+  the one designated pause point in Phase 2 — see `execution/state.json`'s `nextAction`.
 
 ## Deferred
 
-- All of Phase 2 (full-stack generation, Blueprint Engine, Build Planner, Component Registry, structured
-  renderer, conversational editing, mobile output) and Phase 3 (live billing, real AI provider
-  connections, production deployment, store submission, continuous governance monitoring) — per Master
-  Spec's own phase structure, not a scope-reduction decision.
+- Phase 3 in full (live billing, real AI provider connections, production managed hosting, real store
+  submission, continuous governance monitoring, unrestricted autonomous production changes, broad
+  marketplace support, mature Product Outcome Graph, Human Expert/developer marketplaces, capital
+  network) — per Master Spec §58/§65's own phase structure, not a scope-reduction decision.
+- Within Phase 2 itself, intentionally not built (see Master Spec §58 and the per-unit "Honest
+  limitation" notes above): true screen/field-level selective regeneration (P2-08 is category-level);
+  Build Plan/Product State restore (P2-09 restores Blueprint only); a per-check Quality Gate/Store
+  Readiness UI breakdown (P2-17 surfaces the aggregate rationale only); 10 of 13 policy-document content
+  generators (P2-11); migration-plan auto-application on destructive Change Sets (P2-12, standalone
+  tool only); real code-file/deployment export (P2-13, structured JSON bundle only); a mobile
+  equivalent of the web Structured Renderer/Interactive Runtime (P2-15, static navigation scaffold
+  only); a real native mobile build (no Xcode/Android SDK in this environment); real Apple/Google
+  developer account integration (P2-16, `readinessStatus` is honestly always `NOT_READY`); a dedicated
+  "Operate" Studio surface (P2-17, describes production monitoring systems that don't exist yet).
 
 ## Blocked
 
-- None. Phase 1 required no live credentials; Phase 2 likewise does not require them for its core
-  generation architecture (mock/deterministic generation remains valid per Execution Protocol §8) — real
-  AI provider connections are Phase 3 scope (§61).
+- None. Phase 2 required no live credentials for its core generation architecture — mock/deterministic
+  generation remains valid per Execution Protocol §8. Real AI provider connections, real payment
+  provider webhooks, and real Apple/Google developer account integration are all Phase 3 scope (§61,
+  §62, §65).
 
-## Known Limitations (truthful, current — Phase 1 scope)
+## Known Limitations (truthful, current — Phase 2 scope)
 
-- No settings page, integrations-connection UI, or policy-document UI yet — not required by §51's first
-  customer flow.
-- No real payment provider webhooks exist to drive the billing state machine in production — Phase 3
-  scope (§62). No real integration provider (Stripe etc.) is connected to the credential vault yet.
-- Policy documents are durable/versioned but not yet generated from real Product State content.
-- AI provider is mock-only; Requirements Engine, Business Model Brief, and unit economics are
-  deterministic/template-based, not real product or market intelligence — correctly disclosed via
-  Truth Status in the UI.
-- Phase 1's own customer flow (§51) never requires generating a Blueprint/Build Plan or a full-stack
-  application; that is explicitly Phase 2 scope (§54-59) and is not implemented.
-- Steps of the Official V1 Acceptance Test (§67) beyond Phase 1's own exit criteria (export, deployment,
-  store submission, billing-failure simulation, governance-change workflow) are correctly out of scope
-  for Phase 1 and not tested here.
-- Visual design is functional but not pixel-polished "premium" — clean typography/spacing, no custom
-  illustration or animation.
-- Product Knowledge graph only exercises REQUIREMENT/WORKFLOW node types so far; no generation system
-  yet produces Screen/Action/DataModel nodes (Phase 2 concern).
+See `execution/state.json`'s `knownLimitations` array for the complete, current list (one entry per
+implementation unit plus cross-cutting items) — kept there as the single source of truth to avoid two
+copies drifting apart. Every Phase 1 known limitation not resolved by Phase 2's scope still applies
+(see `PHASE_1_COMPLETION_REPORT.md`).
 
 ## Next Action
 
-Begin Phase 2 — "Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification"
-(Master Spec §54-59). First required demonstration: "Build a premium booking app for mobile detailers,"
-generating a real, working full-stack application from Canonical Product State, a versioned Blueprint,
-and a Build Plan — not a mockup (Master Spec §54's explicit standard). Start with Phase 2 decomposition
-into dependency-aware implementation units (Execution Protocol §6), traceable to §55 required
-capabilities and the §59 exit criteria, before any implementation begins.
+See `execution/state.json`'s `nextAction` (kept as the single source of truth). Summary: all 17 Phase 2
+implementation units are complete; assemble the Phase 2 Completion Report + Exit Package, re-verify the
+full test suite immediately before commit, commit, then spawn an independent fresh-context Level 3
+reviewer per Review Protocol §2 to accept or reject Phase 2 against §59's exit criteria — the one
+designated pause point in this phase.
 
 ## Decision Ledger Pointer
 
