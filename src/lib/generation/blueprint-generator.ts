@@ -14,7 +14,11 @@ import {
 } from "./blueprint-templates";
 import { validateBlueprint } from "./blueprint-validation";
 import { createBlueprintVersion } from "./blueprint";
-import { inferScreenPatterns, inferWorkflowPatterns } from "./interaction-contracts";
+import {
+  inferScreenPatterns,
+  inferWorkflowPatterns,
+  workflowContractKey,
+} from "./interaction-contracts";
 import type { InteractionContractMap } from "./interaction-contracts";
 import type { Blueprint, Prisma } from "@/generated/prisma/client";
 
@@ -79,13 +83,23 @@ export async function generateInitialBlueprint(
   // screen and workflow needs, so a later generation stage cannot produce
   // something structurally present but behaviorally hollow without it
   // being a recorded, checkable Blueprint violation. See
-  // src/lib/generation/interaction-contracts.ts.
+  // src/lib/generation/interaction-contracts.ts. The original idea text is
+  // passed through so real customer-stated states (e.g. "show a loading
+  // spinner") are classified `explicit`, not indistinguishable from purely
+  // pattern-inferred ones.
   const interactionContracts: InteractionContractMap = {};
   for (const screen of screens) {
-    interactionContracts[screen] = inferScreenPatterns(screen, categories);
+    interactionContracts[screen] = inferScreenPatterns(
+      screen,
+      categories,
+      productState.originalIdea,
+    );
   }
   for (const workflow of workflows) {
-    interactionContracts[`workflow:${workflow.name}`] = inferWorkflowPatterns(categories);
+    interactionContracts[workflowContractKey(workflow.name)] = inferWorkflowPatterns(
+      categories,
+      productState.originalIdea,
+    );
   }
 
   const targetUsersRaw = productDNA?.targetUsers;
@@ -111,11 +125,18 @@ export async function generateInitialBlueprint(
   // needs-attention item on a Blueprint goes; wiring it into an actual
   // Decision Ledger approval gate belongs to whichever unit first turns
   // this Blueprint into a real build (P2-03/P2-06), not to generation
-  // that hasn't been approved yet.
+  // that hasn't been approved yet. An `unresolved` state (P2-EXIT
+  // extension) is recorded the same way — an open question this module
+  // cannot answer, never silently decided either way.
   for (const [key, contract] of Object.entries(interactionContracts)) {
     for (const state of contract.consequentialStates) {
       openDecisions.push(
         `"${key}" implies a "${state}" step before proceeding — this is a consequential decision and has not been approved.`,
+      );
+    }
+    for (const state of contract.unresolvedStates) {
+      openDecisions.push(
+        `"${key}" may need a "${state}" step, but this cannot be determined from the idea alone — unresolved, confirm with the customer.`,
       );
     }
   }
@@ -142,6 +163,7 @@ export async function generateInitialBlueprint(
     outputTargets,
     dataModels,
     requirements,
+    workflows,
     interactionContracts,
   });
 

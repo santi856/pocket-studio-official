@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useContext, useState } from "react";
+import { useFormStatus } from "react-dom";
+import { useRouter } from "next/navigation";
 import type { ComponentNode } from "@/lib/generation/component-registry";
 
 /**
@@ -172,28 +174,57 @@ export function ComponentRenderer({ node, action, onAction }: ComponentRendererP
     case "EmptyState":
       return <p data-component="EmptyState">{textProp(node, "message") || "Nothing here yet."}</p>;
     case "ErrorState":
-      return (
-        <p data-component="ErrorState" role="alert">
-          {textProp(node, "message") || "Something went wrong."}
-        </p>
-      );
+      return <ErrorStateNode node={node} />;
   }
+}
+
+/**
+ * `disabled-while-pending` (Interaction Contract System, P2-EXIT): a real
+ * submit button must not remain clickable while its own submission is in
+ * flight — `useFormStatus` reads React 19's genuine native form-submission
+ * lifecycle (the same Server Action pending state every native
+ * `<form action={fn}>` in this codebase already produces), so `disabled`
+ * here reflects real pending state, not a decorative flag.
+ */
+function SubmitButton({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button data-component="Button" type="submit" disabled={pending}>
+      {pending ? "Submitting…" : label}
+    </button>
+  );
 }
 
 function ButtonNode({ node, onAction }: { node: ComponentNode; onAction?: ActionHandler }) {
   const insideForm = useContext(FormContext);
   const label = textProp(node, "label") || "Button";
   if (insideForm) {
-    return (
-      <button data-component="Button" type="submit">
-        {label}
-      </button>
-    );
+    return <SubmitButton label={label} />;
   }
   return (
     <button data-component="Button" type="button" onClick={() => onAction?.(label)}>
       {label}
     </button>
+  );
+}
+
+/**
+ * `retry` (Interaction Contract System, P2-EXIT): a real retry affordance,
+ * not just an error message. `router.refresh()` re-runs this route's
+ * Server Component with a fresh request — since every screen's data
+ * (render-runtime.ts's `loadScreenData`) is loaded fresh per request with
+ * no client-side cache of its own, this genuinely re-attempts the failed
+ * load rather than redisplaying stale state.
+ */
+function ErrorStateNode({ node }: { node: ComponentNode }) {
+  const router = useRouter();
+  return (
+    <div data-component="ErrorState">
+      <p role="alert">{textProp(node, "message") || "Something went wrong."}</p>
+      <button type="button" onClick={() => router.refresh()}>
+        Retry
+      </button>
+    </div>
   );
 }
 

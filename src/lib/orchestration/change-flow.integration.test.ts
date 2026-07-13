@@ -110,6 +110,40 @@ describe("beginChangeFlow", () => {
     );
   });
 
+  it("preserves an untouched screen's interaction contract exactly across two structural edits (P2-EXIT determinism proof)", async () => {
+    const { owner, project } = await seedProject();
+    await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Build a premium booking app for mobile detailers.",
+    );
+    // The first describe_idea call only creates Product State — a Blueprint
+    // is first created by whichever edit is the first to add a genuinely
+    // new category (see the "no new signal" test below).
+    await beginChangeFlow(owner.id, project.id, "Add a database of customer records.");
+    const v1 = await getLatestBlueprint(owner.id, project.id);
+    const v1HomeContract = (v1!.interactionContracts as Record<string, unknown>)["Home"];
+    expect(v1HomeContract).toBeDefined();
+
+    // A second, unrelated structural edit (a new "integrations" category)
+    // triggers full regeneration again.
+    await beginChangeFlow(owner.id, project.id, "Add an integration with a calendar service.");
+    const v2 = await getLatestBlueprint(owner.id, project.id);
+    expect(v2!.version).toBeGreaterThan(v1!.version);
+    const v2HomeContract = (v2!.interactionContracts as Record<string, unknown>)["Home"];
+
+    // "Home" is always in BASE_SCREENS and always matches list-view purely
+    // off its own screen name (LIST_LIKE_SCREEN_NAMES), regardless of which
+    // categories the idea touches — inferScreenPatterns is a pure function
+    // of unchanged inputs, so full regeneration reproduces byte-for-byte
+    // identical output for a screen neither edit actually affected. This
+    // is what "conversational editing preserves unrelated interaction
+    // behavior" means concretely: not a diffing/patching mechanism, but a
+    // deterministic function that reliably reproduces the same result
+    // when its own relevant inputs are unchanged.
+    expect(v2HomeContract).toEqual(v1HomeContract);
+  });
+
   it("applies a Change Set with no new signal without creating a no-op Blueprint version", async () => {
     const { owner, project } = await seedProject();
     await beginChangeFlow(

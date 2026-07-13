@@ -9,6 +9,13 @@ import { getLatestProductState, updateUnitEconomicsAssumptions } from "@/lib/pro
 import { defaultUnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
 import type { UnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
 
+// A one- or two-word submission ("app", "hi") gives the deterministic
+// pipeline nothing real to work with — reject it with an honest message
+// instead of silently no-opping (the previous behavior: an empty/blank
+// submission redirected back with zero feedback, as if nothing had been
+// clicked at all).
+const MIN_IDEA_LENGTH = 10;
+
 export async function submitIdeaAction(formData: FormData): Promise<void> {
   const user = await requireCurrentUserForAction();
   const orgSlug = String(formData.get("orgSlug") ?? "");
@@ -17,9 +24,20 @@ export async function submitIdeaAction(formData: FormData): Promise<void> {
 
   const { project } = await resolveProjectForRoute(user.id, orgSlug, projectSlug);
 
-  if (text) {
-    await beginChangeFlow(user.id, project.id, text);
+  if (text.length < MIN_IDEA_LENGTH) {
+    // Recoverable failure preserves input (Example App Ideas picker vertical
+    // proof, P2-EXIT): the attempted text travels through the redirect via
+    // `text=`, so the customer's own typing — or their example-chip
+    // selection — is never silently discarded just because it needs more
+    // detail before it's actionable.
+    redirect(
+      `/org/${orgSlug}/${projectSlug}?error=${encodeURIComponent(
+        "Describe your idea in a bit more detail before sending.",
+      )}&text=${encodeURIComponent(text)}`,
+    );
   }
+
+  await beginChangeFlow(user.id, project.id, text);
 
   redirect(`/org/${orgSlug}/${projectSlug}`);
 }

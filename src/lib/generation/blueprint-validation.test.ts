@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { validateBlueprint } from "./blueprint-validation";
+import { inferScreenPatterns, inferWorkflowPatterns } from "./interaction-contracts";
+import type { InteractionContractMap } from "./interaction-contracts";
 
 function validInput() {
   return {
@@ -10,6 +12,10 @@ function validInput() {
     outputTargets: ["web"],
     dataModels: [{ name: "Record", fields: ["id"] }],
     requirements: [{ statement: "x" }],
+    workflows: [] as Array<{ name: string }>,
+    interactionContracts: {
+      Home: inferScreenPatterns("Home", [], "idea"),
+    } as InteractionContractMap,
   };
 }
 
@@ -80,5 +86,40 @@ describe("validateBlueprint", () => {
       requirements: [],
     });
     expect(result.errors).toHaveLength(3);
+  });
+
+  // P2-EXIT hardening: interaction contracts can no longer be silently
+  // omitted — a screen or workflow present in the Blueprint but absent
+  // from interactionContracts now makes the whole Blueprint INVALID,
+  // where previously an omitted `interactionContracts` field (undefined)
+  // simply skipped the check entirely.
+  it("rejects a screen with no interaction contract at all", () => {
+    const result = validateBlueprint({ ...validInput(), interactionContracts: {} });
+    expect(result.status).toBe("INVALID");
+    expect(result.errors).toContain('"Home" has no interaction contract.');
+  });
+
+  it("rejects a workflow with no interaction contract, not just screens", () => {
+    const input = validInput();
+    const result = validateBlueprint({
+      ...input,
+      workflows: [{ name: "Primary Workflow" }],
+      // interactionContracts still only covers the screen, not the workflow.
+    });
+    expect(result.status).toBe("INVALID");
+    expect(result.errors).toContain('"workflow:Primary Workflow" has no interaction contract.');
+  });
+
+  it("accepts a Blueprint whose workflow also has a well-formed interaction contract", () => {
+    const input = validInput();
+    const result = validateBlueprint({
+      ...input,
+      workflows: [{ name: "Primary Workflow" }],
+      interactionContracts: {
+        ...input.interactionContracts,
+        "workflow:Primary Workflow": inferWorkflowPatterns([], "idea"),
+      },
+    });
+    expect(result).toEqual({ status: "VALID", errors: [] });
   });
 });

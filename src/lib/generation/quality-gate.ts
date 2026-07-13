@@ -2,7 +2,7 @@ import "server-only";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import { getLatestBlueprint } from "./blueprint";
 import { getLatestBuildPlan } from "./build-plan";
-import { validateInteractionContracts } from "./interaction-contracts";
+import { validateInteractionContracts, workflowContractKey } from "./interaction-contracts";
 import { loadScreenData } from "./render-runtime";
 import { bindScreenData } from "./screen-data-binding";
 import { recordEvidence } from "@/lib/product/evidence";
@@ -46,6 +46,14 @@ function asDataModels(value: unknown): BlueprintDataModel[] {
     : [];
 }
 
+function asWorkflowNames(value: unknown): string[] {
+  return Array.isArray(value)
+    ? (value as Array<{ name?: unknown }>)
+        .map((item) => item?.name)
+        .filter((name): name is string => typeof name === "string")
+    : [];
+}
+
 function findInputNames(node: ComponentNode, names: string[]): void {
   if (node.type === "Input" && typeof node.props?.name === "string") {
     names.push(node.props.name);
@@ -86,18 +94,139 @@ function checkBuildPlanReady(buildPlan: BuildPlan): QualityGateCheck {
 }
 
 /**
- * Reuses P2-01's own structural check (every screen has a declared
- * contract with at least one pattern and one required state) — the
- * Quality Gate does not duplicate that logic, only requires it to pass.
+ * Reuses P2-01's own structural check (every screen and workflow has a
+ * declared contract with at least one pattern and one required state) —
+ * the Quality Gate does not duplicate that logic, only requires it to
+ * pass. Extended (P2-EXIT) to cover workflow subjects too, not just
+ * screens — a workflow's contract was previously computed and stored but
+ * never structurally re-verified at this gate.
  */
 function checkInteractionContractsWellFormed(blueprint: Blueprint): QualityGateCheck {
   const screens = asStringArray(blueprint.screens);
+  const workflowNames = asWorkflowNames(blueprint.workflows);
+  const subjects = [...screens, ...workflowNames.map((name) => workflowContractKey(name))];
   const contracts = (blueprint.interactionContracts ?? {}) as InteractionContractMap;
-  const result = validateInteractionContracts(screens, contracts);
+  const result = validateInteractionContracts(subjects, contracts);
   return {
-    name: "Every screen has a well-formed Interaction Contract",
+    name: "Every screen and workflow has a well-formed Interaction Contract",
     passed: result.valid,
-    details: result.valid ? "All screens covered." : result.violations.join("; "),
+    details: result.valid ? "All screens and workflows covered." : result.violations.join("; "),
+  };
+}
+
+/**
+ * A state this build's Interaction Contract System claims will be
+ * implemented (any classification other than `consequential_decision`,
+ * which is deliberately disclosed rather than auto-rendered) but flags as
+ * `unsupportedStates` (interaction-contracts.ts's own capability check) is
+ * a real gap this Quality Gate must catch — never silently pass a
+ * generation that promises behavior this renderer cannot build yet.
+ */
+function checkNoUnsupportedRequiredStates(blueprint: Blueprint): QualityGateCheck {
+  const contracts = (blueprint.interactionContracts ?? {}) as InteractionContractMap;
+  const problems: string[] = [];
+  for (const [subject, contract] of Object.entries(contracts)) {
+    if (contract.unsupportedStates?.length > 0) {
+      problems.push(
+        `"${subject}" requires ${contract.unsupportedStates.join(", ")}, which this build's renderer cannot implement yet.`,
+      );
+    }
+  }
+  return {
+    name: "Every required interaction state is implementable by this build's renderer",
+    passed: problems.length === 0,
+    details: problems.length === 0 ? "No unsupported required states." : problems.join("; "),
+  };
+}
+
+/**
+ * Master Spec §4.2 / D-0022: a consequential or unresolved interaction
+ * state must be disclosed, never silently decided either way. This
+ * re-verifies the disclosure actually happened (blueprint-generator.ts's
+ * own openDecisions loop) rather than trusting it structurally — a real
+ * regression there (e.g. the loop being accidentally removed in a future
+ * change) would otherwise pass every other check silently.
+ */
+function checkConsequentialAndUnresolvedStatesAreDisclosed(blueprint: Blueprint): QualityGateCheck {
+  const contracts = (blueprint.interactionContracts ?? {}) as InteractionContractMap;
+  const openDecisions = asStringArray(blueprint.openDecisions);
+  const problems: string[] = [];
+
+  for (const [subject, contract] of Object.entries(contracts)) {
+    for (const state of contract.consequentialStates ?? []) {
+      const disclosed = openDecisions.some(
+        (decision) =>
+          decision.includes(`"${subject}"`) &&
+          decision.includes(`"${state}"`) &&
+          decision.includes("consequential decision"),
+      );
+      if (!disclosed) {
+        problems.push(`"${subject}"'s consequential "${state}" state is not disclosed.`);
+      }
+    }
+    for (const state of contract.unresolvedStates ?? []) {
+      const disclosed = openDecisions.some(
+        (decision) =>
+          decision.includes(`"${subject}"`) &&
+          decision.includes(`"${state}"`) &&
+          decision.includes("unresolved"),
+      );
+      if (!disclosed) {
+        problems.push(`"${subject}"'s unresolved "${state}" state is not disclosed.`);
+      }
+    }
+  }
+
+  return {
+    name: "Consequential and unresolved interaction states are disclosed, never silently decided",
+    passed: problems.length === 0,
+    details:
+      problems.length === 0
+        ? "All consequential/unresolved states are disclosed."
+        : problems.join("; "),
+  };
+}
+
+/**
+ * A `Button` node reachable outside any `Form` ancestor relies entirely on
+ * a caller-supplied `onAction` handler (component-renderer.tsx) — the live
+ * preview route (P2-06) does not currently pass one, so such a Button
+ * would render as a real, clickable, focusable element that silently does
+ * nothing on click: exactly "looks interactive but is unwired." Today's
+ * deterministic `buildComponentTree` never produces one (every Button sits
+ * inside a Form), so this has zero live matches — but it is a real,
+ * generic safety net against a future template regression, not dead code:
+ * see quality-gate.test.ts for a direct unit test of the detection logic
+ * against a synthetic tree.
+ */
+export function findUnwiredButtonLabels(node: ComponentNode, insideForm = false): string[] {
+  const nowInsideForm = insideForm || node.type === "Form";
+  const found: string[] = [];
+  if (node.type === "Button" && !insideForm) {
+    const label = typeof node.props?.label === "string" ? node.props.label : "(unlabeled)";
+    found.push(label);
+  }
+  for (const child of node.children ?? []) {
+    found.push(...findUnwiredButtonLabels(child, nowInsideForm));
+  }
+  return found;
+}
+
+function checkNoUnwiredButtons(buildPlan: BuildPlan): QualityGateCheck {
+  const componentStructure = (buildPlan.componentStructure ?? {}) as Record<string, ComponentNode>;
+  const problems: string[] = [];
+  for (const [screen, node] of Object.entries(componentStructure)) {
+    const unwired = findUnwiredButtonLabels(node);
+    if (unwired.length > 0) {
+      problems.push(
+        `"${screen}" has Button(s) outside any Form with no real action wired: ${unwired.join(", ")}.`,
+      );
+    }
+  }
+  return {
+    name: "Every Button is wired to a real action (inside a Form, or a real onAction handler)",
+    passed: problems.length === 0,
+    details: problems.length === 0 ? "No unwired buttons found." : problems.join("; "),
   };
 }
 
@@ -274,6 +403,51 @@ async function checkScreensRenderWithoutError(
 }
 
 /**
+ * P2-EXIT: "quality.gate" alone is one flat status collapsing structural,
+ * behavioral, accessibility, governance, and operational completeness
+ * into a single pass/fail — a Build Plan with a missing alt tag and one
+ * with a genuinely unwired Button both just read "BLOCKED," which hides
+ * *what kind* of gap it is. Every check is mapped to exactly one real,
+ * distinct dimension; each dimension gets its own Truth Status subjectKey
+ * (the same "one subjectKey per real axis" pattern already established
+ * for output.web/output.pwa/output.ios/output.android, P2-14/P2-15) in
+ * addition to — not instead of — the existing aggregate "quality.gate"
+ * rollup, so no existing caller's behavior changes.
+ */
+export const QUALITY_DIMENSIONS = [
+  "structural",
+  "behavioral",
+  "accessibility",
+  "governance",
+  "operational",
+] as const;
+export type QualityDimension = (typeof QUALITY_DIMENSIONS)[number];
+
+const CHECK_DIMENSIONS: Readonly<Record<string, QualityDimension>> = {
+  "Blueprint is structurally valid": "structural",
+  "Build Plan has no unresolved blockers": "structural",
+  "Every screen and workflow has a well-formed Interaction Contract": "structural",
+  "Every required interaction state is implementable by this build's renderer": "behavioral",
+  "Consequential and unresolved interaction states are disclosed, never silently decided":
+    "governance",
+  "Every Button is wired to a real action (inside a Form, or a real onAction handler)":
+    "behavioral",
+  "List-view screens are wired to a real data dependency": "behavioral",
+  "Form-submission screens' Inputs match their bound data model's fields": "behavioral",
+  "Every screen is reachable from the navigation graph": "operational",
+  "Every Image has alt text": "accessibility",
+  "Every screen's data binding resolves without error": "operational",
+};
+
+const QUALITY_DIMENSION_LABELS: Readonly<Record<QualityDimension, string>> = {
+  structural: "Structural completeness (Blueprint / Build Plan / Interaction Contracts)",
+  behavioral: "Behavioral completeness (wired, implementable interactions)",
+  accessibility: "Accessibility completeness",
+  governance: "Governance disclosure (consequential / unresolved decisions)",
+  operational: "Operational completeness (reachability, runtime data binding)",
+};
+
+/**
  * Master Spec §55/§59's Quality Gate: runs every check above against a
  * project's *current* generation (its latest Blueprint and Build Plan),
  * records the result as real Product Evidence and Truth Status — never a
@@ -297,6 +471,9 @@ export async function runQualityGate(
     checkBlueprintValid(blueprint),
     checkBuildPlanReady(buildPlan),
     checkInteractionContractsWellFormed(blueprint),
+    checkNoUnsupportedRequiredStates(blueprint),
+    checkConsequentialAndUnresolvedStatesAreDisclosed(blueprint),
+    checkNoUnwiredButtons(buildPlan),
     checkListViewScreensAreDataBound(blueprint, buildPlan),
     checkFormScreensMatchDataModelFields(blueprint, buildPlan),
     checkAllScreensReachable(buildPlan),
@@ -324,6 +501,25 @@ export async function runQualityGate(
     status: passed ? "IMPLEMENTED" : "BLOCKED",
     rationale: passed ? "All Quality Gate checks passed." : `Failed: ${failedNames.join("; ")}`,
   });
+
+  const dimensionChecks = new Map<QualityDimension, QualityGateCheck[]>();
+  for (const check of checks) {
+    const dimension = CHECK_DIMENSIONS[check.name];
+    if (!dimension) continue; // never crash on a future check this map hasn't been updated for
+    dimensionChecks.set(dimension, [...(dimensionChecks.get(dimension) ?? []), check]);
+  }
+  for (const [dimension, dimChecks] of dimensionChecks) {
+    const dimensionPassed = dimChecks.every((check) => check.passed);
+    const dimensionFailedNames = dimChecks.filter((check) => !check.passed).map((c) => c.name);
+    await setTruthStatus(actorUserId, projectId, {
+      subjectKey: `quality.${dimension}`,
+      subjectLabel: QUALITY_DIMENSION_LABELS[dimension],
+      status: dimensionPassed ? "IMPLEMENTED" : "BLOCKED",
+      rationale: dimensionPassed
+        ? `All ${dimChecks.length} ${dimension} check(s) passed.`
+        : `Failed: ${dimensionFailedNames.join("; ")}`,
+    });
+  }
 
   await recordEvent(actorUserId, projectId, {
     type: "QUALITY_GATE_RUN",

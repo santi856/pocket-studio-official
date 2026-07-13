@@ -102,8 +102,12 @@ describe("generateProductIntelligence", () => {
     await generateProductIntelligence(owner.id, project.id, "Build a booking app.");
 
     const statuses = await listLatestTruthStatuses(owner.id, project.id);
+    // generation.full_stack_web_app is SUPPORTED_NOW as of Phase 2's real,
+    // shipped generation pipeline (P2-01..P2-06) — maps to IMPLEMENTED, not
+    // PLANNED, since the Capability Registry entry was updated (P2-EXIT) to
+    // stop understating a capability this build genuinely delivers.
     const webAppStatus = statuses.find((s) => s.subjectKey === "generation.full_stack_web_app");
-    expect(webAppStatus?.status).toBe("PLANNED");
+    expect(webAppStatus?.status).toBe("IMPLEMENTED");
     expect(webAppStatus?.evidenceRef).toBeTruthy();
 
     const events = await listEvents(owner.id, project.id, {

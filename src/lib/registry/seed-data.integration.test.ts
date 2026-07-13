@@ -36,4 +36,23 @@ describe("seedCapabilityRegistry", () => {
     expect(entries).toHaveLength(INITIAL_CAPABILITIES.length);
     expect(entries.every((entry) => entry.version === 2)).toBe(true);
   });
+
+  it("registers generation.full_stack_web_app as SUPPORTED_NOW, not stale SUPPORTED_LATER_PHASE, now that Phase 2 ships it (P2-EXIT)", async () => {
+    await seedCapabilityRegistry();
+
+    const entries = await listLatestCapabilities();
+    const webApp = entries.find((entry) => entry.capabilityKey === "generation.full_stack_web_app");
+    expect(webApp?.implementationLevel).toBe("SUPPORTED_NOW");
+  });
+
+  it("registers the Example App Ideas picker (AS-0001's first vertical proof) as a real, SUPPORTED_NOW platform capability", async () => {
+    await seedCapabilityRegistry();
+
+    const entries = await listLatestCapabilities();
+    const picker = entries.find(
+      (entry) => entry.capabilityKey === "studio.example_app_ideas_picker",
+    );
+    expect(picker?.implementationLevel).toBe("SUPPORTED_NOW");
+    expect(picker?.riskClass).toBe("LOW");
+  });
 });

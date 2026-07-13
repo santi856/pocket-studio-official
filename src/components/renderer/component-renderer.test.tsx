@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ComponentRenderer } from "./component-renderer";
 import type { ComponentNode } from "@/lib/generation/component-registry";
+
+const refresh = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh }),
+}));
 
 describe("ComponentRenderer", () => {
   it("renders a Screen tree of real, semantic DOM elements — not a static preview image", () => {
@@ -70,6 +75,35 @@ describe("ComponentRenderer", () => {
     expect(captured?.get("email")).toBe("customer@example.com");
   });
 
+  it("disables the submit button while its own submission is pending, using React's real form-status lifecycle", async () => {
+    let resolveAction: () => void = () => {};
+    const action = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveAction = resolve;
+        }),
+    );
+    const node: ComponentNode = {
+      type: "Form",
+      children: [
+        { type: "Input", props: { name: "email" } },
+        { type: "Button", props: { label: "Submit" } },
+      ],
+    };
+
+    render(<ComponentRenderer node={node} action={action} />);
+    const button = screen.getByRole("button", { name: "Submit" });
+    expect(button).not.toBeDisabled();
+
+    fireEvent.click(button);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Submitting…" })).toBeDisabled());
+
+    resolveAction();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Submit" })).not.toBeDisabled());
+  });
+
   it("renders List items from real data, not a hardcoded placeholder", () => {
     const node: ComponentNode = { type: "List", props: { items: ["Booking #1", "Booking #2"] } };
 
@@ -99,11 +133,23 @@ describe("ComponentRenderer", () => {
       <ComponentRenderer node={{ type: "ErrorState", props: { message: "Could not load." } }} />,
     );
     expect(screen.getByRole("alert")).toHaveTextContent("Could not load.");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
 
     rerender(
       <ComponentRenderer node={{ type: "EmptyState", props: { message: "No bookings yet." } }} />,
     );
     expect(screen.getByText("No bookings yet.")).toBeInTheDocument();
+  });
+
+  it("ErrorState's real Retry button re-runs the current route via router.refresh(), not a decorative click", () => {
+    refresh.mockClear();
+    render(
+      <ComponentRenderer node={{ type: "ErrorState", props: { message: "Could not load." } }} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it("Tabs switch the visible panel on real user interaction, not on mount only", () => {

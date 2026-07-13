@@ -249,11 +249,12 @@ describe("generateInitialBlueprint", () => {
       outputTargets: blueprint.outputTargets as string[],
       dataModels: blueprint.dataModels as Array<{ name: string; fields: string[] }>,
       requirements: blueprint.requirements as unknown[],
+      workflows: blueprint.workflows as Array<{ name: string }>,
       interactionContracts: contracts as unknown as InteractionContractMap,
     });
 
     expect(result.status).toBe("INVALID");
-    expect(result.errors).toContain(`Screen "${firstScreen}" has no interaction contract.`);
+    expect(result.errors).toContain(`"${firstScreen}" has no interaction contract.`);
   });
 
   it("denies generation for an actor without project access", async () => {

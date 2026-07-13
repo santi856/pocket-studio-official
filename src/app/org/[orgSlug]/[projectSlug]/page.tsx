@@ -24,6 +24,7 @@ import {
 } from "@/lib/actions/launch-actions";
 import { AppNav } from "@/components/app-nav";
 import { TruthBadge } from "@/components/truth-badge";
+import { IdeaTextarea } from "@/components/example-idea-picker";
 import type { UnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
 import type { PolicyDocumentType } from "@/generated/prisma/client";
 
@@ -32,11 +33,11 @@ export default async function StudioSimpleModePage({
   searchParams,
 }: {
   params: Promise<{ orgSlug: string; projectSlug: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; text?: string }>;
 }) {
   const user = await requireUserForPage();
   const { orgSlug, projectSlug } = await params;
-  const { error } = await searchParams;
+  const { error, text: preservedText } = await searchParams;
   const { organization, project } = await resolveProjectForRoute(user.id, orgSlug, projectSlug);
 
   const [
@@ -106,10 +107,9 @@ export default async function StudioSimpleModePage({
               Describe your product
             </h1>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              Tell Pocket Studio what you want to build. For example: &ldquo;Build a premium booking
-              app for mobile detailers.&rdquo;
+              Tell Pocket Studio what you want to build, or pick an example below to get started.
             </p>
-            <IdeaForm orgSlug={orgSlug} projectSlug={projectSlug} />
+            <IdeaForm orgSlug={orgSlug} projectSlug={projectSlug} initialText={preservedText} />
           </section>
         ) : (
           <>
@@ -487,7 +487,7 @@ export default async function StudioSimpleModePage({
               <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-500">
                 Continue the conversation
               </h2>
-              <IdeaForm orgSlug={orgSlug} projectSlug={projectSlug} />
+              <IdeaForm orgSlug={orgSlug} projectSlug={projectSlug} initialText={preservedText} />
             </section>
           </>
         )}
@@ -569,17 +569,23 @@ function UnitEconomicsForm({
   );
 }
 
-function IdeaForm({ orgSlug, projectSlug }: { orgSlug: string; projectSlug: string }) {
+function IdeaForm({
+  orgSlug,
+  projectSlug,
+  initialText,
+}: {
+  orgSlug: string;
+  projectSlug: string;
+  initialText?: string;
+}) {
   return (
     <form action={submitIdeaAction} className="mt-4 flex flex-col gap-3">
       <input type="hidden" name="orgSlug" value={orgSlug} />
       <input type="hidden" name="projectSlug" value={projectSlug} />
-      <textarea
+      <IdeaTextarea
         name="text"
-        required
-        rows={3}
         placeholder="Describe your product idea..."
-        className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+        initialValue={initialText}
       />
       <button
         type="submit"

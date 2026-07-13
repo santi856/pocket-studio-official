@@ -129,6 +129,28 @@ describe("generateBuildPlan", () => {
     expect((plan.tests as string[]).some((t) => t.includes('"loading"'))).toBe(true);
   });
 
+  it("derives tests from a workflow's own interaction contract, not just a generic completion string (P2-EXIT fix)", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build a booking app with a database of customer records and a workflow for scheduling.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+
+    const plan = await generateBuildPlan(owner.id, project.id);
+    const tests = plan.tests as string[];
+
+    expect(tests).toContain("Primary Workflow: end-to-end workflow completion test.");
+    // Every multi-step-workflow requires loading/error/success — these must
+    // now be reflected as real, per-state workflow tests, not silently
+    // dropped between Blueprint generation (which computes the contract)
+    // and the Build Plan (which previously never consumed it).
+    expect(tests).toContain('Primary Workflow: verify the "loading" state.');
+    expect(tests).toContain('Primary Workflow: verify the "error" state.');
+    expect(tests).toContain('Primary Workflow: verify the "success" state.');
+  });
+
   it("labels planning as deterministic, never as AI-authored planning", async () => {
     const { owner, project } = await seedProject();
     await generateProductIntelligence(owner.id, project.id, "Build a booking app.");

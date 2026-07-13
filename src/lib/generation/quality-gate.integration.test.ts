@@ -140,6 +140,174 @@ describe("runQualityGate", () => {
     expect(result.passed).toBe(false);
   });
 
+  it("marks every real quality dimension IMPLEMENTED for a clean generation, not just the flat rollup (P2-EXIT)", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build a booking app with a database of customer records.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+    await generateBuildPlan(owner.id, project.id);
+
+    await runQualityGate(owner.id, project.id);
+
+    for (const dimension of [
+      "structural",
+      "behavioral",
+      "accessibility",
+      "governance",
+      "operational",
+    ]) {
+      const status = await getLatestTruthStatus(owner.id, project.id, `quality.${dimension}`);
+      expect(status?.status).toBe("IMPLEMENTED");
+    }
+  });
+
+  it("records independent Truth Status per quality dimension — a missing alt tag blocks only quality.accessibility, not structural or behavioral (P2-EXIT)", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build a booking app with a database of customer records.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+    const plan = await generateBuildPlan(owner.id, project.id);
+
+    // buildComponentTree never generates an Image node deterministically —
+    // inject one with no alt text to exercise the one real accessibility
+    // check that exists, the same corruption discipline as every other
+    // Quality Gate regression test in this file.
+    const componentStructure = plan.componentStructure as Record<string, { children?: unknown[] }>;
+    const [firstScreen] = Object.keys(componentStructure);
+    componentStructure[firstScreen!]!.children = [
+      ...(componentStructure[firstScreen!]!.children ?? []),
+      { type: "Image", props: {} },
+    ];
+    await db.buildPlan.update({
+      where: { id: plan.id },
+      data: { componentStructure: componentStructure as never },
+    });
+
+    const result = await runQualityGate(owner.id, project.id);
+    expect(result.passed).toBe(false);
+
+    const accessibility = await getLatestTruthStatus(owner.id, project.id, "quality.accessibility");
+    expect(accessibility?.status).toBe("BLOCKED");
+
+    // A defect in one dimension must never collapse another, real dimension
+    // into a false BLOCKED — that would be exactly the "one misleading
+    // status" failure mode this split exists to prevent.
+    const structural = await getLatestTruthStatus(owner.id, project.id, "quality.structural");
+    expect(structural?.status).toBe("IMPLEMENTED");
+    const behavioral = await getLatestTruthStatus(owner.id, project.id, "quality.behavioral");
+    expect(behavioral?.status).toBe("IMPLEMENTED");
+    const governance = await getLatestTruthStatus(owner.id, project.id, "quality.governance");
+    expect(governance?.status).toBe("IMPLEMENTED");
+  });
+
+  it("catches a required interaction state this build's renderer cannot actually implement (P2-EXIT check)", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build a booking app with a database of customer records.",
+    );
+    const blueprint = await generateInitialBlueprint(owner.id, project.id);
+    await generateBuildPlan(owner.id, project.id);
+
+    // Corrupt the stored Blueprint's real interaction contract to claim a
+    // required state this build's renderer does not implement — proves the
+    // check reacts to a real capability gap rather than trusting the
+    // contract was computed correctly, the same discipline as the sibling
+    // Form-Input-mismatch test above.
+    const contracts = blueprint.interactionContracts as Record<
+      string,
+      { unsupportedStates?: string[] }
+    >;
+    const [firstScreen] = Object.keys(contracts);
+    contracts[firstScreen!]!.unsupportedStates = ["retry"];
+    await db.blueprint.update({
+      where: { id: blueprint.id },
+      data: { interactionContracts: contracts as never },
+    });
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    const unsupportedCheck = result.checks.find(
+      (c) =>
+        c.name === "Every required interaction state is implementable by this build's renderer",
+    );
+    expect(unsupportedCheck?.passed).toBe(false);
+    expect(unsupportedCheck?.details).toContain("retry");
+    expect(result.passed).toBe(false);
+  });
+
+  it("catches a consequential interaction state that was never actually disclosed in openDecisions (P2-EXIT check)", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build a booking app with appointment deposits.",
+    );
+    const blueprint = await generateInitialBlueprint(owner.id, project.id);
+    await generateBuildPlan(owner.id, project.id);
+
+    // This idea's Checkout screen has a real consequential "confirmation"
+    // state, disclosed in openDecisions by blueprint-generator.ts's own
+    // loop. Strip that disclosure to prove the Quality Gate independently
+    // re-verifies it happened, rather than trusting it structurally.
+    const originalOpenDecisions = blueprint.openDecisions as string[];
+    const strippedOpenDecisions = originalOpenDecisions.filter(
+      (decision) => !decision.includes("consequential decision"),
+    );
+    expect(strippedOpenDecisions.length).toBeLessThan(originalOpenDecisions.length);
+    await db.blueprint.update({
+      where: { id: blueprint.id },
+      data: { openDecisions: strippedOpenDecisions },
+    });
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    const disclosureCheck = result.checks.find(
+      (c) =>
+        c.name ===
+        "Consequential and unresolved interaction states are disclosed, never silently decided",
+    );
+    expect(disclosureCheck?.passed).toBe(false);
+    expect(disclosureCheck?.details).toContain("consequential");
+    expect(result.passed).toBe(false);
+  });
+
+  it("catches a Button rendered outside any Form — a real dead click on the live preview route (P2-EXIT check)", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(owner.id, project.id, "Build a booking app.");
+    await generateInitialBlueprint(owner.id, project.id);
+    const plan = await generateBuildPlan(owner.id, project.id);
+
+    const componentStructure = plan.componentStructure as Record<string, { children?: unknown[] }>;
+    const [firstScreen] = Object.keys(componentStructure);
+    componentStructure[firstScreen!]!.children = [
+      ...(componentStructure[firstScreen!]!.children ?? []),
+      { type: "Button", props: { label: "Decorative button" } },
+    ];
+    await db.buildPlan.update({
+      where: { id: plan.id },
+      data: { componentStructure: componentStructure as never },
+    });
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    const unwiredCheck = result.checks.find(
+      (c) =>
+        c.name ===
+        "Every Button is wired to a real action (inside a Form, or a real onAction handler)",
+    );
+    expect(unwiredCheck?.passed).toBe(false);
+    expect(unwiredCheck?.details).toContain("Decorative button");
+    expect(result.passed).toBe(false);
+  });
+
   it("denies running the Quality Gate for an actor without project access", async () => {
     const { owner, project } = await seedProject();
     await generateProductIntelligence(owner.id, project.id, "Build a booking app.");

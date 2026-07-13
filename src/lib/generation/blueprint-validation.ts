@@ -1,6 +1,6 @@
 import "server-only";
 import type { BlueprintValidationStatus } from "@/generated/prisma/client";
-import { validateInteractionContracts } from "./interaction-contracts";
+import { validateInteractionContracts, workflowContractKey } from "./interaction-contracts";
 import type { InteractionContractMap } from "./interaction-contracts";
 
 export type BlueprintValidationInput = {
@@ -11,11 +11,15 @@ export type BlueprintValidationInput = {
   outputTargets: string[];
   dataModels: Array<{ name: string; fields: string[] }>;
   requirements: unknown[];
-  // Optional for backward compatibility (a caller that doesn't generate
-  // interaction contracts yet is not penalized for their absence) — but
-  // whenever present, every named screen must have a well-formed one. See
-  // src/lib/generation/interaction-contracts.ts.
-  interactionContracts?: InteractionContractMap;
+  workflows: Array<{ name: string }>;
+  // Required (P2-EXIT hardening): a caller that omits this entirely
+  // previously caused interaction-contract completeness to be silently
+  // skipped rather than checked, which is exactly the "silently omit an
+  // applicable interaction contract" failure mode this field exists to
+  // prevent. Every caller must now supply its real contract map (or an
+  // honestly empty one, which correctly fails validation if screens or
+  // workflows exist) — see src/lib/generation/interaction-contracts.ts.
+  interactionContracts: InteractionContractMap;
 };
 
 export type BlueprintValidationResult = {
@@ -56,11 +60,17 @@ export function validateBlueprint(input: BlueprintValidationInput): BlueprintVal
       );
     }
   }
-  if (input.interactionContracts) {
-    errors.push(
-      ...validateInteractionContracts(input.screens, input.interactionContracts).violations,
-    );
-  }
+
+  // Every screen AND every workflow must have a well-formed interaction
+  // contract — not just screens, closing the gap where a workflow's
+  // contract was computed and stored but never structurally validated.
+  const contractSubjects = [
+    ...input.screens,
+    ...input.workflows.map((workflow) => workflowContractKey(workflow.name)),
+  ];
+  errors.push(
+    ...validateInteractionContracts(contractSubjects, input.interactionContracts).violations,
+  );
 
   return { status: errors.length === 0 ? "VALID" : "INVALID", errors };
 }

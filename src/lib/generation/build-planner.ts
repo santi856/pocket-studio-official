@@ -6,6 +6,7 @@ import { recordEvent } from "@/lib/product/events";
 import {
   CHECKOUT_SCREEN_NAME,
   LIST_LIKE_SCREEN_NAMES,
+  workflowContractKey,
   type InteractionContract,
   type InteractionContractMap,
 } from "./interaction-contracts";
@@ -179,6 +180,15 @@ function deriveDependencies(phases: ImplementationPhase[]): Record<string, strin
   return dependencies;
 }
 
+/**
+ * Every workflow gets a real per-state test derived from its own
+ * interaction contract (P2-EXIT fix) — previously only a single generic
+ * "end-to-end workflow completion test" string, which never reflected
+ * that workflow's real required/recommended/consequential states even
+ * though `inferWorkflowPatterns` computed them at Blueprint generation
+ * time. A workflow's contract was stored but never consumed anywhere in
+ * the pipeline until this fix.
+ */
 function deriveTests(
   screens: string[],
   workflows: BlueprintWorkflow[],
@@ -192,6 +202,10 @@ function deriveTests(
   }
   for (const workflow of workflows) {
     tests.push(`${workflow.name}: end-to-end workflow completion test.`);
+    for (const state of interactionContracts[workflowContractKey(workflow.name)]?.requiredStates ??
+      []) {
+      tests.push(`${workflow.name}: verify the "${state}" state.`);
+    }
   }
   return tests;
 }

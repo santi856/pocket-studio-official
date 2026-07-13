@@ -51,7 +51,12 @@ test("golden path: sign up through Product Intelligence generation", async ({ pa
   await expect(
     page.getByText("Generated, working full-stack web application from Product State"),
   ).toBeVisible();
-  await expect(page.getByText("Planned", { exact: true })).toBeVisible();
+  // Implemented, not Planned (P2-EXIT): Phase 2's real generation pipeline
+  // (P2-01..P2-06) shipped and was independently reviewed, so the
+  // Capability Registry entry now accurately reflects it as SUPPORTED_NOW
+  // rather than the stale SUPPORTED_LATER_PHASE this test originally
+  // asserted from Phase 1, before that capability existed.
+  await expect(page.getByText("Implemented", { exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Switch to Expert Mode" }).click();
   await expect(page).toHaveURL(/\/expert$/);

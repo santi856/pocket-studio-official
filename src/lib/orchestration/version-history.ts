@@ -10,6 +10,7 @@ import {
 import { listBuildPlanVersions } from "@/lib/generation/build-plan";
 import { listChangeSets } from "./change-set";
 import { validateBlueprint } from "@/lib/generation/blueprint-validation";
+import type { InteractionContractMap } from "@/lib/generation/interaction-contracts";
 import { recordEvent } from "@/lib/product/events";
 import type { Blueprint, Prisma } from "@/generated/prisma/client";
 import type { BlueprintValidationResult } from "@/lib/generation/blueprint-validation";
@@ -106,6 +107,14 @@ function asDataModelNames(value: unknown): string[] {
     : [];
 }
 
+function asWorkflows(value: unknown): Array<{ name: string }> {
+  return Array.isArray(value)
+    ? (value as Array<{ name?: unknown }>)
+        .filter((item): item is { name: string } => typeof item?.name === "string")
+        .map((item) => ({ name: item.name }))
+    : [];
+}
+
 export type BlueprintRestoreDiff = {
   targetVersion: number;
   currentVersion: number;
@@ -159,7 +168,12 @@ export async function previewBlueprintRestore(
  * newly generated Blueprint passes through (blueprint-validation.ts)
  * against the target version's stored content, so a restore is never
  * applied blindly — confirming the target is still valid, not just that it
- * once was.
+ * once was. Passes `workflows` and `interactionContracts` (P2-EXIT fix):
+ * previously omitted, which silently skipped interaction-contract
+ * completeness checking specifically for the restore path, even though
+ * `restoreBlueprintVersion` itself always carried `interactionContracts`
+ * forward correctly — the target's completeness was carried forward
+ * without ever being re-verified.
  */
 export async function validateBlueprintRestore(
   actorUserId: string,
@@ -183,6 +197,8 @@ export async function validateBlueprintRestore(
       ? (target.dataModels as Array<{ name: string; fields: string[] }>)
       : [],
     requirements: Array.isArray(target.requirements) ? target.requirements : [],
+    workflows: asWorkflows(target.workflows),
+    interactionContracts: (target.interactionContracts ?? {}) as InteractionContractMap,
   });
 }
 
