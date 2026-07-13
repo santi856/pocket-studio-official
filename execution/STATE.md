@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **active**, decomposed into 17 units (P2-01..P2-17) plus P2-EXIT. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-15 (Mobile architecture + generated mobile project)
+- **Active implementation unit:** P2-16 (Mobile-commerce classification + Store Readiness Engine)
 
 ## Phase 2 Decomposition
 
@@ -37,7 +37,7 @@ says otherwise.
 | P2-12 ✅ | Migration planning for generated-app data model changes                                                                    | §28                      | P2-08                                       |
 | P2-13 ✅ | Export foundation + durable jobs/retries/checkpoints/idempotency                                                           | §25, §29                 | P2-07                                       |
 | P2-14 ✅ | Web and PWA output                                                                                                         | §39, §40                 | P2-05                                       |
-| P2-15    | Mobile architecture selection + generated mobile project                                                                   | §41                      | P2-01, P2-04                                |
+| P2-15 ✅ | Mobile architecture selection + generated mobile project                                                                   | §41                      | P2-01, P2-04                                |
 | P2-16    | Mobile-commerce classification + Store Readiness Engine                                                                    | §42, §44                 | P2-15                                       |
 | P2-17    | Studio UI wiring — Blueprint/Build Plan viewer, Generate action, Preview link, Change Set review, restore UI               | §6, §7                   | P2-01..P2-16                                |
 | P2-EXIT  | Assemble Phase 2 evidence, checkpoint, Level 3 independent review against §59                                              | §16 (Execution Protocol) | all above                                   |
@@ -354,6 +354,25 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
   (355/355 unit+integration, 10/10 e2e, clean typecheck/lint/format, production build). Honest
   limitation: no Lighthouse-grade installability audit, no offline/push architecture, no Studio UI
   explaining web vs. PWA vs. native mobile yet (P2-17). See `D-0035`, `EV-0077`, `EV-0078`.
+- **P2-15 — Mobile architecture + generated mobile project (Master Spec §41).** React Native +
+  Expo selected and documented (Master Spec's own suggested example) via a `MOBILE_ARCHITECTURE`
+  constant and `generationMetadata` rather than a Decision Ledger entry, since the choice is a fixed
+  platform constant, not a customer-specific recommendation. `generateMobileProjectFiles()`
+  (`src/lib/generation/mobile.ts`) deterministically produces a real, minimal Expo project scaffold
+  (`app.json`/`package.json`/`tsconfig.json`/`App.tsx`) from the project's actual name and Blueprint
+  screen list — a static navigation-list scaffold, not a feature-complete mobile app; no mobile
+  equivalent of the web Structured Renderer/Interactive Runtime (P2-05) exists yet.
+  `validateMobileProjectFiles()` performs real "build validation" honestly scoped to JSON parsing plus
+  TypeScript/TSX syntax validation via the TypeScript compiler's own parser — genuinely catches
+  malformed generated code, verified with a standalone script before relying on it in tests — but is
+  explicitly not a full type-check against React Native's ambient types (not installed in this repo)
+  and never a real native `.ipa`/`.apk` build (no Xcode/Android SDK in this environment).
+  `generateMobileProject()` syncs `output.ios`/`output.android` Truth Status to `IMPLEMENTED` with an
+  honest no-native-build rationale. 10 new tests (6 pure unit, 4 integration against a real database).
+  Full suite green (365/365 unit+integration, 10/10 e2e, clean typecheck/lint/format, production
+  build). Honest limitation: `output.ios`/`output.android` is not coupled to `generateApplication` — a
+  later web regeneration resets both to `NOT_EVALUATED` until this function is called again. See
+  `D-0036`, `EV-0079`, `EV-0080`.
 
 ## Completed
 
