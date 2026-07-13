@@ -206,7 +206,8 @@
     "EV-0080",
     "EV-0081",
     "EV-0082",
-    "EV-0083"
+    "EV-0083",
+    "EV-0084"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories — not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (§61).",

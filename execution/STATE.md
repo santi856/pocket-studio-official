@@ -41,7 +41,7 @@ says otherwise.
 | P2-15 ✅ | Mobile architecture selection + generated mobile project                                                                   | §41                      | P2-01, P2-04                                |
 | P2-16 ✅ | Mobile-commerce classification + Store Readiness Engine                                                                    | §42, §44                 | P2-15                                       |
 | P2-17 ✅ | Studio UI wiring — versions/restore, Quality Gate, Store Readiness, mobile project, legal drafts, export                   | §6, §7                   | P2-01..P2-16                                |
-| P2-EXIT  | Assemble Phase 2 evidence, checkpoint, Level 3 independent review against §59 — **active**                                | §16 (Execution Protocol) | all above                                   |
+| P2-EXIT  | Assemble Phase 2 evidence, checkpoint, Level 3 independent review against §59 — **active**                                 | §16 (Execution Protocol) | all above                                   |
 
 ## Phase 2 Completed
 
