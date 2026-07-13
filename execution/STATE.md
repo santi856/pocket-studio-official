@@ -640,8 +640,14 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
 
 ## Active
 
-- None. Phase 2 is complete (tag `phase-2-complete`, commit `dfefbb2`). Awaiting explicit user
-  authorization to begin Phase 3 — see `execution/state.json`'s `nextAction`.
+- A practical-product-completeness repair (interaction-contract pipeline hardening + Example App Ideas
+  vertical proof, commit `d912048`) was forward-committed on top of `phase-2-complete` (tag, commit
+  `fae0dcc`). A pre-Phase-3 forensic audit (`execution/audits/*.md`, D-0042/EV-0087) then returned
+  verdict **REVISE**, naming two blocking items before Phase 3 may begin: (1) commit `d912048` needs
+  its own Level 3 independent review round; (2) a real, reproduced Vitest full-suite isolation
+  fragility (`execution/audits/TEST_AND_EVIDENCE_AUDIT.md`) needs root-causing. See
+  `execution/audits/PHASE_3_READINESS_DECISION.md` for the full decision. Not blocked on user
+  authorization alone anymore — blocked on these two items first.
 
 ## Deferred
 
@@ -676,12 +682,12 @@ copies drifting apart. Every Phase 1 known limitation not resolved by Phase 2's 
 
 ## Next Action
 
-See `execution/state.json`'s `nextAction` (kept as the single source of truth). Summary: Phase 2 is
-complete and checkpointed. Report this outcome to the user and stop — Phase 3 ("Commercial Production,
-Billing, Deployment, Mobile Distribution, Governance Monitoring, and Operations," Master Spec §60-66)
-requires explicit user authorization to begin, given its real credentials and materially higher risk
-profile (live billing, real production charges, real store submission) than anything auto-approved so
-far. Do not begin Phase 3 decomposition or implementation without that explicit authorization.
+See `execution/state.json`'s `nextAction` (kept as the single source of truth) and
+`execution/audits/PHASE_3_READINESS_DECISION.md`. Summary: resolve the two named blocking items (a
+Level 3 review round for commit `d912048`; root-cause the Vitest isolation fragility), then obtain
+explicit user authorization before beginning Phase 3 ("Commercial Production, Billing, Deployment,
+Mobile Distribution, Governance Monitoring, and Operations," Master Spec §60-66) — which separately
+requires real credentials and carries materially higher risk than anything auto-approved so far.
 
 ## Decision Ledger Pointer
 
