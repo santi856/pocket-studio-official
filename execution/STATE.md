@@ -11,7 +11,7 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — **COMPLETE**. Level 3 independent phase-exit review accepted the phase (round
   2, conditionally accept, condition satisfied immediately — EV-0086), checkpointed as tag
-  `phase-2-complete` (commit `5fbb869`). See
+  `phase-2-complete` (commit `dfefbb2`). See
   `execution/reviews/level3/phase-2/PHASE_2_COMPLETION_REPORT.md`. Demonstration product: "Build a
   premium booking app for mobile detailers" (§56).
 - **Active implementation unit:** none — Phase 2 complete, awaiting explicit user authorization to
@@ -640,7 +640,7 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
 
 ## Active
 
-- None. Phase 2 is complete (tag `phase-2-complete`, commit `5fbb869`). Awaiting explicit user
+- None. Phase 2 is complete (tag `phase-2-complete`, commit `dfefbb2`). Awaiting explicit user
   authorization to begin Phase 3 — see `execution/state.json`'s `nextAction`.
 
 ## Deferred

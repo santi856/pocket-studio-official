@@ -10,7 +10,7 @@
     "previousPhase": "phase-1",
     "previousPhaseStatus": "complete",
     "previousPhaseCheckpoint": "phase-1-complete (commit 93571b6, Level 3 review accepted round 2, EV-0047)",
-    "checkpoint": "phase-2-complete (commit 5fbb869, Level 3 review conditionally accepted round 2 with condition satisfied immediately, EV-0086)"
+    "checkpoint": "phase-2-complete (tag commit dfefbb2; review accepted at commit 5fbb869, Level 3 review conditionally accepted round 2 with condition satisfied immediately, EV-0086)"
   },
   "milestone": {
     "current": "M6-operability",
@@ -242,5 +242,5 @@
   ],
   "requiredCustomerActions": [],
   "requiredExternalActions": [],
-  "nextAction": "Phase 2 is complete and checkpointed (tag phase-2-complete, commit 5fbb869). The Level 3 independent phase-exit review accepted the phase (round 2, conditionally accept, condition satisfied immediately — EV-0086) per Master Spec §59's exit criteria. Report this outcome to the user and stop. Per this build's standing instructions, Phase 3 ('Commercial Production, Billing, Deployment, Mobile Distribution, Governance Monitoring, and Operations,' Master Spec §60-66) requires explicit user authorization to begin — it is a new phase with its own scope, real credentials (AI provider, Stripe, Apple/Google developer accounts), and materially higher risk profile (live billing, real production charges, real store submission) than anything auto-approved so far. Do not begin Phase 3 decomposition or implementation without that explicit authorization."
+  "nextAction": "Phase 2 is complete and checkpointed (tag phase-2-complete, commit dfefbb2). The Level 3 independent phase-exit review accepted the phase (round 2, conditionally accept, condition satisfied immediately — EV-0086) per Master Spec §59's exit criteria. Report this outcome to the user and stop. Per this build's standing instructions, Phase 3 ('Commercial Production, Billing, Deployment, Mobile Distribution, Governance Monitoring, and Operations,' Master Spec §60-66) requires explicit user authorization to begin — it is a new phase with its own scope, real credentials (AI provider, Stripe, Apple/Google developer accounts), and materially higher risk profile (live billing, real production charges, real store submission) than anything auto-approved so far. Do not begin Phase 3 decomposition or implementation without that explicit authorization."
 }

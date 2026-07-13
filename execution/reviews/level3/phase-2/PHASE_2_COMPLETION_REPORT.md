@@ -3,7 +3,7 @@
 Assembled per Execution Protocol §16/§11. Phase 2 — "Full-Stack Generation, Editing, Mobile Output,
 Business Operations, and Verification" (Master Spec §54-59) — passed the Level 3 independent phase-exit
 review (Review Protocol §2) on round 2, verdict **conditionally accept**, condition satisfied
-immediately at commit `5fbb869`, checkpointed as tag `phase-2-complete`.
+immediately at commit `5fbb869`, checkpointed as tag `phase-2-complete` (commit `dfefbb2`).
 
 ## Review history
 
