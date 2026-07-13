@@ -9,10 +9,13 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
   commit `3739836`, checkpointed as tag `phase-1-complete` (commit `93571b6`). See
   `execution/reviews/level3/phase-1/PHASE_1_COMPLETION_REPORT.md`.
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
-  (Master Spec §54-59) — all 17 implementation units (P2-01..P2-17) **complete**. Demonstration
-  product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-EXIT (round 1 Level 3 review returned **revise**; all 4 findings
-  repaired — D-0040, EV-0085; round 2 independent review next)
+  (Master Spec §54-59) — **COMPLETE**. Level 3 independent phase-exit review accepted the phase (round
+  2, conditionally accept, condition satisfied immediately — EV-0086), checkpointed as tag
+  `phase-2-complete` (commit `5fbb869`). See
+  `execution/reviews/level3/phase-2/PHASE_2_COMPLETION_REPORT.md`. Demonstration product: "Build a
+  premium booking app for mobile detailers" (§56).
+- **Active implementation unit:** none — Phase 2 complete, awaiting explicit user authorization to
+  begin Phase 3.
 
 ## Phase 2 Decomposition
 
@@ -22,26 +25,26 @@ Orchestration Contract, Decision/Event/Evidence Ledgers, Truth Status, Capabilit
 recreating them — every unit below reuses the corresponding Phase 1 primitive unless a decision record
 says otherwise.
 
-| Unit     | Scope                                                                                                                      | Master Spec              | Depends on                                  |
-| -------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------- |
-| P2-01 ✅ | Blueprint Engine — versioned, validated Blueprint model + generator from Product State/DNA/Requirements                    | §23                      | Phase 1 Product State, DNA, Knowledge graph |
-| P2-02 ✅ | Component Registry — closed set of UI primitives, Zod-validated, unknown-component-fails-safely                            | §26                      | —                                           |
-| P2-03 ✅ | Build Planner — versioned Build Plan derived from a validated Blueprint                                                    | §24                      | P2-01                                       |
-| P2-04 ✅ | Generated-app data layer — generic multi-tenant store for a generated product's own data + end users                       | §25                      | Phase 1 tenancy                             |
-| P2-05 ✅ | Structured Renderer + Interactive Runtime — real, working UI interpreted from Blueprint screens, not hardcoded             | §25, §26                 | P2-01, P2-02                                |
-| P2-06 ✅ | Full-stack generation orchestration — ties Blueprint+BuildPlan+Registry+data layer+renderer into one generation call       | §25                      | P2-01..P2-05                                |
-| P2-07 ✅ | Demonstration product — booking app for mobile detailers: concrete Blueprint content, screens, data models, business logic | §56                      | P2-06                                       |
-| P2-08 ✅ | Conversational editing + Change Sets + selective regeneration                                                              | §27, §57                 | P2-07, Phase 1 Orchestration Contract       |
-| P2-09 ✅ | Version history and restore                                                                                                | §27                      | P2-08                                       |
-| P2-10 ✅ | Quality Gate — unit/integration/authorization/tenant/accessibility/e2e tests for the generated product                     | §55, §59                 | P2-07                                       |
-| P2-11 ✅ | Security/privacy/governance impact + legal/policy draft generation from real state                                         | §31, §32, §34            | P2-07, Phase 1 PolicyDocument               |
-| P2-12 ✅ | Migration planning for generated-app data model changes                                                                    | §28                      | P2-08                                       |
-| P2-13 ✅ | Export foundation + durable jobs/retries/checkpoints/idempotency                                                           | §25, §29                 | P2-07                                       |
-| P2-14 ✅ | Web and PWA output                                                                                                         | §39, §40                 | P2-05                                       |
-| P2-15 ✅ | Mobile architecture selection + generated mobile project                                                                   | §41                      | P2-01, P2-04                                |
-| P2-16 ✅ | Mobile-commerce classification + Store Readiness Engine                                                                    | §42, §44                 | P2-15                                       |
-| P2-17 ✅ | Studio UI wiring — versions/restore, Quality Gate, Store Readiness, mobile project, legal drafts, export                   | §6, §7                   | P2-01..P2-16                                |
-| P2-EXIT  | Assemble Phase 2 evidence, checkpoint, Level 3 independent review against §59 — round 1 **revise**, repaired, round 2 next | §16 (Execution Protocol) | all above                                   |
+| Unit       | Scope                                                                                                                                                         | Master Spec              | Depends on                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------- |
+| P2-01 ✅   | Blueprint Engine — versioned, validated Blueprint model + generator from Product State/DNA/Requirements                                                       | §23                      | Phase 1 Product State, DNA, Knowledge graph |
+| P2-02 ✅   | Component Registry — closed set of UI primitives, Zod-validated, unknown-component-fails-safely                                                               | §26                      | —                                           |
+| P2-03 ✅   | Build Planner — versioned Build Plan derived from a validated Blueprint                                                                                       | §24                      | P2-01                                       |
+| P2-04 ✅   | Generated-app data layer — generic multi-tenant store for a generated product's own data + end users                                                          | §25                      | Phase 1 tenancy                             |
+| P2-05 ✅   | Structured Renderer + Interactive Runtime — real, working UI interpreted from Blueprint screens, not hardcoded                                                | §25, §26                 | P2-01, P2-02                                |
+| P2-06 ✅   | Full-stack generation orchestration — ties Blueprint+BuildPlan+Registry+data layer+renderer into one generation call                                          | §25                      | P2-01..P2-05                                |
+| P2-07 ✅   | Demonstration product — booking app for mobile detailers: concrete Blueprint content, screens, data models, business logic                                    | §56                      | P2-06                                       |
+| P2-08 ✅   | Conversational editing + Change Sets + selective regeneration                                                                                                 | §27, §57                 | P2-07, Phase 1 Orchestration Contract       |
+| P2-09 ✅   | Version history and restore                                                                                                                                   | §27                      | P2-08                                       |
+| P2-10 ✅   | Quality Gate — unit/integration/authorization/tenant/accessibility/e2e tests for the generated product                                                        | §55, §59                 | P2-07                                       |
+| P2-11 ✅   | Security/privacy/governance impact + legal/policy draft generation from real state                                                                            | §31, §32, §34            | P2-07, Phase 1 PolicyDocument               |
+| P2-12 ✅   | Migration planning for generated-app data model changes                                                                                                       | §28                      | P2-08                                       |
+| P2-13 ✅   | Export foundation + durable jobs/retries/checkpoints/idempotency                                                                                              | §25, §29                 | P2-07                                       |
+| P2-14 ✅   | Web and PWA output                                                                                                                                            | §39, §40                 | P2-05                                       |
+| P2-15 ✅   | Mobile architecture selection + generated mobile project                                                                                                      | §41                      | P2-01, P2-04                                |
+| P2-16 ✅   | Mobile-commerce classification + Store Readiness Engine                                                                                                       | §42, §44                 | P2-15                                       |
+| P2-17 ✅   | Studio UI wiring — versions/restore, Quality Gate, Store Readiness, mobile project, legal drafts, export                                                      | §6, §7                   | P2-01..P2-16                                |
+| P2-EXIT ✅ | Assemble Phase 2 evidence, checkpoint, Level 3 independent review against §59 — round 1 revise → repaired, round 2 conditionally accept → condition satisfied | §16 (Execution Protocol) | all above                                   |
 
 ## Phase 2 Completed
 
@@ -436,6 +439,27 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
   `e2e/auth-guard.spec.ts`'s new expired-session test genuinely crashes without the fix), then restored
   and reconfirmed green. Full suite green (382/382 unit+integration — 377 prior + 5 new, 12/12 e2e — 11
   prior + 1 new, clean typecheck/lint/format, production build). Next: round 2 independent review.
+- **P2-EXIT round 2 review and repair.** A second independent, fresh-context Level 3 reviewer audited
+  Phase 2 against commit `6a6e393` and returned verdict **conditionally accept**
+  (`execution/reviews/level3/phase-2/ROUND_2_REVIEW.md`). It independently re-verified all four round 1
+  fixes live rather than trusting the repair summary — reverting each in turn and confirming the exact
+  failure reproduces, then restoring and reconfirming — and stress-tested the concurrency fix well
+  beyond the team's own evidence (100 concurrent writers, no failure). Its own adversarial pass beyond
+  the round 1 findings surfaced one new, undisclosed instance of the identical race class:
+  `startOrGetJobRun` (`src/lib/generation/job-runs.ts`) could crash with an uncaught Prisma `P2002` when
+  two concurrent callers shared the same `idempotencyKey` — not a CRITICAL DEFECT (the affected code is
+  not wired into any live Server Action or route today), but the reviewer's condition for acceptance
+  required it be fixed or disclosed, explicitly noting that satisfying the condition would not require
+  another full review cycle. Fixed immediately rather than only disclosed: `startOrGetJobRun` now
+  catches the exact conflict and defers to the winner's row via a new `resolveExistingJobRun` helper —
+  the correct idempotency response, distinct from `createNextVersion`'s retry-a-new-version pattern
+  (which doesn't apply here, since a `JobRun`'s identity is fixed by its `idempotencyKey`, not an
+  incrementing version number). Adversarially self-verified the same way as every prior fix: reverted,
+  confirmed a new 10-concurrent-caller regression test reproduces the exact live crash, restored,
+  reconfirmed green. Full suite green (383/383 unit+integration — 382 prior + 1 new, 12/12 e2e, clean
+  typecheck/lint/format, production build). See `D-0041`, `EV-0086`.
+  **Phase 2 exit is achieved as of commit `5fbb869`, checkpointed as tag `phase-2-complete`.** See
+  `execution/reviews/level3/phase-2/PHASE_2_COMPLETION_REPORT.md`.
 
 ## Completed
 
@@ -616,10 +640,8 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
 
 ## Active
 
-- P2-EXIT: round 1 Level 3 review returned **revise** (`execution/reviews/level3/phase-2/
-ROUND_1_REVIEW.md`); all 4 findings repaired and adversarially self-verified (D-0040, EV-0085).
-  Committing this repair cycle, then spawning an independent, fresh-context round 2 reviewer. This
-  remains the one designated pause point in Phase 2 — see `execution/state.json`'s `nextAction`.
+- None. Phase 2 is complete (tag `phase-2-complete`, commit `5fbb869`). Awaiting explicit user
+  authorization to begin Phase 3 — see `execution/state.json`'s `nextAction`.
 
 ## Deferred
 
@@ -654,11 +676,12 @@ copies drifting apart. Every Phase 1 known limitation not resolved by Phase 2's 
 
 ## Next Action
 
-See `execution/state.json`'s `nextAction` (kept as the single source of truth). Summary: commit the
-round 1 repair cycle, then spawn a second independent, fresh-context Level 3 reviewer per Review
-Protocol §2 for round 2 — give it the round 1 findings and this repair's evidence, and ask it to
-independently re-verify each fix live rather than trust this summary, mirroring exactly how Phase 1's
-round 2 review worked. This remains the one designated pause point in this phase.
+See `execution/state.json`'s `nextAction` (kept as the single source of truth). Summary: Phase 2 is
+complete and checkpointed. Report this outcome to the user and stop — Phase 3 ("Commercial Production,
+Billing, Deployment, Mobile Distribution, Governance Monitoring, and Operations," Master Spec §60-66)
+requires explicit user authorization to begin, given its real credentials and materially higher risk
+profile (live billing, real production charges, real store submission) than anything auto-approved so
+far. Do not begin Phase 3 decomposition or implementation without that explicit authorization.
 
 ## Decision Ledger Pointer
 
