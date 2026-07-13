@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { createNextVersion } from "@/lib/db-versioning";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import type { BuildPlan, BuildPlanStatus, Prisma } from "@/generated/prisma/client";
 
@@ -38,40 +39,42 @@ export async function createBuildPlanVersion(
 ): Promise<BuildPlan> {
   await requireProjectAccess(actorUserId, projectId, "MEMBER");
 
-  return db.$transaction(async (tx) => {
-    const latest = await tx.buildPlan.findFirst({
-      where: { projectId },
-      orderBy: { version: "desc" },
-    });
+  return createNextVersion(() =>
+    db.$transaction(async (tx) => {
+      const latest = await tx.buildPlan.findFirst({
+        where: { projectId },
+        orderBy: { version: "desc" },
+      });
 
-    return tx.buildPlan.create({
-      data: {
-        projectId,
-        version: (latest?.version ?? 0) + 1,
-        createdByUserId: actorUserId,
-        basedOnBlueprintVersion: input.basedOnBlueprintVersion,
-        planStatus: input.planStatus,
-        implementationPhases: input.implementationPhases,
-        dependencies: input.dependencies,
-        screenOrder: input.screenOrder,
-        componentStructure: input.componentStructure,
-        navigationGraph: input.navigationGraph,
-        dataDependencies: input.dataDependencies,
-        backendAndBusinessLogic: input.backendAndBusinessLogic,
-        administrativeRequirements: input.administrativeRequirements,
-        integrations: input.integrations,
-        monetization: input.monetization,
-        platformRequirements: input.platformRequirements,
-        persistence: input.persistence,
-        tests: input.tests,
-        acceptanceCriteria: input.acceptanceCriteria,
-        evidenceRequirements: input.evidenceRequirements,
-        risk: input.risk,
-        blockers: input.blockers,
-        generationMetadata: input.generationMetadata,
-      },
-    });
-  });
+      return tx.buildPlan.create({
+        data: {
+          projectId,
+          version: (latest?.version ?? 0) + 1,
+          createdByUserId: actorUserId,
+          basedOnBlueprintVersion: input.basedOnBlueprintVersion,
+          planStatus: input.planStatus,
+          implementationPhases: input.implementationPhases,
+          dependencies: input.dependencies,
+          screenOrder: input.screenOrder,
+          componentStructure: input.componentStructure,
+          navigationGraph: input.navigationGraph,
+          dataDependencies: input.dataDependencies,
+          backendAndBusinessLogic: input.backendAndBusinessLogic,
+          administrativeRequirements: input.administrativeRequirements,
+          integrations: input.integrations,
+          monetization: input.monetization,
+          platformRequirements: input.platformRequirements,
+          persistence: input.persistence,
+          tests: input.tests,
+          acceptanceCriteria: input.acceptanceCriteria,
+          evidenceRequirements: input.evidenceRequirements,
+          risk: input.risk,
+          blockers: input.blockers,
+          generationMetadata: input.generationMetadata,
+        },
+      });
+    }),
+  );
 }
 
 export async function getLatestBuildPlan(

@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { createNextVersion } from "@/lib/db-versioning";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import type { TruthStatusEntry, TruthStatusValue } from "@/generated/prisma/client";
 
@@ -24,25 +25,27 @@ export async function setTruthStatus(
 ): Promise<TruthStatusEntry> {
   await requireProjectAccess(actorUserId, projectId, "MEMBER");
 
-  return db.$transaction(async (tx) => {
-    const previous = await tx.truthStatusEntry.findFirst({
-      where: { projectId, subjectKey: input.subjectKey },
-      orderBy: { version: "desc" },
-    });
+  return createNextVersion(() =>
+    db.$transaction(async (tx) => {
+      const previous = await tx.truthStatusEntry.findFirst({
+        where: { projectId, subjectKey: input.subjectKey },
+        orderBy: { version: "desc" },
+      });
 
-    return tx.truthStatusEntry.create({
-      data: {
-        projectId,
-        subjectKey: input.subjectKey,
-        subjectLabel: input.subjectLabel,
-        version: (previous?.version ?? 0) + 1,
-        status: input.status,
-        evidenceRef: input.evidenceRef,
-        rationale: input.rationale,
-        createdByUserId: actorUserId,
-      },
-    });
-  });
+      return tx.truthStatusEntry.create({
+        data: {
+          projectId,
+          subjectKey: input.subjectKey,
+          subjectLabel: input.subjectLabel,
+          version: (previous?.version ?? 0) + 1,
+          status: input.status,
+          evidenceRef: input.evidenceRef,
+          rationale: input.rationale,
+          createdByUserId: actorUserId,
+        },
+      });
+    }),
+  );
 }
 
 export async function getLatestTruthStatus(

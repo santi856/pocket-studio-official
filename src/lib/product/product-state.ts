@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { createNextVersion } from "@/lib/db-versioning";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import type { Prisma, ProductState } from "@/generated/prisma/client";
 
@@ -29,30 +30,32 @@ export async function createProductStateVersion(
 ): Promise<ProductState> {
   await requireProjectAccess(actorUserId, projectId, "MEMBER");
 
-  return db.$transaction(async (tx) => {
-    const latest = await tx.productState.findFirst({
-      where: { projectId },
-      orderBy: { version: "desc" },
-    });
+  return createNextVersion(() =>
+    db.$transaction(async (tx) => {
+      const latest = await tx.productState.findFirst({
+        where: { projectId },
+        orderBy: { version: "desc" },
+      });
 
-    return tx.productState.create({
-      data: {
-        projectId,
-        version: (latest?.version ?? 0) + 1,
-        createdByUserId: actorUserId,
-        originalIdea: input.originalIdea,
-        productIntelligence: input.productIntelligence,
-        feasibilityReport: input.feasibilityReport,
-        businessModelBrief: input.businessModelBrief,
-        monetizationRecommendations: input.monetizationRecommendations,
-        unitEconomicsAssumptions: input.unitEconomicsAssumptions,
-        operationalComplexity: input.operationalComplexity,
-        requiredIntegrations: input.requiredIntegrations,
-        outputTargets: input.outputTargets,
-        governanceRequirements: input.governanceRequirements,
-      },
-    });
-  });
+      return tx.productState.create({
+        data: {
+          projectId,
+          version: (latest?.version ?? 0) + 1,
+          createdByUserId: actorUserId,
+          originalIdea: input.originalIdea,
+          productIntelligence: input.productIntelligence,
+          feasibilityReport: input.feasibilityReport,
+          businessModelBrief: input.businessModelBrief,
+          monetizationRecommendations: input.monetizationRecommendations,
+          unitEconomicsAssumptions: input.unitEconomicsAssumptions,
+          operationalComplexity: input.operationalComplexity,
+          requiredIntegrations: input.requiredIntegrations,
+          outputTargets: input.outputTargets,
+          governanceRequirements: input.governanceRequirements,
+        },
+      });
+    }),
+  );
 }
 
 export async function getLatestProductState(

@@ -5,6 +5,54 @@ records, Truth Status, the Decision Ledger, and test/build results — never wri
 confidence). This is the entry point for the Level 3 independent phase-exit reviewer (Review Protocol
 §2). It is a factual index, not an argument for acceptance.
 
+## Round 1 review outcome and fixes (read before re-reviewing)
+
+An independent, fresh-context Level 3 reviewer already reviewed this phase once, against commit
+`605e62d`. Verdict: **revise**. Full record: `execution/reviews/level3/phase-2/ROUND_1_REVIEW.md`.
+
+Two CRITICAL DEFECTs, both live-reproduced against a real running instance (two real accounts/orgs/
+projects, real HTTP traffic, not mocks):
+
+1. A version-creation race condition: `createBlueprintVersion`/`createProductStateVersion`'s
+   read-latest-then-create-next-version pattern is not serialized under Postgres's default READ
+   COMMITTED isolation, so concurrent submissions (e.g. a double-clicked "Generate app") could crash to
+   a raw Prisma `P2002` unique-constraint error instead of the graceful `?error=` redirect this
+   codebase requires everywhere else. The reviewer noted this pattern is systemic, not confined to the
+   two functions reproduced.
+2. Every Server Action crashed to a raw error page on an expired/absent session instead of redirecting
+   to sign-in, because no action caught `UnauthenticatedError` — the two P2-14 Route Handlers already
+   did this correctly, the fix pattern just was never applied to any Server Action.
+
+Plus two DEFECTs: the §56 demonstration-product content gap needed an explicit phase-exit-level
+acknowledgment rather than D-0028's routine self-classification; `sw.js` was missing the same
+auth/tenant gate its sibling `manifest.webmanifest` route has.
+
+**All four were fixed in D-0040 (EV-0085)**, each critical fix adversarially self-verified by reverting
+it, confirming a new regression test reproduces the reviewer's exact live failure, then restoring and
+reconfirming green:
+
+- `src/lib/db-versioning.ts`'s `createNextVersion()` adds a retry-with-jittered-backoff wrapper (up to
+  20 attempts), applied to all 8 append-only versioned models sharing the racy pattern (Blueprint,
+  BuildPlan, ProductState, ProductDNA, PolicyDocument, TruthStatusEntry, CapabilityRegistryEntry,
+  PlanDefinition) — not just the two the reviewer reproduced. Verified: reverted the fix in
+  `product-state.ts`, confirmed a new 10-concurrent-writer integration test
+  (`product-state.integration.test.ts`) genuinely hits `P2002`, restored the fix, confirmed it now
+  passes reliably across repeated runs.
+- `requireCurrentUserForAction()` (`src/lib/web/require-user.ts`) — the same redirect-to-`/sign-in`
+  shape already proven for pages (`requireUserForPage`) — replaces `requireCurrentUser()` across all 6
+  `"use server"` action files. Verified: reverted the fix in `studio-actions.ts`, confirmed a new e2e
+  test (`e2e/auth-guard.spec.ts`) genuinely reproduces the crash live in a browser after clearing the
+  session cookie, restored the fix, confirmed it now passes.
+- `D-0039` records the explicit, phase-exit-visible acknowledgment that the exact §56 demonstration
+  sentence does not produce §56's full stated vision today.
+- `sw.js` now carries the identical auth/tenant gate `manifest.webmanifest` already had.
+
+Full validation suite after fixes: typecheck/lint/format clean, **382/382** unit+integration tests pass
+(377 prior + 5 new), **12/12** e2e tests pass (11 prior + 1 new), production build succeeds (EV-0085).
+
+Re-reviewer: please verify these fixes independently rather than trusting this summary, per the same
+standard applied in round 1.
+
 ## Scope claim
 
 Phase 2 — "Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification" — per
@@ -82,25 +130,25 @@ Verified end to end, live in a real browser, by `e2e/golden-path.spec.ts` (Phase
 integration tests (`change-flow.integration.test.ts`, `change-set.integration.test.ts`) which drive
 Impact Analysis → Change Set → validation → tests → evidence → version → Truth Status for a real edit.
 
-| Requirement                                                                                   | Evidence                                                                                                                         |
-| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Demonstration product renders                                                                 | EV-0061, EV-0062 (`e2e/generation-preview.spec.ts`)                                                                              |
-| Completes its primary customer workflow                                                       | EV-0063, EV-0064 (`e2e/official-demonstration.spec.ts`) — see Known limitations for the honest scope of "primary workflow" today |
-| Completes its primary business-owner workflow                                                 | Not separately demonstrated — see Known limitations                                                                              |
-| Persists supported data                                                                       | EV-0057, EV-0058 (GeneratedRecord, real Postgres writes)                                                                         |
-| Represents payment and subscription behavior truthfully                                       | EV-0081, EV-0082 (Store Readiness honestly NOT_READY; no live payment execution exists anywhere in this build)                   |
-| Accepts the required edit in §57                                                              | See "§57 required edit" section below                                                                                            |
-| Updates affected systems while preserving unrelated systems                                   | EV-0065, EV-0066 (D-0029's regression fix + regression test)                                                                     |
-| Creates and restores versions                                                                 | EV-0067, EV-0068; reachable in the Studio UI via EV-0083                                                                         |
-| Passes the Quality Gate                                                                       | EV-0069, EV-0070; reachable in the Studio UI via EV-0083                                                                         |
-| Generates security, privacy, governance, and launch-readiness requirements                    | EV-0071, EV-0072, EV-0081, EV-0082                                                                                               |
-| Exports supported artifacts                                                                   | EV-0075, EV-0076; reachable in the Studio UI via EV-0083                                                                         |
-| Generated mobile project, working supported runtime, build validation                         | EV-0079, EV-0080 — see Known limitations for "working supported runtime" scope                                                   |
-| Navigation, backend connectivity, supported authentication (mobile)                           | EV-0079, EV-0080 — scaffold-level, see Known limitations                                                                         |
-| Platform requirements, store metadata/asset requirements                                      | EV-0081, EV-0082 — see Known limitations (no asset generation)                                                                   |
-| Platform-specific readiness status                                                            | EV-0077 (web/PWA), EV-0079 (iOS/Android build), EV-0081 (store readiness)                                                        |
-| Typecheck, lint, unit, integration, e2e, tenant, accessibility, mobile-build validations pass | EV-0083 (last full-suite run: 377/377 unit+integration, 11/11 e2e, clean typecheck/lint/format, production build)                |
-| Independent Level 3 review accepts the phase                                                  | **Pending — this review**                                                                                                        |
+| Requirement                                                                                   | Evidence                                                                                                                                |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Demonstration product renders                                                                 | EV-0061, EV-0062 (`e2e/generation-preview.spec.ts`)                                                                                     |
+| Completes its primary customer workflow                                                       | EV-0063, EV-0064 (`e2e/official-demonstration.spec.ts`) — see Known limitations for the honest scope of "primary workflow" today        |
+| Completes its primary business-owner workflow                                                 | Not separately demonstrated — see Known limitations                                                                                     |
+| Persists supported data                                                                       | EV-0057, EV-0058 (GeneratedRecord, real Postgres writes)                                                                                |
+| Represents payment and subscription behavior truthfully                                       | EV-0081, EV-0082 (Store Readiness honestly NOT_READY; no live payment execution exists anywhere in this build)                          |
+| Accepts the required edit in §57                                                              | See "§57 required edit" section below                                                                                                   |
+| Updates affected systems while preserving unrelated systems                                   | EV-0065, EV-0066 (D-0029's regression fix + regression test)                                                                            |
+| Creates and restores versions                                                                 | EV-0067, EV-0068; reachable in the Studio UI via EV-0083                                                                                |
+| Passes the Quality Gate                                                                       | EV-0069, EV-0070; reachable in the Studio UI via EV-0083                                                                                |
+| Generates security, privacy, governance, and launch-readiness requirements                    | EV-0071, EV-0072, EV-0081, EV-0082                                                                                                      |
+| Exports supported artifacts                                                                   | EV-0075, EV-0076; reachable in the Studio UI via EV-0083                                                                                |
+| Generated mobile project, working supported runtime, build validation                         | EV-0079, EV-0080 — see Known limitations for "working supported runtime" scope                                                          |
+| Navigation, backend connectivity, supported authentication (mobile)                           | EV-0079, EV-0080 — scaffold-level, see Known limitations                                                                                |
+| Platform requirements, store metadata/asset requirements                                      | EV-0081, EV-0082 — see Known limitations (no asset generation)                                                                          |
+| Platform-specific readiness status                                                            | EV-0077 (web/PWA), EV-0079 (iOS/Android build), EV-0081 (store readiness)                                                               |
+| Typecheck, lint, unit, integration, e2e, tenant, accessibility, mobile-build validations pass | EV-0085 (last full-suite run after round 1 repairs: 382/382 unit+integration, 12/12 e2e, clean typecheck/lint/format, production build) |
+| Independent Level 3 review accepts the phase                                                  | **Pending — this review**                                                                                                               |
 
 ### §56 demonstration product — honest current state
 
@@ -136,10 +184,10 @@ above. This is disclosed, not hidden.
 
 ## Full evidence and decision ledgers
 
-- `execution/evidence/ledger.jsonl` — 83 records total; Phase 2's portion is EV-0048 through EV-0083
-  (36 records), each with evidence type, verification method, result, and limitations.
-- `execution/decisions/ledger.jsonl` — 38 records total; Phase 2's portion is D-0019 through D-0038
-  (20 records), each with reason, alternatives considered, and impact.
+- `execution/evidence/ledger.jsonl` — 85 records total; Phase 2's portion is EV-0048 through EV-0085
+  (38 records), each with evidence type, verification method, result, and limitations.
+- `execution/decisions/ledger.jsonl` — 40 records total; Phase 2's portion is D-0019 through D-0040
+  (22 records), each with reason, alternatives considered, and impact.
 - `execution/STATE.md` — human-readable narrative of what each unit built, for context only; the
   Evidence Ledger is the source of truth, not this narrative.
 

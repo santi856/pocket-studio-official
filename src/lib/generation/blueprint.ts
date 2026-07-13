@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { createNextVersion } from "@/lib/db-versioning";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import type { Blueprint, BlueprintValidationStatus, Prisma } from "@/generated/prisma/client";
 
@@ -52,52 +53,54 @@ export async function createBlueprintVersion(
 ): Promise<Blueprint> {
   await requireProjectAccess(actorUserId, projectId, "MEMBER");
 
-  return db.$transaction(async (tx) => {
-    const latest = await tx.blueprint.findFirst({
-      where: { projectId },
-      orderBy: { version: "desc" },
-    });
+  return createNextVersion(() =>
+    db.$transaction(async (tx) => {
+      const latest = await tx.blueprint.findFirst({
+        where: { projectId },
+        orderBy: { version: "desc" },
+      });
 
-    return tx.blueprint.create({
-      data: {
-        projectId,
-        version: (latest?.version ?? 0) + 1,
-        createdByUserId: actorUserId,
-        schemaVersion: input.schemaVersion,
-        productType: input.productType,
-        targetUsers: input.targetUsers,
-        roles: input.roles,
-        requirements: input.requirements,
-        workflows: input.workflows,
-        screens: input.screens,
-        navigation: input.navigation,
-        dataModels: input.dataModels,
-        permissions: input.permissions,
-        actions: input.actions,
-        integrations: input.integrations,
-        businessRules: input.businessRules,
-        monetization: input.monetization,
-        subscriptions: input.subscriptions,
-        ownerOperations: input.ownerOperations,
-        outputTargets: input.outputTargets,
-        themeAndStyle: input.themeAndStyle,
-        interactionContracts: input.interactionContracts,
-        assumptions: input.assumptions,
-        openDecisions: input.openDecisions,
-        memory: input.memory,
-        security: input.security,
-        privacy: input.privacy,
-        accessibility: input.accessibility,
-        governance: input.governance,
-        feasibility: input.feasibility,
-        generationMetadata: input.generationMetadata,
-        validationStatus: input.validationStatus,
-        validationErrors: input.validationErrors,
-        basedOnProductStateVersion: input.basedOnProductStateVersion,
-        basedOnProductDnaVersion: input.basedOnProductDnaVersion,
-      },
-    });
-  });
+      return tx.blueprint.create({
+        data: {
+          projectId,
+          version: (latest?.version ?? 0) + 1,
+          createdByUserId: actorUserId,
+          schemaVersion: input.schemaVersion,
+          productType: input.productType,
+          targetUsers: input.targetUsers,
+          roles: input.roles,
+          requirements: input.requirements,
+          workflows: input.workflows,
+          screens: input.screens,
+          navigation: input.navigation,
+          dataModels: input.dataModels,
+          permissions: input.permissions,
+          actions: input.actions,
+          integrations: input.integrations,
+          businessRules: input.businessRules,
+          monetization: input.monetization,
+          subscriptions: input.subscriptions,
+          ownerOperations: input.ownerOperations,
+          outputTargets: input.outputTargets,
+          themeAndStyle: input.themeAndStyle,
+          interactionContracts: input.interactionContracts,
+          assumptions: input.assumptions,
+          openDecisions: input.openDecisions,
+          memory: input.memory,
+          security: input.security,
+          privacy: input.privacy,
+          accessibility: input.accessibility,
+          governance: input.governance,
+          feasibility: input.feasibility,
+          generationMetadata: input.generationMetadata,
+          validationStatus: input.validationStatus,
+          validationErrors: input.validationErrors,
+          basedOnProductStateVersion: input.basedOnProductStateVersion,
+          basedOnProductDnaVersion: input.basedOnProductDnaVersion,
+        },
+      });
+    }),
+  );
 }
 
 export async function getLatestBlueprint(

@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { createNextVersion } from "@/lib/db-versioning";
 import type { PlanDefinition, PlanKey, Prisma } from "@/generated/prisma/client";
 
 export type PlanDefinitionInput = {
@@ -20,25 +21,27 @@ export async function upsertPlanVersion(
   definition: PlanDefinitionInput,
   actorUserId?: string,
 ): Promise<PlanDefinition> {
-  return db.$transaction(async (tx) => {
-    const previous = await tx.planDefinition.findFirst({
-      where: { planKey: definition.planKey },
-      orderBy: { version: "desc" },
-    });
+  return createNextVersion(() =>
+    db.$transaction(async (tx) => {
+      const previous = await tx.planDefinition.findFirst({
+        where: { planKey: definition.planKey },
+        orderBy: { version: "desc" },
+      });
 
-    return tx.planDefinition.create({
-      data: {
-        planKey: definition.planKey,
-        version: (previous?.version ?? 0) + 1,
-        name: definition.name,
-        monthlyPriceCents: definition.monthlyPriceCents,
-        annualPriceCents: definition.annualPriceCents,
-        currency: definition.currency ?? "usd",
-        entitlements: definition.entitlements,
-        createdByUserId: actorUserId,
-      },
-    });
-  });
+      return tx.planDefinition.create({
+        data: {
+          planKey: definition.planKey,
+          version: (previous?.version ?? 0) + 1,
+          name: definition.name,
+          monthlyPriceCents: definition.monthlyPriceCents,
+          annualPriceCents: definition.annualPriceCents,
+          currency: definition.currency ?? "usd",
+          entitlements: definition.entitlements,
+          createdByUserId: actorUserId,
+        },
+      });
+    }),
+  );
 }
 
 export async function getLatestPlan(planKey: PlanKey): Promise<PlanDefinition | null> {

@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { requireCurrentUser } from "@/lib/auth/current-user";
+import { requireCurrentUserForAction } from "@/lib/web/require-user";
 import { resolveProjectForRoute } from "@/lib/web/resolve-project";
 import { generateApplication } from "@/lib/generation/generation-orchestrator";
 import { submitScreenRecord } from "@/lib/generation/render-runtime";
@@ -10,7 +10,7 @@ import { InvalidRecordDataError, UnknownDataModelError } from "@/lib/generation/
 import { ForbiddenError } from "@/lib/tenancy/authz";
 
 export async function generateApplicationAction(formData: FormData): Promise<void> {
-  const user = await requireCurrentUser();
+  const user = await requireCurrentUserForAction();
   const orgSlug = String(formData.get("orgSlug") ?? "");
   const projectSlug = String(formData.get("projectSlug") ?? "");
 
@@ -45,7 +45,7 @@ export async function submitGeneratedRecordAction(
   screenName: string,
   formData: FormData,
 ): Promise<void> {
-  const user = await requireCurrentUser();
+  const user = await requireCurrentUserForAction();
   const { project } = await resolveProjectForRoute(user.id, orgSlug, projectSlug);
 
   const data: Record<string, string> = {};

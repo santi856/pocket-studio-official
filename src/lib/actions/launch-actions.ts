@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { requireCurrentUser } from "@/lib/auth/current-user";
+import { requireCurrentUserForAction } from "@/lib/web/require-user";
 import { resolveProjectForRoute } from "@/lib/web/resolve-project";
 import { NoGenerationToCheckError, runQualityGate } from "@/lib/generation/quality-gate";
 import {
@@ -32,7 +32,7 @@ import {
  */
 
 export async function runQualityGateAction(formData: FormData): Promise<void> {
-  const user = await requireCurrentUser();
+  const user = await requireCurrentUserForAction();
   const orgSlug = String(formData.get("orgSlug") ?? "");
   const projectSlug = String(formData.get("projectSlug") ?? "");
   const { project } = await resolveProjectForRoute(user.id, orgSlug, projectSlug);
@@ -50,7 +50,7 @@ export async function runQualityGateAction(formData: FormData): Promise<void> {
 }
 
 export async function assessStoreReadinessAction(formData: FormData): Promise<void> {
-  const user = await requireCurrentUser();
+  const user = await requireCurrentUserForAction();
   const orgSlug = String(formData.get("orgSlug") ?? "");
   const projectSlug = String(formData.get("projectSlug") ?? "");
   const { project } = await resolveProjectForRoute(user.id, orgSlug, projectSlug);
@@ -68,7 +68,7 @@ export async function assessStoreReadinessAction(formData: FormData): Promise<vo
 }
 
 export async function generateMobileProjectAction(formData: FormData): Promise<void> {
-  const user = await requireCurrentUser();
+  const user = await requireCurrentUserForAction();
   const orgSlug = String(formData.get("orgSlug") ?? "");
   const projectSlug = String(formData.get("projectSlug") ?? "");
   const { project } = await resolveProjectForRoute(user.id, orgSlug, projectSlug);
@@ -92,7 +92,7 @@ const GENERATABLE_POLICY_TYPES: readonly GeneratablePolicyDocumentType[] = [
 ];
 
 export async function generatePolicyDraftAction(formData: FormData): Promise<void> {
-  const user = await requireCurrentUser();
+  const user = await requireCurrentUserForAction();
   const orgSlug = String(formData.get("orgSlug") ?? "");
   const projectSlug = String(formData.get("projectSlug") ?? "");
   const type = String(formData.get("type") ?? "");
@@ -117,7 +117,7 @@ export async function generatePolicyDraftAction(formData: FormData): Promise<voi
 }
 
 export async function restoreBlueprintVersionAction(formData: FormData): Promise<void> {
-  const user = await requireCurrentUser();
+  const user = await requireCurrentUserForAction();
   const orgSlug = String(formData.get("orgSlug") ?? "");
   const projectSlug = String(formData.get("projectSlug") ?? "");
   const targetVersion = Number(formData.get("targetVersion"));

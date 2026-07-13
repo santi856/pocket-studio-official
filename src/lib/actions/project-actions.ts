@@ -1,13 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { requireCurrentUser } from "@/lib/auth/current-user";
+import { requireCurrentUserForAction } from "@/lib/web/require-user";
 import { db } from "@/lib/db";
 import { createProject } from "@/lib/services/projects";
 import { ForbiddenError } from "@/lib/tenancy/authz";
 
 export async function createProjectAction(formData: FormData): Promise<void> {
-  const user = await requireCurrentUser();
+  const user = await requireCurrentUserForAction();
   const organizationSlug = String(formData.get("organizationSlug") ?? "");
   const name = String(formData.get("name") ?? "").trim();
 

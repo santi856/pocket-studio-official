@@ -1,12 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { requireCurrentUser } from "@/lib/auth/current-user";
+import { requireCurrentUserForAction } from "@/lib/web/require-user";
 import { createOrganization } from "@/lib/services/organizations";
 import { createSubscription } from "@/lib/billing/subscription";
 
 export async function createOrganizationAction(formData: FormData): Promise<void> {
-  const user = await requireCurrentUser();
+  const user = await requireCurrentUserForAction();
   const name = String(formData.get("name") ?? "").trim();
 
   if (!name) {

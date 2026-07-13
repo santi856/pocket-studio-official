@@ -91,6 +91,30 @@ describe("Canonical Product State versioning", () => {
     expect(state.businessModelBrief).toMatchObject({ revenueModel: "deposits + subscriptions" });
   });
 
+  it("survives concurrent version creation without crashing (Phase 2 Level 3 review round 1, finding 1)", async () => {
+    const { owner, project } = await seedProject();
+
+    // Two callers racing to create the next version (e.g. a double-clicked
+    // "Generate app" button) both read the same "latest version" before
+    // either commits — Postgres READ COMMITTED does not serialize this, so
+    // both would try to insert the same next version number and one would
+    // previously crash with an uncaught unique-constraint error instead of
+    // succeeding. createNextVersion (db-versioning.ts) retries the losing
+    // transaction so both calls genuinely succeed with distinct versions.
+    const CONCURRENT_WRITERS = 10;
+    const results = await Promise.all(
+      Array.from({ length: CONCURRENT_WRITERS }, (_, i) =>
+        createProductStateVersion(owner.id, project.id, { originalIdea: `concurrent idea ${i}` }),
+      ),
+    );
+
+    const versions = results.map((r) => r.version).sort((a, b) => a - b);
+    expect(versions).toEqual(Array.from({ length: CONCURRENT_WRITERS }, (_, i) => i + 1));
+
+    const history = await listProductStateVersions(owner.id, project.id);
+    expect(history).toHaveLength(CONCURRENT_WRITERS);
+  });
+
   it("denies reading or writing Product State for a non-member (tenant isolation)", async () => {
     const { owner, outsider, project } = await seedProject();
     await createProductStateVersion(owner.id, project.id, { originalIdea: "idea" });

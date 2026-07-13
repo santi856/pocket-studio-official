@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { requireCurrentUser } from "@/lib/auth/current-user";
+import { requireCurrentUserForAction } from "@/lib/web/require-user";
 import { resolveProjectForRoute } from "@/lib/web/resolve-project";
 import { beginChangeFlow, respondToChangeSetDecision } from "@/lib/orchestration/change-flow";
 import { DecisionNotPendingError } from "@/lib/product/decisions";
@@ -10,7 +10,7 @@ import { defaultUnitEconomicsAssumptions } from "@/lib/orchestration/unit-econom
 import type { UnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
 
 export async function submitIdeaAction(formData: FormData): Promise<void> {
-  const user = await requireCurrentUser();
+  const user = await requireCurrentUserForAction();
   const orgSlug = String(formData.get("orgSlug") ?? "");
   const projectSlug = String(formData.get("projectSlug") ?? "");
   const text = String(formData.get("text") ?? "").trim();
@@ -25,7 +25,7 @@ export async function submitIdeaAction(formData: FormData): Promise<void> {
 }
 
 export async function respondToDecisionAction(formData: FormData): Promise<void> {
-  const user = await requireCurrentUser();
+  const user = await requireCurrentUserForAction();
   const orgSlug = String(formData.get("orgSlug") ?? "");
   const projectSlug = String(formData.get("projectSlug") ?? "");
   const decisionId = String(formData.get("decisionId") ?? "");
@@ -74,7 +74,7 @@ const UNIT_ECONOMICS_FIELDS = [
  * never silently reclassified as a platform "estimate."
  */
 export async function updateUnitEconomicsAction(formData: FormData): Promise<void> {
-  const user = await requireCurrentUser();
+  const user = await requireCurrentUserForAction();
   const orgSlug = String(formData.get("orgSlug") ?? "");
   const projectSlug = String(formData.get("projectSlug") ?? "");
 

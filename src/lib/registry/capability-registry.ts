@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { createNextVersion } from "@/lib/db-versioning";
 import type {
   CapabilityImplementationLevel,
   CapabilityRegistryEntry,
@@ -31,30 +32,32 @@ export async function upsertCapabilityVersion(
   definition: CapabilityDefinition,
   actorUserId?: string,
 ): Promise<CapabilityRegistryEntry> {
-  return db.$transaction(async (tx) => {
-    const previous = await tx.capabilityRegistryEntry.findFirst({
-      where: { capabilityKey: definition.capabilityKey },
-      orderBy: { version: "desc" },
-    });
+  return createNextVersion(() =>
+    db.$transaction(async (tx) => {
+      const previous = await tx.capabilityRegistryEntry.findFirst({
+        where: { capabilityKey: definition.capabilityKey },
+        orderBy: { version: "desc" },
+      });
 
-    return tx.capabilityRegistryEntry.create({
-      data: {
-        capabilityKey: definition.capabilityKey,
-        version: (previous?.version ?? 0) + 1,
-        label: definition.label,
-        category: definition.category,
-        outputTargets: definition.outputTargets,
-        implementationLevel: definition.implementationLevel,
-        requiredIntegrations: definition.requiredIntegrations,
-        evidenceStandard: definition.evidenceStandard,
-        riskClass: definition.riskClass,
-        limitations: definition.limitations,
-        providerDependencies: definition.providerDependencies,
-        launchImplications: definition.launchImplications,
-        createdByUserId: actorUserId,
-      },
-    });
-  });
+      return tx.capabilityRegistryEntry.create({
+        data: {
+          capabilityKey: definition.capabilityKey,
+          version: (previous?.version ?? 0) + 1,
+          label: definition.label,
+          category: definition.category,
+          outputTargets: definition.outputTargets,
+          implementationLevel: definition.implementationLevel,
+          requiredIntegrations: definition.requiredIntegrations,
+          evidenceStandard: definition.evidenceStandard,
+          riskClass: definition.riskClass,
+          limitations: definition.limitations,
+          providerDependencies: definition.providerDependencies,
+          launchImplications: definition.launchImplications,
+          createdByUserId: actorUserId,
+        },
+      });
+    }),
+  );
 }
 
 export async function getLatestCapability(

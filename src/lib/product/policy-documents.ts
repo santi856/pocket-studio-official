@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { createNextVersion } from "@/lib/db-versioning";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import type { PolicyDocument, PolicyDocumentType } from "@/generated/prisma/client";
 
@@ -25,25 +26,27 @@ export async function createPolicyDocumentDraft(
 
   const language = input.language ?? "en";
 
-  return db.$transaction(async (tx) => {
-    const previous = await tx.policyDocument.findFirst({
-      where: { projectId, type: input.type, language },
-      orderBy: { version: "desc" },
-    });
+  return createNextVersion(() =>
+    db.$transaction(async (tx) => {
+      const previous = await tx.policyDocument.findFirst({
+        where: { projectId, type: input.type, language },
+        orderBy: { version: "desc" },
+      });
 
-    return tx.policyDocument.create({
-      data: {
-        projectId,
-        type: input.type,
-        language,
-        version: (previous?.version ?? 0) + 1,
-        status: "DRAFT",
-        content: input.content,
-        basedOnProductStateVersion: input.basedOnProductStateVersion,
-        createdByUserId: actorUserId,
-      },
-    });
-  });
+      return tx.policyDocument.create({
+        data: {
+          projectId,
+          type: input.type,
+          language,
+          version: (previous?.version ?? 0) + 1,
+          status: "DRAFT",
+          content: input.content,
+          basedOnProductStateVersion: input.basedOnProductStateVersion,
+          createdByUserId: actorUserId,
+        },
+      });
+    }),
+  );
 }
 
 export async function getLatestPolicyDocument(

@@ -11,8 +11,8 @@ Human-readable companion to `execution/state.json`. `state.json` is authoritativ
 - **Phase 2** — Full-Stack Generation, Editing, Mobile Output, Business Operations, and Verification
   (Master Spec §54-59) — all 17 implementation units (P2-01..P2-17) **complete**. Demonstration
   product: "Build a premium booking app for mobile detailers" (§56).
-- **Active implementation unit:** P2-EXIT (assemble Phase 2 evidence, checkpoint, Level 3 independent
-  review against §59)
+- **Active implementation unit:** P2-EXIT (round 1 Level 3 review returned **revise**; all 4 findings
+  repaired — D-0040, EV-0085; round 2 independent review next)
 
 ## Phase 2 Decomposition
 
@@ -41,7 +41,7 @@ says otherwise.
 | P2-15 ✅ | Mobile architecture selection + generated mobile project                                                                   | §41                      | P2-01, P2-04                                |
 | P2-16 ✅ | Mobile-commerce classification + Store Readiness Engine                                                                    | §42, §44                 | P2-15                                       |
 | P2-17 ✅ | Studio UI wiring — versions/restore, Quality Gate, Store Readiness, mobile project, legal drafts, export                   | §6, §7                   | P2-01..P2-16                                |
-| P2-EXIT  | Assemble Phase 2 evidence, checkpoint, Level 3 independent review against §59 — **active**                                 | §16 (Execution Protocol) | all above                                   |
+| P2-EXIT  | Assemble Phase 2 evidence, checkpoint, Level 3 independent review against §59 — round 1 **revise**, repaired, round 2 next | §16 (Execution Protocol) | all above                                   |
 
 ## Phase 2 Completed
 
@@ -413,6 +413,29 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
   business activity, alerts — describes production monitoring systems that don't exist yet, Phase 3
   scope); restore has no diff-preview step in the UI; migration planning (P2-12) still has no UI
   surface at all. See `D-0038`, `EV-0083`.
+- **P2-EXIT round 1 review and repair.** An independent, fresh-context Level 3 reviewer (Review
+  Protocol §2) audited Phase 2 against commit `605e62d` and returned verdict **revise**
+  (`execution/reviews/level3/phase-2/ROUND_1_REVIEW.md`), citing two CRITICAL DEFECTs it live-reproduced
+  against a real running instance: (1) a version-creation race — `createBlueprintVersion`/
+  `createProductStateVersion`'s read-latest-then-create-next-version pattern is not serialized under
+  Postgres's default READ COMMITTED isolation, so a double-clicked "Generate app" could crash to a raw
+  Prisma `P2002` error instead of the graceful `?error=` redirect this codebase requires everywhere
+  else; (2) every Server Action crashed to a raw error page on an expired/absent session instead of
+  redirecting to sign-in, since no action caught `UnauthenticatedError` (the two P2-14 Route Handlers
+  already did this correctly). Plus two DEFECTs: the §56 demonstration-product content gap needed an
+  explicit phase-exit-level acknowledgment rather than D-0028's routine self-classification; `sw.js` was
+  missing the same auth/tenant gate its sibling `manifest.webmanifest` route has. All four were fixed
+  (`D-0040`, `EV-0085`): `src/lib/db-versioning.ts`'s `createNextVersion()` adds a shared
+  retry-with-jittered-backoff wrapper, applied to all 8 append-only versioned models that share the
+  racy pattern (not just the two reproduced); `requireCurrentUserForAction()`
+  (`src/lib/web/require-user.ts`) replaces `requireCurrentUser()` across all 6 Server Action files;
+  `D-0039` records the explicit §56/§59 acknowledgment; `sw.js` now carries the same gate as
+  `manifest.webmanifest`. Both critical fixes were adversarially self-verified before being trusted:
+  each was reverted, confirmed a new regression test reproduces the reviewer's exact live failure (a
+  10-concurrent-writer integration test genuinely hits `P2002` without the fix;
+  `e2e/auth-guard.spec.ts`'s new expired-session test genuinely crashes without the fix), then restored
+  and reconfirmed green. Full suite green (382/382 unit+integration — 377 prior + 5 new, 12/12 e2e — 11
+  prior + 1 new, clean typecheck/lint/format, production build). Next: round 2 independent review.
 
 ## Completed
 
@@ -593,9 +616,10 @@ booking app for mobile detailers."` — through the full pipeline end to end, li
 
 ## Active
 
-- P2-EXIT: assembling the Phase 2 Completion Report + Exit Package under
-  `execution/reviews/level3/phase-2/` and preparing to spawn the independent Level 3 review. This is
-  the one designated pause point in Phase 2 — see `execution/state.json`'s `nextAction`.
+- P2-EXIT: round 1 Level 3 review returned **revise** (`execution/reviews/level3/phase-2/
+ROUND_1_REVIEW.md`); all 4 findings repaired and adversarially self-verified (D-0040, EV-0085).
+  Committing this repair cycle, then spawning an independent, fresh-context round 2 reviewer. This
+  remains the one designated pause point in Phase 2 — see `execution/state.json`'s `nextAction`.
 
 ## Deferred
 
@@ -630,11 +654,11 @@ copies drifting apart. Every Phase 1 known limitation not resolved by Phase 2's 
 
 ## Next Action
 
-See `execution/state.json`'s `nextAction` (kept as the single source of truth). Summary: all 17 Phase 2
-implementation units are complete; assemble the Phase 2 Completion Report + Exit Package, re-verify the
-full test suite immediately before commit, commit, then spawn an independent fresh-context Level 3
-reviewer per Review Protocol §2 to accept or reject Phase 2 against §59's exit criteria — the one
-designated pause point in this phase.
+See `execution/state.json`'s `nextAction` (kept as the single source of truth). Summary: commit the
+round 1 repair cycle, then spawn a second independent, fresh-context Level 3 reviewer per Review
+Protocol §2 for round 2 — give it the round 1 findings and this repair's evidence, and ask it to
+independently re-verify each fix live rather than trust this summary, mirroring exactly how Phase 1's
+round 2 review worked. This remains the one designated pause point in this phase.
 
 ## Decision Ledger Pointer
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { createNextVersion } from "@/lib/db-versioning";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import { Prisma } from "@/generated/prisma/client";
 import type { ProductDNA } from "@/generated/prisma/client";
@@ -56,63 +57,65 @@ export async function updateProductDNA(
 ): Promise<ProductDNA> {
   await requireProjectAccess(actorUserId, projectId, "MEMBER");
 
-  return db.$transaction(async (tx) => {
-    const previous = await tx.productDNA.findFirst({
-      where: { projectId },
-      orderBy: { version: "desc" },
-    });
+  return createNextVersion(() =>
+    db.$transaction(async (tx) => {
+      const previous = await tx.productDNA.findFirst({
+        where: { projectId },
+        orderBy: { version: "desc" },
+      });
 
-    const originalIdea = "originalIdea" in input ? input.originalIdea : previous?.originalIdea;
-    if (!originalIdea) {
-      throw new Error("Product DNA requires originalIdea on its first version.");
-    }
+      const originalIdea = "originalIdea" in input ? input.originalIdea : previous?.originalIdea;
+      if (!originalIdea) {
+        throw new Error("Product DNA requires originalIdea on its first version.");
+      }
 
-    return tx.productDNA.create({
-      data: {
-        projectId,
-        version: (previous?.version ?? 0) + 1,
-        createdByUserId: actorUserId,
-        originalIdea,
-        purpose: "purpose" in input ? input.purpose : previous?.purpose,
-        problem: "problem" in input ? input.problem : previous?.problem,
-        targetUsers: toJsonCreateValue(
-          "targetUsers" in input ? input.targetUsers : previous?.targetUsers,
-        ),
-        productThesis: "productThesis" in input ? input.productThesis : previous?.productThesis,
-        differentiation:
-          "differentiation" in input ? input.differentiation : previous?.differentiation,
-        productEdge: "productEdge" in input ? input.productEdge : previous?.productEdge,
-        customerPromise:
-          "customerPromise" in input ? input.customerPromise : previous?.customerPromise,
-        brandDirection: toJsonCreateValue(
-          "brandDirection" in input ? input.brandDirection : previous?.brandDirection,
-        ),
-        businessModel: "businessModel" in input ? input.businessModel : previous?.businessModel,
-        monetizationDirection:
-          "monetizationDirection" in input
-            ? input.monetizationDirection
-            : previous?.monetizationDirection,
-        constraints: toJsonCreateValue(
-          "constraints" in input ? input.constraints : previous?.constraints,
-        ),
-        nonNegotiables: toJsonCreateValue(
-          "nonNegotiables" in input ? input.nonNegotiables : previous?.nonNegotiables,
-        ),
-        acceptedDecisions: toJsonCreateValue(
-          "acceptedDecisions" in input ? input.acceptedDecisions : previous?.acceptedDecisions,
-        ),
-        rejectedDecisions: toJsonCreateValue(
-          "rejectedDecisions" in input ? input.rejectedDecisions : previous?.rejectedDecisions,
-        ),
-        openQuestions: toJsonCreateValue(
-          "openQuestions" in input ? input.openQuestions : previous?.openQuestions,
-        ),
-        knownRisks: toJsonCreateValue(
-          "knownRisks" in input ? input.knownRisks : previous?.knownRisks,
-        ),
-      },
-    });
-  });
+      return tx.productDNA.create({
+        data: {
+          projectId,
+          version: (previous?.version ?? 0) + 1,
+          createdByUserId: actorUserId,
+          originalIdea,
+          purpose: "purpose" in input ? input.purpose : previous?.purpose,
+          problem: "problem" in input ? input.problem : previous?.problem,
+          targetUsers: toJsonCreateValue(
+            "targetUsers" in input ? input.targetUsers : previous?.targetUsers,
+          ),
+          productThesis: "productThesis" in input ? input.productThesis : previous?.productThesis,
+          differentiation:
+            "differentiation" in input ? input.differentiation : previous?.differentiation,
+          productEdge: "productEdge" in input ? input.productEdge : previous?.productEdge,
+          customerPromise:
+            "customerPromise" in input ? input.customerPromise : previous?.customerPromise,
+          brandDirection: toJsonCreateValue(
+            "brandDirection" in input ? input.brandDirection : previous?.brandDirection,
+          ),
+          businessModel: "businessModel" in input ? input.businessModel : previous?.businessModel,
+          monetizationDirection:
+            "monetizationDirection" in input
+              ? input.monetizationDirection
+              : previous?.monetizationDirection,
+          constraints: toJsonCreateValue(
+            "constraints" in input ? input.constraints : previous?.constraints,
+          ),
+          nonNegotiables: toJsonCreateValue(
+            "nonNegotiables" in input ? input.nonNegotiables : previous?.nonNegotiables,
+          ),
+          acceptedDecisions: toJsonCreateValue(
+            "acceptedDecisions" in input ? input.acceptedDecisions : previous?.acceptedDecisions,
+          ),
+          rejectedDecisions: toJsonCreateValue(
+            "rejectedDecisions" in input ? input.rejectedDecisions : previous?.rejectedDecisions,
+          ),
+          openQuestions: toJsonCreateValue(
+            "openQuestions" in input ? input.openQuestions : previous?.openQuestions,
+          ),
+          knownRisks: toJsonCreateValue(
+            "knownRisks" in input ? input.knownRisks : previous?.knownRisks,
+          ),
+        },
+      });
+    }),
+  );
 }
 
 export async function getLatestProductDNA(
