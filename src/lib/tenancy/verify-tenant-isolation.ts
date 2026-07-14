@@ -144,6 +144,10 @@ function hasTenantScopedStringParam(node: ts.FunctionDeclaration): boolean {
   });
 }
 
+function functionKey(file: string, name: string): string {
+  return `${file}:${name}`;
+}
+
 /**
  * Parses every `.ts` file under `src/lib` (excluding tests) and, for every
  * exported async function whose parameter list includes `projectId:
@@ -154,20 +158,33 @@ function hasTenantScopedStringParam(node: ts.FunctionDeclaration): boolean {
  * gap: it can read or write tenant-scoped data without ever checking the
  * caller belongs to that tenant.
  *
- * This is a name-based call graph, not a fully type-resolved one — two
- * unrelated functions sharing the same name in different files would be
- * conflated. Proportional for this codebase's actual size and its
- * consistent one-function-one-name convention; a full TypeScript
- * type-checker-based resolution would be the next step if that convention
- * is ever violated.
+ * This is a name-based call graph, not a fully type-resolved one — but
+ * every declaration is stored keyed by *file-qualified* name
+ * (`functionsByKey`), never a bare name alone, so two unrelated functions
+ * sharing the same name in different files can never silently overwrite
+ * each other (Level 3 review round 1, DEFECT 2 — a synthetic fixture
+ * proved the prior bare-name-keyed map let a genuine violation go
+ * unreported when a same-named, compliant helper in another file was
+ * processed later and won the map slot). Call resolution
+ * (`resolveCall`) prefers a same-file declaration first — the dominant
+ * real case, an exported function delegating to a local private helper —
+ * and only falls back to a cross-file lookup when the name is genuinely
+ * unambiguous (declared in exactly one file). A call whose target name is
+ * ambiguous across files, and not resolvable in the caller's own file, is
+ * treated as *not* reaching an authz root: the safe default for a
+ * security-relevant analyzer is a false positive (a compliant function
+ * gets flagged for human review) over a false negative (a real violation
+ * goes unreported).
  */
 export function findTenantIsolationViolations(
   rootDir = path.resolve(process.cwd(), "src/lib"),
 ): TenantIsolationViolation[] {
   const files = collectSourceFiles(rootDir);
-  const functions = new Map<string, FunctionInfo>();
+  const functionsByKey = new Map<string, FunctionInfo>();
+  const functionsByName = new Map<string, FunctionInfo[]>();
 
   for (const file of files) {
+    const relativeFile = path.relative(process.cwd(), file);
     const sourceText = fs.readFileSync(file, "utf8");
     const sourceFile = ts.createSourceFile(file, sourceText, ts.ScriptTarget.Latest, true);
 
@@ -192,45 +209,59 @@ export function findTenantIsolationViolations(
         }
 
         const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
-        functions.set(node.name.text, {
+        const info: FunctionInfo = {
           name: node.name.text,
-          file: path.relative(process.cwd(), file),
+          file: relativeFile,
           line: line + 1,
           isExported: node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false,
           isTenantScoped: hasTenantScopedStringParam(node),
           calls,
-        });
+        };
+        functionsByKey.set(functionKey(relativeFile, info.name), info);
+        const sameName = functionsByName.get(info.name) ?? [];
+        sameName.push(info);
+        functionsByName.set(info.name, sameName);
       }
       ts.forEachChild(node, visit);
     };
     visit(sourceFile);
   }
 
-  const reachesAuthzRoot = (startName: string): boolean => {
+  const resolveCall = (callerFile: string, calleeName: string): FunctionInfo | undefined => {
+    const sameFile = functionsByKey.get(functionKey(callerFile, calleeName));
+    if (sameFile) return sameFile;
+
+    const candidates = functionsByName.get(calleeName) ?? [];
+    return candidates.length === 1 ? candidates[0] : undefined;
+  };
+
+  const reachesAuthzRoot = (start: FunctionInfo): boolean => {
     const seen = new Set<string>();
-    const stack = [startName];
+    const stack = [start];
     while (stack.length > 0) {
       const current = stack.pop()!;
-      if (seen.has(current)) continue;
-      seen.add(current);
+      const key = functionKey(current.file, current.name);
+      if (seen.has(key)) continue;
+      seen.add(key);
 
-      const info = functions.get(current);
-      const calls = info?.calls ?? new Set<string>();
-      for (const called of calls) {
+      for (const called of current.calls) {
         if (AUTHZ_ROOTS.has(called)) return true;
-        if (!seen.has(called)) stack.push(called);
+        const resolved = resolveCall(current.file, called);
+        if (resolved && !seen.has(functionKey(resolved.file, resolved.name))) {
+          stack.push(resolved);
+        }
       }
     }
     return false;
   };
 
   const violations: TenantIsolationViolation[] = [];
-  for (const info of functions.values()) {
+  for (const info of functionsByKey.values()) {
     if (!info.isExported) continue;
     if (!info.isTenantScoped) continue;
     if (AUTHZ_ROOTS.has(info.name)) continue;
     if (ALLOWED_EXCEPTIONS.has(info.name)) continue;
-    if (!reachesAuthzRoot(info.name)) {
+    if (!reachesAuthzRoot(info)) {
       violations.push({ functionName: info.name, file: info.file, line: info.line });
     }
   }

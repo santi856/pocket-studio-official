@@ -6,6 +6,7 @@ import {
   applyBillingLifecycleEventFromWebhook,
   findOrganizationIdByBillingProviderCustomerId,
 } from "./subscription";
+import { InvalidBillingTransitionError } from "./access";
 import type { BillingLifecycleEvent } from "./access";
 
 export class UnrecognizedWebhookOrganizationError extends Error {
@@ -84,6 +85,23 @@ export async function processBillingWebhook(
     throw new UnrecognizedWebhookOrganizationError();
   }
 
-  await applyBillingLifecycleEventFromWebhook(organizationId, mappedEvent);
+  try {
+    await applyBillingLifecycleEventFromWebhook(organizationId, mappedEvent);
+  } catch (error) {
+    // Real Stripe usage: invoice.payment_succeeded fires on every
+    // successful invoice charge, not just failure recovery — overwhelmingly
+    // the ordinary renewal of an already-ACTIVE subscription, which has
+    // nothing to "recover" from. nextBillingState (src/lib/billing/access.ts)
+    // only defines PAYMENT_RECOVERED as a real transition from a
+    // failure-adjacent state; an ACTIVE/TRIALING-origin success (or any
+    // other state with no defined transition) is a genuine no-op, not an
+    // error — the event was still real and is still durably recorded via
+    // the idempotency check above, it simply implies no BillingEvent state
+    // change.
+    if (mappedEvent === "PAYMENT_RECOVERED" && error instanceof InvalidBillingTransitionError) {
+      return { status: "processed", event: mappedEvent };
+    }
+    throw error;
+  }
   return { status: "processed", event: mappedEvent };
 }

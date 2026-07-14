@@ -101,4 +101,50 @@ describe("processBillingWebhook", () => {
     });
     expect(recorded).not.toBeNull();
   });
+
+  describe("invoice.payment_succeeded against an already-healthy subscription (Level 3 review round 1, DEFECT 1)", () => {
+    it("does not crash on the ordinary renewal of an ACTIVE subscription — a real no-op, not an error", async () => {
+      const { owner, org } = await seedLinkedOrg("cus_renewal_1");
+      const before = await db.billingEvent.count();
+
+      const result = await processBillingWebhook(
+        eventBody("evt_renewal_1", "invoice.payment_succeeded", "cus_renewal_1"),
+        "mock-signature",
+      );
+
+      expect(result).toEqual({ status: "processed", event: "PAYMENT_RECOVERED" });
+      const subscription = await getSubscription(owner.id, org.id);
+      expect(subscription?.billingState).toBe("ACTIVE");
+      // No new BillingEvent transition was recorded for the no-op.
+      expect(await db.billingEvent.count()).toBe(before);
+    });
+
+    it("still permits a genuine payment recovery from a failure-adjacent state", async () => {
+      const { owner, org } = await seedLinkedOrg("cus_recovery_1");
+      await db.organizationSubscription.update({
+        where: { organizationId: org.id },
+        data: { billingState: "PAST_DUE" },
+      });
+
+      const result = await processBillingWebhook(
+        eventBody("evt_recovery_1", "invoice.payment_succeeded", "cus_recovery_1"),
+        "mock-signature",
+      );
+
+      expect(result).toEqual({ status: "processed", event: "PAYMENT_RECOVERED" });
+      const subscription = await getSubscription(owner.id, org.id);
+      expect(subscription?.billingState).toBe("ACTIVE");
+    });
+
+    it("the idempotency check still recognizes a redelivery of the same no-op event", async () => {
+      await seedLinkedOrg("cus_renewal_2");
+      const body = eventBody("evt_renewal_2", "invoice.payment_succeeded", "cus_renewal_2");
+
+      const first = await processBillingWebhook(body, "mock-signature");
+      const second = await processBillingWebhook(body, "mock-signature");
+
+      expect(first).toEqual({ status: "processed", event: "PAYMENT_RECOVERED" });
+      expect(second).toEqual({ status: "duplicate_ignored" });
+    });
+  });
 });

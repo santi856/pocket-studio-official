@@ -41,6 +41,14 @@ describe("findTenantIsolationViolations detector correctness (against synthetic 
     return tempDir;
   }
 
+  function writeMultiFileFixture(files: Record<string, string>): string {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tenant-isolation-fixture-"));
+    for (const [name, contents] of Object.entries(files)) {
+      fs.writeFileSync(path.join(tempDir, name), contents);
+    }
+    return tempDir;
+  }
+
   it("flags a project-scoped function that never checks access — proves the detector is not vacuous", () => {
     const dir = writeFixture(`
       export async function leaksData(actorUserId: string, projectId: string) {
@@ -145,5 +153,53 @@ describe("findTenantIsolationViolations detector correctness (against synthetic 
     expect(violations).toEqual([
       { functionName: "delegatesToUncheckedHelper", file: expect.any(String), line: 6 },
     ]);
+  });
+
+  it("still flags a real violation even when a same-named, compliant helper exists in a different file (Level 3 review round 1, DEFECT 2) — proves same-name declarations across files never collide in the graph", () => {
+    const dir = writeMultiFileFixture({
+      "compliant.ts": `
+        async function helper(actorUserId: string, projectId: string) {
+          await requireProjectAccess(actorUserId, projectId, "MEMBER");
+          return db.project.findUnique({ where: { id: projectId } });
+        }
+
+        export async function compliantCaller(actorUserId: string, projectId: string) {
+          return helper(actorUserId, projectId);
+        }
+      `,
+      "violating.ts": `
+        async function helper(projectId: string) {
+          return db.project.findUnique({ where: { id: projectId } });
+        }
+
+        export async function violatingCaller(actorUserId: string, projectId: string) {
+          return helper(projectId);
+        }
+      `,
+    });
+
+    const violations = findTenantIsolationViolations(dir);
+
+    expect(violations).toEqual([
+      { functionName: "violatingCaller", file: expect.any(String), line: 6 },
+    ]);
+  });
+
+  it("resolves a call to an unambiguous cross-file same-named function correctly", () => {
+    const dir = writeMultiFileFixture({
+      "helpers.ts": `
+        export async function sharedHelper(actorUserId: string, projectId: string) {
+          await requireProjectAccess(actorUserId, projectId, "MEMBER");
+          return db.project.findUnique({ where: { id: projectId } });
+        }
+      `,
+      "caller.ts": `
+        export async function callsSharedHelper(actorUserId: string, projectId: string) {
+          return sharedHelper(actorUserId, projectId);
+        }
+      `,
+    });
+
+    expect(findTenantIsolationViolations(dir)).toEqual([]);
   });
 });

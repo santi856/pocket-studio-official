@@ -71,8 +71,6 @@ export async function GET(request: Request) {
     );
   }
 
-  const destination = await redirectDestination(pending.projectId);
-
   try {
     await completeOAuthConnection(user.id, state, code, config);
   } catch (error) {
@@ -81,16 +79,19 @@ export async function GET(request: Request) {
       error instanceof OAuthCallbackActorMismatchError ||
       error instanceof OAuthTokenExchangeError
     ) {
+      // Resolve to a generic path, never the real org/project slug this
+      // callback has not yet proven the caller is authorized to see
+      // (Level 3 review round 1, DEFECT 5) — the actor-mismatch/state-
+      // mismatch/token-exchange failure means this request has not
+      // established the right to know where `pending.projectId` lives.
       return NextResponse.redirect(
-        new URL(
-          `${destination}?integrationError=${encodeURIComponent(error.message)}`,
-          request.url,
-        ),
+        new URL(`/dashboard?integrationError=${encodeURIComponent(error.message)}`, request.url),
       );
     }
     throw error;
   }
 
+  const destination = await redirectDestination(pending.projectId);
   return NextResponse.redirect(new URL(`${destination}?integrationConnected=1`, request.url));
 }
 

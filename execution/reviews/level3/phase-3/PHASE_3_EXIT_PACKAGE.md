@@ -5,6 +5,58 @@ records, Truth Status, the Decision Ledger, and test/build results — never wri
 confidence). This is the entry point for the Level 3 independent phase-exit reviewer (Review Protocol
 §2). It is a factual index, not an argument for acceptance.
 
+## Round 1 review outcome and fixes (read before re-reviewing)
+
+An independent, fresh-context Level 3 reviewer already reviewed this phase once, against commit
+`3d1c816`. Verdict: **revise**. Full record: `execution/reviews/level3/phase-3/ROUND_1_REVIEW.md`.
+
+One CRITICAL DEFECT, live-reproduced against a real running Postgres database (not mocks): the real
+Stripe webhook handler (`src/lib/billing/webhook-processing.ts`) unconditionally mapped
+`invoice.payment_succeeded` → `PAYMENT_RECOVERED`, but `nextBillingState`
+(`src/lib/billing/access.ts`) only defines that as a real transition from a failure-adjacent state. In
+real Stripe usage, `invoice.payment_succeeded` fires on every successful invoice charge — overwhelmingly
+the ordinary renewal of an already-`ACTIVE` subscription, not a failure-recovery edge case — so this
+crashed on the single most common real-world billing webhook every paying customer would generate.
+Worse, the idempotency record committed before the failing transition, so the event could never be
+successfully retried after its first failure.
+
+Plus four non-blocking findings: the tenant-isolation static analyzer keyed its internal function map by
+bare name, which a synthetic fixture proved can let a same-named, compliant helper in one file mask a
+genuine violation in another (13 real name collisions already exist in this codebase's style, none
+currently on a tenant-scoped path); 2 execution-record files had real prettier formatting drift the exit
+package's own validation table had claimed was clean; the P3-02 rate limiter's X-Forwarded-For spoofing
+dependency was disclosed only in a code comment, not customer-facing Known Limitations; and the OAuth
+callback route resolved a project's org/project slug before its actor-mismatch check ran.
+
+**All five were fixed in D-0062 (EV-0107)**, both non-trivial fixes adversarially self-verified by
+reverting them, confirming a new regression test reproduces the reviewer's exact finding, then restoring
+and reconfirming green:
+
+- `src/lib/billing/webhook-processing.ts` now catches `InvalidBillingTransitionError` specifically for
+  the `PAYMENT_RECOVERED` case and treats it as a real, durably-recorded no-op rather than an error — a
+  success event with nothing to recover from is not a failure. Verified: reverted the fix, confirmed a
+  new integration test genuinely reproduces the reviewer's exact `InvalidBillingTransitionError` crash,
+  restored the fix, reconfirmed green (8/8 webhook tests, including a regression test proving genuine
+  failure-adjacent recovery still works).
+- `src/lib/tenancy/verify-tenant-isolation.ts` now stores every function declaration keyed by
+  file-qualified name and resolves calls with same-file precedence, falling back only to an unambiguous
+  (single-file) cross-file match — a genuinely ambiguous call is treated as unresolved, the safe default
+  for a security-relevant analyzer. Verified: reverted the fix, confirmed the reviewer's exact two-file
+  same-name-collision fixture produces incorrect, order-dependent results against the old code, restored
+  the fix, reconfirmed green (12/12 tenant-isolation tests, 0 violations against the real codebase).
+- `execution/reviews/level3/phase-3/PHASE_3_EXIT_PACKAGE.md` and `execution/state.json` reformatted with
+  Prettier.
+- Known Limitations (below) now explicitly discloses the X-Forwarded-For spoofing dependency.
+- `src/app/api/integrations/oauth/callback/route.ts` now runs the actor-mismatch check before resolving
+  the redirect destination, falling back to a generic `/dashboard` path on any of the 3 known callback
+  failure types.
+
+Full validation suite after fixes: typecheck/lint/format clean, **676/676** unit+integration tests pass
+(671 prior + 5 new), **24/24** e2e tests pass, production build succeeds (EV-0107).
+
+Re-reviewer: please verify these fixes independently rather than trusting this summary, per the same
+standard applied in round 1.
+
 ## Scope claim
 
 Phase 3 — "Commercial Production, Billing, Deployment, Mobile Distribution, Governance Monitoring, and
@@ -12,114 +64,114 @@ Operations" — per Master Spec §60-§66. 14 implementation units (P3-01 throug
 mid-phase, user-directed regression repair (P3-02 regression repair, D-0053), on `main`, starting
 immediately after the `phase-2-complete` checkpoint (commit `e96617e`):
 
-| Commit    | Unit                    | Subject                                                                 | Decision | Evidence |
-| --------- | ------------------------ | ------------------------------------------------------------------------ | -------- | -------- |
-| `ad14d95` | P3-01                    | Real AI provider connection (Anthropic)                                  | D-0047   | EV-0092  |
-| `639c429` | P3-02                    | Production database/auth hardening + tenant-isolation/migration tooling  | D-0048   | EV-0093  |
-| `d045272` | P3-03                    | Plans, entitlements, usage metering, limits and overages                 | D-0049   | EV-0094  |
-| `e6d7a70` | P3-04                    | Production billing — portal, verified webhooks, reconciliation           | D-0050   | EV-0095  |
-| `9ffdd96` | P3-05                    | Customer-owned infrastructure protection + integration OAuth             | D-0051   | EV-0096  |
-| `922aec1` | P3-06                    | Customer-owned generated-app payment and subscription connections        | D-0052   | EV-0097  |
-| `ec7cd2e` | P3-02 regression repair  | User-directed review: 5 real defects fixed in the sign-in rate limiter   | D-0053   | EV-0098  |
-| `85db50b` | P3-07                    | Production email                                                         | D-0054   | EV-0099  |
-| `9acc936` | P3-08                    | Environments, deployment, and production exports                         | D-0055   | EV-0100  |
-| `0801f68` | P3-09                    | Mobile and store workflow                                                 | D-0056   | EV-0101  |
-| `ec0b51f` | P3-10                    | Governance workflow                                                      | D-0057   | EV-0102  |
-| `f758d44` | P3-11                    | Observability                                                            | D-0058   | EV-0103  |
-| `2665742` | P3-12                    | Product and business analytics + grounded business-health recommendations | D-0059   | EV-0104  |
-| `31f49d4` | P3-13                    | Internal administrative operations                                       | D-0060   | EV-0105  |
-| `4bbc705` | P3-14                    | Product Outcome foundation + bounded Continuous Product Agent foundation  | D-0061   | EV-0106  |
+| Commit    | Unit                    | Subject                                                                   | Decision | Evidence |
+| --------- | ----------------------- | ------------------------------------------------------------------------- | -------- | -------- |
+| `ad14d95` | P3-01                   | Real AI provider connection (Anthropic)                                   | D-0047   | EV-0092  |
+| `639c429` | P3-02                   | Production database/auth hardening + tenant-isolation/migration tooling   | D-0048   | EV-0093  |
+| `d045272` | P3-03                   | Plans, entitlements, usage metering, limits and overages                  | D-0049   | EV-0094  |
+| `e6d7a70` | P3-04                   | Production billing — portal, verified webhooks, reconciliation            | D-0050   | EV-0095  |
+| `9ffdd96` | P3-05                   | Customer-owned infrastructure protection + integration OAuth              | D-0051   | EV-0096  |
+| `922aec1` | P3-06                   | Customer-owned generated-app payment and subscription connections         | D-0052   | EV-0097  |
+| `ec7cd2e` | P3-02 regression repair | User-directed review: 5 real defects fixed in the sign-in rate limiter    | D-0053   | EV-0098  |
+| `85db50b` | P3-07                   | Production email                                                          | D-0054   | EV-0099  |
+| `9acc936` | P3-08                   | Environments, deployment, and production exports                          | D-0055   | EV-0100  |
+| `0801f68` | P3-09                   | Mobile and store workflow                                                 | D-0056   | EV-0101  |
+| `ec0b51f` | P3-10                   | Governance workflow                                                       | D-0057   | EV-0102  |
+| `f758d44` | P3-11                   | Observability                                                             | D-0058   | EV-0103  |
+| `2665742` | P3-12                   | Product and business analytics + grounded business-health recommendations | D-0059   | EV-0104  |
+| `31f49d4` | P3-13                   | Internal administrative operations                                        | D-0060   | EV-0105  |
+| `4bbc705` | P3-14                   | Product Outcome foundation + bounded Continuous Product Agent foundation  | D-0061   | EV-0106  |
 
 Decomposition itself recorded as D-0046 (`execution/decisions/ledger.jsonl`), following the same
 dependency-ordered, `execution/state.json`-tracked pattern established for Phase 2's P2-01..P2-17.
 
 ## Master Spec §61 required capabilities → evidence
 
-| Capability                                                                          | Unit(s) | Evidence |
-| ------------------------------------------------------------------------------------ | ------- | -------- |
-| Real server-side AI provider connections                                             | P3-01   | EV-0092  |
-| Production database and authentication                                               | P3-02   | EV-0093, EV-0098 |
-| Migrations and tenant-isolation verification                                         | P3-02   | EV-0093 (`verify-migration-safety.ts`, `verify-tenant-isolation.ts`) |
-| Credential vault and OAuth where supported                                           | P3-05   | EV-0096 |
-| Pocket Studio production billing                                                     | P3-04   | EV-0095 |
-| Plans, entitlements, usage metering, limits, and overages                            | P3-03   | EV-0094 |
-| Billing portal, verified webhooks and reconciliation                                 | P3-04   | EV-0095 |
-| Failed-payment retries, grace periods, restriction/suspension/restoration/retention/deletion | P3-04 | EV-0095 |
-| Customer-owned infrastructure protection                                             | P3-05   | EV-0096 |
-| Managed-hosting suspension                                                           | Not implemented — see Known limitations (not commercially enabled this phase) | — |
-| Customer-owned generated-app payment and subscription connections                    | P3-06   | EV-0097 |
-| Production email                                                                     | P3-07   | EV-0099 |
-| Monitoring and analytics, audit logs, cost tracking                                  | P3-11   | EV-0103 |
-| Customer-owned integration connections                                               | P3-05   | EV-0096 |
-| Development, Preview, Staging, and Production environments; supported deployment; deployment evidence and rollback | P3-08 | EV-0100 |
-| Production exports                                                                   | P3-08   | EV-0100 |
-| Customer-owned Apple and Google account connection workflows                         | P3-09   | EV-0101 |
-| iOS and Android production-build workflows, testing-track preparation                | P3-09   | EV-0101 |
-| Store metadata, assets, disclosures, and submission packages                         | P3-09   | EV-0101 |
-| Explicit submission approval; supported submission and status tracking; rejection and remediation; releases and updates | P3-09 | EV-0101 |
-| Continuous governance-source monitoring; governance change detection and impact      | P3-10   | EV-0102 |
-| Customer notification and remediation; professional-review workflow                  | P3-10   | EV-0102 |
-| Policy publication and acceptance tracking; multilingual governance synchronization   | P3-10   | EV-0102 |
-| Observability and incident response                                                  | P3-11   | EV-0103 |
-| Product and business analytics; grounded business-health recommendations             | P3-12   | EV-0104 |
-| Internal administrative operations                                                   | P3-13   | EV-0105 |
-| Product Outcome foundation                                                           | P3-14   | EV-0106 |
-| Bounded Continuous Product Agent foundation                                          | P3-14   | EV-0106 |
+| Capability                                                                                                              | Unit(s)                                                                       | Evidence                                                             |
+| ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Real server-side AI provider connections                                                                                | P3-01                                                                         | EV-0092                                                              |
+| Production database and authentication                                                                                  | P3-02                                                                         | EV-0093, EV-0098                                                     |
+| Migrations and tenant-isolation verification                                                                            | P3-02                                                                         | EV-0093 (`verify-migration-safety.ts`, `verify-tenant-isolation.ts`) |
+| Credential vault and OAuth where supported                                                                              | P3-05                                                                         | EV-0096                                                              |
+| Pocket Studio production billing                                                                                        | P3-04                                                                         | EV-0095                                                              |
+| Plans, entitlements, usage metering, limits, and overages                                                               | P3-03                                                                         | EV-0094                                                              |
+| Billing portal, verified webhooks and reconciliation                                                                    | P3-04                                                                         | EV-0095                                                              |
+| Failed-payment retries, grace periods, restriction/suspension/restoration/retention/deletion                            | P3-04                                                                         | EV-0095                                                              |
+| Customer-owned infrastructure protection                                                                                | P3-05                                                                         | EV-0096                                                              |
+| Managed-hosting suspension                                                                                              | Not implemented — see Known limitations (not commercially enabled this phase) | —                                                                    |
+| Customer-owned generated-app payment and subscription connections                                                       | P3-06                                                                         | EV-0097                                                              |
+| Production email                                                                                                        | P3-07                                                                         | EV-0099                                                              |
+| Monitoring and analytics, audit logs, cost tracking                                                                     | P3-11                                                                         | EV-0103                                                              |
+| Customer-owned integration connections                                                                                  | P3-05                                                                         | EV-0096                                                              |
+| Development, Preview, Staging, and Production environments; supported deployment; deployment evidence and rollback      | P3-08                                                                         | EV-0100                                                              |
+| Production exports                                                                                                      | P3-08                                                                         | EV-0100                                                              |
+| Customer-owned Apple and Google account connection workflows                                                            | P3-09                                                                         | EV-0101                                                              |
+| iOS and Android production-build workflows, testing-track preparation                                                   | P3-09                                                                         | EV-0101                                                              |
+| Store metadata, assets, disclosures, and submission packages                                                            | P3-09                                                                         | EV-0101                                                              |
+| Explicit submission approval; supported submission and status tracking; rejection and remediation; releases and updates | P3-09                                                                         | EV-0101                                                              |
+| Continuous governance-source monitoring; governance change detection and impact                                         | P3-10                                                                         | EV-0102                                                              |
+| Customer notification and remediation; professional-review workflow                                                     | P3-10                                                                         | EV-0102                                                              |
+| Policy publication and acceptance tracking; multilingual governance synchronization                                     | P3-10                                                                         | EV-0102                                                              |
+| Observability and incident response                                                                                     | P3-11                                                                         | EV-0103                                                              |
+| Product and business analytics; grounded business-health recommendations                                                | P3-12                                                                         | EV-0104                                                              |
+| Internal administrative operations                                                                                      | P3-13                                                                         | EV-0105                                                              |
+| Product Outcome foundation                                                                                              | P3-14                                                                         | EV-0106                                                              |
+| Bounded Continuous Product Agent foundation                                                                             | P3-14                                                                         | EV-0106                                                              |
 
 ## Master Spec §66 exit criteria → evidence
 
 **A supported paying customer can:**
 
-| Requirement | Evidence |
-| --- | --- |
-| Create an account and organization | Phase 1 (reused, not re-tested this phase) |
-| Subscribe and receive entitlements | EV-0094 (P3-03 entitlements), EV-0095 (P3-04 real billing) — no live checkout UI wired to a real card; see Known limitations |
-| Use real AI generation and production persistence | EV-0092 (real Anthropic connection, mock remains default) |
-| Create a project | Phase 1 (reused) |
-| Receive Product and Business Intelligence | Phase 1/2 (reused) |
-| Generate a supported web or mobile application | Phase 2 (reused) |
-| Use customer and owner workflows | Phase 2 (reused) |
-| Edit conversationally | Phase 2 (reused) |
-| Version and restore | Phase 2 (reused) |
-| Validate and test | Phase 2 (reused; Quality Gate) |
-| Connect required customer-owned services | EV-0096 (OAuth), EV-0097 (generated-app payments) |
-| Export | EV-0100 (production exports, real ExportRecord audit trail) |
-| Create supported builds | EV-0101 (mobile scaffold + submission workflow) |
-| Prepare accurate launch and store artifacts | EV-0101 |
-| Complete supported testing | EV-0101 (`INTERNAL_TESTING`/`BETA` tracks modeled) |
-| Approve deployment or submission | EV-0100 (deployment), EV-0101 (`approveGovernanceRemediation`-style customer approval steps) |
-| Record deployment/submission evidence | EV-0100, EV-0101 |
-| Understand platform-specific status | EV-0100, EV-0101, EV-0104 (product analytics snapshot) |
-| Manage rejection and remediation | EV-0101 (store submission), EV-0102 (governance) |
-| Prepare releases and updates | EV-0101 (`releaseStoreSubmission`) |
+| Requirement                                       | Evidence                                                                                                                     |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Create an account and organization                | Phase 1 (reused, not re-tested this phase)                                                                                   |
+| Subscribe and receive entitlements                | EV-0094 (P3-03 entitlements), EV-0095 (P3-04 real billing) — no live checkout UI wired to a real card; see Known limitations |
+| Use real AI generation and production persistence | EV-0092 (real Anthropic connection, mock remains default)                                                                    |
+| Create a project                                  | Phase 1 (reused)                                                                                                             |
+| Receive Product and Business Intelligence         | Phase 1/2 (reused)                                                                                                           |
+| Generate a supported web or mobile application    | Phase 2 (reused)                                                                                                             |
+| Use customer and owner workflows                  | Phase 2 (reused)                                                                                                             |
+| Edit conversationally                             | Phase 2 (reused)                                                                                                             |
+| Version and restore                               | Phase 2 (reused)                                                                                                             |
+| Validate and test                                 | Phase 2 (reused; Quality Gate)                                                                                               |
+| Connect required customer-owned services          | EV-0096 (OAuth), EV-0097 (generated-app payments)                                                                            |
+| Export                                            | EV-0100 (production exports, real ExportRecord audit trail)                                                                  |
+| Create supported builds                           | EV-0101 (mobile scaffold + submission workflow)                                                                              |
+| Prepare accurate launch and store artifacts       | EV-0101                                                                                                                      |
+| Complete supported testing                        | EV-0101 (`INTERNAL_TESTING`/`BETA` tracks modeled)                                                                           |
+| Approve deployment or submission                  | EV-0100 (deployment), EV-0101 (`approveGovernanceRemediation`-style customer approval steps)                                 |
+| Record deployment/submission evidence             | EV-0100, EV-0101                                                                                                             |
+| Understand platform-specific status               | EV-0100, EV-0101, EV-0104 (product analytics snapshot)                                                                       |
+| Manage rejection and remediation                  | EV-0101 (store submission), EV-0102 (governance)                                                                             |
+| Prepare releases and updates                      | EV-0101 (`releaseStoreSubmission`)                                                                                           |
 
 **The platform must demonstrate:**
 
-| Requirement | Evidence |
-| --- | --- |
-| Tested tenant and credential isolation | EV-0093 (`verify-tenant-isolation.ts`, 0 violations, exact-match reviewed-exception list) — re-verified after every subsequent unit this phase |
-| Real billing and webhook processing | EV-0095 |
-| Usage metering | EV-0094 |
-| Failed-payment and restoration behavior | EV-0095 |
-| Customer-owned infrastructure protection | EV-0096 |
-| Retention and deletion behavior | EV-0095 |
-| Deployment and rollback | EV-0100 |
-| Store readiness and platform Truth Status | EV-0101 (store-readiness.ts's developer-account check now real, not hardcoded) |
-| Governance monitoring and impact | EV-0102 |
-| Policy versioning and approvals | EV-0102 (PolicyDocument DRAFT → PENDING_REVIEW → APPROVED → PUBLISHED) |
-| Monitoring, analytics, cost intelligence, support boundaries, and incident response | EV-0103, EV-0104, EV-0105 |
-| A complete Production Readiness Report with truthful limitations | This document |
+| Requirement                                                                         | Evidence                                                                                                                                       |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tested tenant and credential isolation                                              | EV-0093 (`verify-tenant-isolation.ts`, 0 violations, exact-match reviewed-exception list) — re-verified after every subsequent unit this phase |
+| Real billing and webhook processing                                                 | EV-0095                                                                                                                                        |
+| Usage metering                                                                      | EV-0094                                                                                                                                        |
+| Failed-payment and restoration behavior                                             | EV-0095                                                                                                                                        |
+| Customer-owned infrastructure protection                                            | EV-0096                                                                                                                                        |
+| Retention and deletion behavior                                                     | EV-0095                                                                                                                                        |
+| Deployment and rollback                                                             | EV-0100                                                                                                                                        |
+| Store readiness and platform Truth Status                                           | EV-0101 (store-readiness.ts's developer-account check now real, not hardcoded)                                                                 |
+| Governance monitoring and impact                                                    | EV-0102                                                                                                                                        |
+| Policy versioning and approvals                                                     | EV-0102 (PolicyDocument DRAFT → PENDING_REVIEW → APPROVED → PUBLISHED)                                                                         |
+| Monitoring, analytics, cost intelligence, support boundaries, and incident response | EV-0103, EV-0104, EV-0105                                                                                                                      |
+| A complete Production Readiness Report with truthful limitations                    | This document                                                                                                                                  |
 
 **Independent Level 3 review accepts the phase:** Pending — this review.
 
 ## Full evidence and decision ledgers
 
-- `execution/evidence/ledger.jsonl` — 106 records total; Phase 3's portion is EV-0092 through EV-0106
-  (15 records — 14 units + the mid-phase regression repair), each with evidence type, verification
-  method, result, and limitations.
-- `execution/decisions/ledger.jsonl` — 61 records total; Phase 3's portion is D-0046 through D-0061
-  (16 records — the decomposition plus 14 units plus the regression repair), each with reason,
-  alternatives considered, and impact.
+- `execution/evidence/ledger.jsonl` — 107 records total; Phase 3's portion is EV-0092 through EV-0107
+  (16 records — 14 units + the mid-phase regression repair + the round 1 review repair), each with
+  evidence type, verification method, result, and limitations.
+- `execution/decisions/ledger.jsonl` — 62 records total; Phase 3's portion is D-0046 through D-0062
+  (17 records — the decomposition plus 14 units plus the regression repair plus the round 1 review
+  repair), each with reason, alternatives considered, and impact.
 - `execution/state.json` — machine-readable current state; `phase.unitDecomposition` lists all 14 units,
   each `complete` with its evidence pointer.
 
@@ -160,6 +212,13 @@ dependency-ordered, `execution/state.json`-tracked pattern established for Phase
 
 ## Known limitations (truthful, current)
 
+- **The P3-02 login rate limiter's per-IP component depends on a reverse proxy that overwrites
+  client-supplied `X-Forwarded-For`** (`src/lib/web/client-ip.ts`) — without one (a plausible
+  self-hosted deployment for this platform's target "local and service businesses" customers, Master
+  Spec §2), an attacker can set an arbitrary `X-Forwarded-For` value per request, either reintroducing
+  the email-only-lockout DoS the P3-02 regression repair (D-0053) specifically closed, or defeating
+  IP-based throttling entirely by rotating spoofed values (Level 3 review round 1, CUSTOMER-RISK
+  FINDING 4).
 - **No real external account has ever been exercised** for any Phase 3 provider (Anthropic, Stripe,
   any OAuth provider, SMTP, Apple/Google developer accounts) — every provider defaults to its
   deterministic mock; real implementations exist and are tested against fully scripted fake
@@ -218,10 +277,12 @@ dependency-ordered, `execution/state.json`-tracked pattern established for Phase
 - `npx tsc --noEmit`: clean.
 - `npx eslint . --max-warnings=0`: clean.
 - `npx prettier --check .`: clean.
-- `npx vitest run`: **671/671** unit+integration tests, stable across repeated runs throughout the
-  phase (each unit's own evidence entry records the count at that point: 434 → 671).
+- `npx vitest run`: **676/676** unit+integration tests, stable across repeated runs throughout the
+  phase (each unit's own evidence entry records the count at that point: 434 → 671 → 676 after the
+  round 1 review repair's 5 new regression tests).
 - `npx vitest run` on `verify-tenant-isolation.test.ts` and `verify-migration-safety.test.ts` directly:
-  0 violations at every unit boundary this phase, including after every schema/authorization change.
+  0 violations at every unit boundary this phase, including after every schema/authorization change and
+  after the round 1 review repair's fix to the detector's own name-collision blind spot (D-0062).
 - `rm -rf .next && npx next build`: succeeds.
 - `npx playwright test`: **24/24** e2e tests pass (stable; one isolated `golden-path.spec.ts` timing
   flake was observed and confirmed non-reproducing via both a standalone re-run and a full-suite
