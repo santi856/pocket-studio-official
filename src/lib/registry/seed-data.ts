@@ -85,13 +85,41 @@ export const INITIAL_CAPABILITIES: readonly CapabilityDefinition[] = [
     ],
   },
   {
+    // P3-01: a real Anthropic connection now exists and is wired into
+    // intent resolution (AIProvider.resolveIntent, real API call with
+    // forced tool-use for a structurally guaranteed response, active only
+    // when AI_PROVIDER=anthropic and a real key is configured). This
+    // capability key specifically covers full AI-model-backed *product*
+    // generation (Blueprint/Build Plan content) -- that remains the
+    // deterministic template pipeline from Phase 2 (blueprint-generator.ts
+    // never calls AIProvider); genuinely not yet real, so this stays
+    // SUPPORTED_LATER_PHASE rather than being overstated.
     capabilityKey: "ai.live_provider_generation",
     label: "Real AI-model-backed product generation",
     category: "ai",
     implementationLevel: "SUPPORTED_LATER_PHASE",
     riskClass: "MEDIUM",
     limitations: [
-      "Real server-side AI provider connections are Phase 3 scope (§61); Phase 1-2 use the deterministic mock provider.",
+      "A real Anthropic provider connection exists (P3-01, src/lib/ai/anthropic-provider.ts) and is wired into intent resolution, but Blueprint/Build Plan generation (the actual product content) is still the deterministic template pipeline from Phase 2 -- see ai.live_provider_intent_resolution for what is real today.",
+    ],
+  },
+  {
+    capabilityKey: "ai.live_provider_intent_resolution",
+    label: "Real AI-backed intent classification (describe_idea / edit_request / unclear)",
+    category: "ai",
+    // Real, working code exists and is fully tested (mocked-fetch unit
+    // tests verifying request shape, response parsing, and every error
+    // path) -- but its only live exercise path requires a real
+    // ANTHROPIC_API_KEY this environment does not have configured
+    // (AI_PROVIDER defaults to mock), so it has never been proven against
+    // Anthropic's actual API. PROTOTYPE_ONLY, not SUPPORTED_NOW, per this
+    // project's own standard for "real code, unproven against the real
+    // external system."
+    implementationLevel: "PROTOTYPE_ONLY",
+    riskClass: "MEDIUM",
+    requiredIntegrations: ["ANTHROPIC_API_KEY (platform-level, not customer-owned)"],
+    limitations: [
+      "Implemented and unit-tested against a mocked Anthropic API response, but never exercised against the real Anthropic API in this environment -- no ANTHROPIC_API_KEY is configured. Set AI_PROVIDER=anthropic and a real key to activate it; MockAIProvider remains the default and requires no credentials.",
     ],
   },
   {

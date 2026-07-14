@@ -15,24 +15,13 @@ export type ResolvedIntent = {
 };
 
 /**
- * One interface, swappable implementations. Phase 1 ships only
- * MockAIProvider (deterministic, no external calls). Real provider
- * connections are Phase 3 scope (Master Spec §61) — AnthropicAIProvider
- * exists as an architectural placeholder so call sites never need to
- * change when it is implemented, per Execution Protocol §8 ("never block
- * architecture on missing credentials").
+ * One interface, swappable implementations. MockAIProvider is
+ * deterministic and makes no external calls; AnthropicAIProvider is a real
+ * server-side connection to Anthropic's API (Master Spec §61, Phase 3).
+ * Selected via AI_PROVIDER (src/lib/env.ts) — call sites never need to
+ * change based on which one is active.
  */
 export interface AIProvider {
   readonly name: "mock" | "anthropic";
   resolveIntent(input: ResolveIntentInput): Promise<ResolvedIntent>;
-}
-
-export class ProviderNotImplementedError extends Error {
-  constructor(providerName: string) {
-    super(
-      `AI provider "${providerName}" is not yet implemented. Real provider connections are ` +
-        `Phase 3 scope (Master Spec §61). Set AI_PROVIDER=mock to run without a live provider.`,
-    );
-    this.name = "ProviderNotImplementedError";
-  }
 }
