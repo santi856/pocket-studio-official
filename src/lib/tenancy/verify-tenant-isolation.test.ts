@@ -16,6 +16,10 @@ describe("findTenantIsolationViolations against the real codebase", () => {
       "applyBillingLifecycleEventFromWebhook",
       "authenticateGeneratedAppUser",
       "createGeneratedAppCharge",
+      "createGovernanceImpactAssessment",
+      "dismissGovernanceImpactAssessment",
+      "notifyCustomerOfGovernanceImpact",
+      "recordPolicyAcceptance",
       "retrieveCredentialSecretForGeneratedApp",
     ]);
   });

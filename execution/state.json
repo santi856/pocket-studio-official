@@ -71,7 +71,8 @@
         {
           "id": "P3-10",
           "name": "Governance workflow: continuous governance-source monitoring, change detection/impact, notification/remediation, professional-review workflow, policy publication/acceptance tracking, multilingual sync",
-          "status": "pending"
+          "status": "complete",
+          "evidence": "EV-0102"
         },
         {
           "id": "P3-11",
@@ -104,9 +105,9 @@
   "milestone": {
     "current": "M3-real-billing-infrastructure",
     "previousMilestone": "M2-hardening-and-verification-tooling (P3-02, P3-03, complete)",
-    "description": "P3-04 through P3-09 complete. Every real external-provider integration built in Phase 3 so far (billing, OAuth, generated-app payments, email) follows the same pattern: real protocol/API implementation via raw fetch/crypto/tls (no SDK dependency), a deterministic mock as the safe default, honest PROTOTYPE_ONLY Capability Registry disclosure since none has been exercised against a live external account, and no specific third-party vendor named where the underlying standard (OAuth2, SMTP) is itself vendor-agnostic. P3-08 (deployment) and P3-09 (mobile/store) both have no such universal protocol to implement in their place (no named hosting vendor, and Apple/Google review APIs require a live, credentialed developer account this environment does not have), so each has only a mock provider (SUPPORTED_LATER_PHASE / EXTERNAL_APPROVAL_REQUIRED) behind a real, tested record-keeping/workflow state machine. Next: P3-10, governance workflow."
+    "description": "P3-04 through P3-10 complete. Every real external-provider integration built in Phase 3 so far (billing, OAuth, generated-app payments, email) follows the same pattern: real protocol/API implementation via raw fetch/crypto/tls (no SDK dependency), a deterministic mock as the safe default, honest PROTOTYPE_ONLY Capability Registry disclosure. P3-08 (deployment) and P3-09 (mobile/store) both have no such universal protocol to implement in their place, so each has only a mock provider behind a real, tested record-keeping/workflow state machine. P3-10 (governance) follows the same shape once more: no real external legal/regulatory source is monitored automatically (none is named or authorized), but the policy publication/acceptance workflow, translation-staleness detection, and the governance-requirement/impact-assessment pipeline (through a real email notification, customer approval, and Evidence/Truth Status on validation) are all real and tested. Next: P3-11, observability."
   },
-  "activeImplementationUnit": "P3-10: Governance workflow \u2014 continuous governance-source monitoring, change detection/impact, notification/remediation, professional-review workflow, policy publication/acceptance tracking, multilingual sync \u2014 next unblocked unit per the P3-01..P3-14 decomposition (D-0046)",
+  "activeImplementationUnit": "P3-11: Observability \u2014 monitoring/analytics, audit logs, cost tracking, incident response \u2014 next unblocked unit per the P3-01..P3-14 decomposition (D-0046)",
   "architecturalStandards": [
     {
       "id": "AS-0001",

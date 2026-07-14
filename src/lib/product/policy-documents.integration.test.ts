@@ -7,9 +7,19 @@ import { createOrganization } from "@/lib/services/organizations";
 import { createProject } from "@/lib/services/projects";
 import { ForbiddenError } from "@/lib/tenancy/authz";
 import {
+  GeneratedAppUserNotFoundForAcceptanceError,
+  InvalidPolicyDocumentTransitionError,
+  PolicyDocumentNotFoundError,
+  PolicyDocumentNotPublishedError,
+  approvePolicyDocument,
   createPolicyDocumentDraft,
   getLatestPolicyDocument,
+  listOutdatedTranslations,
   listPolicyDocuments,
+  publishPolicyDocument,
+  recordPolicyAcceptance,
+  recordPolicyDocumentProfessionalReview,
+  submitPolicyDocumentForReview,
 } from "./policy-documents";
 
 describe("Policy Documents", () => {
@@ -107,5 +117,232 @@ describe("Policy Documents", () => {
     await expect(listPolicyDocuments(outsider.id, project.id)).rejects.toBeInstanceOf(
       ForbiddenError,
     );
+  });
+
+  describe("publication workflow (submit -> review -> approve -> publish)", () => {
+    it("moves DRAFT -> PENDING_REVIEW -> APPROVED -> PUBLISHED", async () => {
+      const { owner, project } = await seedProject();
+      const draft = await createPolicyDocumentDraft(owner.id, project.id, {
+        type: "PRIVACY_POLICY",
+        content: "v1",
+      });
+
+      const submitted = await submitPolicyDocumentForReview(owner.id, project.id, draft.id);
+      expect(submitted.status).toBe("PENDING_REVIEW");
+
+      const reviewed = await recordPolicyDocumentProfessionalReview(
+        owner.id,
+        project.id,
+        draft.id,
+        {
+          reviewerName: "Jane Attorney",
+        },
+      );
+      expect(reviewed.professionallyReviewed).toBe(true);
+      expect(reviewed.reviewerName).toBe("Jane Attorney");
+      expect(reviewed.reviewedAt).not.toBeNull();
+
+      const approved = await approvePolicyDocument(owner.id, project.id, draft.id);
+      expect(approved.status).toBe("APPROVED");
+      expect(approved.approvedByUserId).toBe(owner.id);
+
+      const published = await publishPolicyDocument(owner.id, project.id, draft.id);
+      expect(published.status).toBe("PUBLISHED");
+      expect(published.publishedAt).not.toBeNull();
+    });
+
+    it("rejects out-of-order transitions", async () => {
+      const { owner, project } = await seedProject();
+      const draft = await createPolicyDocumentDraft(owner.id, project.id, {
+        type: "PRIVACY_POLICY",
+        content: "v1",
+      });
+
+      await expect(approvePolicyDocument(owner.id, project.id, draft.id)).rejects.toBeInstanceOf(
+        InvalidPolicyDocumentTransitionError,
+      );
+      await expect(publishPolicyDocument(owner.id, project.id, draft.id)).rejects.toBeInstanceOf(
+        InvalidPolicyDocumentTransitionError,
+      );
+    });
+
+    it("throws PolicyDocumentNotFoundError for an unknown id", async () => {
+      const { owner, project } = await seedProject();
+
+      await expect(
+        submitPolicyDocumentForReview(owner.id, project.id, "nonexistent-id"),
+      ).rejects.toBeInstanceOf(PolicyDocumentNotFoundError);
+    });
+
+    it("denies the workflow to a non-member", async () => {
+      const { owner, outsider, project } = await seedProject();
+      const draft = await createPolicyDocumentDraft(owner.id, project.id, {
+        type: "PRIVACY_POLICY",
+        content: "v1",
+      });
+
+      await expect(
+        submitPolicyDocumentForReview(outsider.id, project.id, draft.id),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+
+  describe("recordPolicyAcceptance (generated-app end user)", () => {
+    async function seedPublishedPolicy(projectId: string, ownerId: string) {
+      const draft = await createPolicyDocumentDraft(ownerId, projectId, {
+        type: "TERMS_OF_SERVICE",
+        content: "Terms v1",
+      });
+      await submitPolicyDocumentForReview(ownerId, projectId, draft.id);
+      await approvePolicyDocument(ownerId, projectId, draft.id);
+      return publishPolicyDocument(ownerId, projectId, draft.id);
+    }
+
+    it("records an acceptance for a published document", async () => {
+      const { owner, project } = await seedProject();
+      const published = await seedPublishedPolicy(project.id, owner.id);
+      const endUser = await db.generatedAppUser.create({
+        data: {
+          projectId: project.id,
+          email: "customer@example.com",
+          passwordHash: "irrelevant",
+          role: "customer",
+        },
+      });
+
+      const acceptance = await recordPolicyAcceptance(project.id, {
+        policyDocumentId: published.id,
+        generatedAppUserId: endUser.id,
+      });
+
+      expect(acceptance.policyDocumentId).toBe(published.id);
+      expect(acceptance.generatedAppUserId).toBe(endUser.id);
+    });
+
+    it("is idempotent for the same document and user", async () => {
+      const { owner, project } = await seedProject();
+      const published = await seedPublishedPolicy(project.id, owner.id);
+      const endUser = await db.generatedAppUser.create({
+        data: {
+          projectId: project.id,
+          email: "customer@example.com",
+          passwordHash: "irrelevant",
+          role: "customer",
+        },
+      });
+
+      await recordPolicyAcceptance(project.id, {
+        policyDocumentId: published.id,
+        generatedAppUserId: endUser.id,
+      });
+      await recordPolicyAcceptance(project.id, {
+        policyDocumentId: published.id,
+        generatedAppUserId: endUser.id,
+      });
+
+      const count = await db.policyAcceptance.count({ where: { policyDocumentId: published.id } });
+      expect(count).toBe(1);
+    });
+
+    it("throws PolicyDocumentNotPublishedError for a draft document", async () => {
+      const { owner, project } = await seedProject();
+      const draft = await createPolicyDocumentDraft(owner.id, project.id, {
+        type: "TERMS_OF_SERVICE",
+        content: "Terms v1",
+      });
+      const endUser = await db.generatedAppUser.create({
+        data: {
+          projectId: project.id,
+          email: "customer@example.com",
+          passwordHash: "irrelevant",
+          role: "customer",
+        },
+      });
+
+      await expect(
+        recordPolicyAcceptance(project.id, {
+          policyDocumentId: draft.id,
+          generatedAppUserId: endUser.id,
+        }),
+      ).rejects.toBeInstanceOf(PolicyDocumentNotPublishedError);
+    });
+
+    it("throws GeneratedAppUserNotFoundForAcceptanceError for an unknown end user", async () => {
+      const { owner, project } = await seedProject();
+      const published = await seedPublishedPolicy(project.id, owner.id);
+
+      await expect(
+        recordPolicyAcceptance(project.id, {
+          policyDocumentId: published.id,
+          generatedAppUserId: "nonexistent-id",
+        }),
+      ).rejects.toBeInstanceOf(GeneratedAppUserNotFoundForAcceptanceError);
+    });
+  });
+
+  describe("listOutdatedTranslations", () => {
+    it("flags a translation with no translatedFromVersion as outdated", async () => {
+      const { owner, project } = await seedProject();
+      await createPolicyDocumentDraft(owner.id, project.id, {
+        type: "PRIVACY_POLICY",
+        content: "English v1",
+        language: "en",
+      });
+      await createPolicyDocumentDraft(owner.id, project.id, {
+        type: "PRIVACY_POLICY",
+        content: "Spanish, untracked",
+        language: "es",
+      });
+
+      const outdated = await listOutdatedTranslations(owner.id, project.id);
+
+      expect(outdated).toHaveLength(1);
+      expect(outdated[0]?.document.language).toBe("es");
+      expect(outdated[0]?.currentEnglishVersion).toBe(1);
+    });
+
+    it("does not flag a translation that matches the current English version", async () => {
+      const { owner, project } = await seedProject();
+      await createPolicyDocumentDraft(owner.id, project.id, {
+        type: "PRIVACY_POLICY",
+        content: "English v1",
+        language: "en",
+      });
+      await createPolicyDocumentDraft(owner.id, project.id, {
+        type: "PRIVACY_POLICY",
+        content: "Spanish v1",
+        language: "es",
+        translatedFromVersion: 1,
+      });
+
+      const outdated = await listOutdatedTranslations(owner.id, project.id);
+
+      expect(outdated).toHaveLength(0);
+    });
+
+    it("flags a translation as outdated once the English source is revised", async () => {
+      const { owner, project } = await seedProject();
+      await createPolicyDocumentDraft(owner.id, project.id, {
+        type: "PRIVACY_POLICY",
+        content: "English v1",
+        language: "en",
+      });
+      await createPolicyDocumentDraft(owner.id, project.id, {
+        type: "PRIVACY_POLICY",
+        content: "Spanish v1",
+        language: "es",
+        translatedFromVersion: 1,
+      });
+      await createPolicyDocumentDraft(owner.id, project.id, {
+        type: "PRIVACY_POLICY",
+        content: "English v2, materially changed",
+        language: "en",
+      });
+
+      const outdated = await listOutdatedTranslations(owner.id, project.id);
+
+      expect(outdated).toHaveLength(1);
+      expect(outdated[0]?.currentEnglishVersion).toBe(2);
+    });
   });
 });

@@ -17,10 +17,10 @@ export async function resetDatabase(): Promise<void> {
   // Project cascades to ProductState, ProductDNA, ProductMemoryEntry,
   // ProductKnowledgeNode/Edge, Decision, ProductEvent, ProductEvidence,
   // TruthStatusEntry, IntegrationRequirement (-> CredentialReference),
-  // GovernanceProfile, PolicyDocument, OAuthConnectionState, Deployment,
-  // ExportRecord, and StoreSubmission — no need to delete those
-  // separately. Organization cascades to OrganizationSubscription (->
-  // BillingEvent).
+  // GovernanceProfile, PolicyDocument (-> PolicyAcceptance),
+  // OAuthConnectionState, Deployment, ExportRecord, StoreSubmission, and
+  // GovernanceImpactAssessment — no need to delete those separately.
+  // Organization cascades to OrganizationSubscription (-> BillingEvent).
   await db.project.deleteMany();
   await db.membership.deleteMany();
   await db.organization.deleteMany();
@@ -29,6 +29,7 @@ export async function resetDatabase(): Promise<void> {
   // not covered by the cascades above.
   await db.capabilityRegistryEntry.deleteMany();
   await db.planDefinition.deleteMany();
+  await db.governanceRequirement.deleteMany();
   // Not a relation of anything else — identified only by its own
   // (provider, providerEventId) pair, so not covered by any cascade above.
   await db.processedWebhookEvent.deleteMany();

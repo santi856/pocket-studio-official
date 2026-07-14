@@ -55,6 +55,47 @@ const ALLOWED_EXCEPTIONS: ReadonlyMap<string, string> = new Map([
       "payment credential to charge its own customer has no Pocket Studio " +
       "member 'acting' in that moment.",
   ],
+  [
+    "recordPolicyAcceptance",
+    "A generated product's own end user accepting a published policy " +
+      "document (P3-10, src/lib/product/policy-documents.ts) — " +
+      "deliberately has no actorUserId, same shape of exception as " +
+      "createGeneratedAppCharge: no Pocket Studio member 'acts' when a " +
+      "generated app's own end user accepts its own terms. Not yet wired " +
+      "into any live route, same disclosed gap as " +
+      "authenticateGeneratedAppUser.",
+  ],
+  [
+    "createGovernanceImpactAssessment",
+    "Maps a real, operator-verified governance requirement " +
+      "(GovernanceRequirement, platform-wide, not tenant-scoped) onto a " +
+      "specific customer project (P3-10, " +
+      "src/lib/governance/governance-requirements.ts) — deliberately has " +
+      "no actorUserId. Judging which projects a real legal/regulatory " +
+      "requirement applies to, and whether that application is material, " +
+      "is Pocket Studio's own operator judgment call, not a customer " +
+      "self-service action; no customer-facing route exists (or should " +
+      "exist) that lets a signed-in user invoke this against an arbitrary " +
+      "project.",
+  ],
+  [
+    "notifyCustomerOfGovernanceImpact",
+    "The 'customer notification' step of the governance-monitoring " +
+      "pipeline (P3-10, Master Spec §33) — deliberately has no " +
+      "actorUserId, same operator-only posture as " +
+      "createGovernanceImpactAssessment above: the system notifying a " +
+      "customer that a real governance change affects their project is " +
+      "not something the customer requests for themselves.",
+  ],
+  [
+    "dismissGovernanceImpactAssessment",
+    "Closes a NOT_MATERIAL governance impact assessment without any " +
+      "customer-facing workflow (P3-10) — deliberately has no " +
+      "actorUserId, same operator-only posture as " +
+      "createGovernanceImpactAssessment above: judging that a real " +
+      "requirement does not actually apply to a project is Pocket " +
+      "Studio's own call, not the customer's.",
+  ],
 ]);
 
 export type TenantIsolationViolation = {

@@ -140,30 +140,32 @@ model Project {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  productStates           ProductState[]
-  productDnaVersions      ProductDNA[]
-  memoryEntries           ProductMemoryEntry[]
-  knowledgeNodes          ProductKnowledgeNode[]
-  knowledgeEdges          ProductKnowledgeEdge[]
-  decisions               Decision[]
-  events                  ProductEvent[]
-  evidenceRecords         ProductEvidence[]
-  truthStatuses           TruthStatusEntry[]
-  integrationRequirements IntegrationRequirement[]
-  credentialReferences    CredentialReference[]
-  governanceProfile       GovernanceProfile?
-  policyDocuments         PolicyDocument[]
-  blueprints              Blueprint[]
-  buildPlans              BuildPlan[]
-  generatedAppUsers       GeneratedAppUser[]
-  generatedRecords        GeneratedRecord[]
-  changeSets              ChangeSet[]
-  jobRuns                 JobRun[]
-  oauthConnectionStates   OAuthConnectionState[]
-  generatedAppPayments    GeneratedAppPayment[]
-  deployments             Deployment[]
-  exportRecords           ExportRecord[]
-  storeSubmissions        StoreSubmission[]
+  productStates               ProductState[]
+  productDnaVersions          ProductDNA[]
+  memoryEntries               ProductMemoryEntry[]
+  knowledgeNodes              ProductKnowledgeNode[]
+  knowledgeEdges              ProductKnowledgeEdge[]
+  decisions                   Decision[]
+  events                      ProductEvent[]
+  evidenceRecords             ProductEvidence[]
+  truthStatuses               TruthStatusEntry[]
+  integrationRequirements     IntegrationRequirement[]
+  credentialReferences        CredentialReference[]
+  governanceProfile           GovernanceProfile?
+  policyDocuments             PolicyDocument[]
+  blueprints                  Blueprint[]
+  buildPlans                  BuildPlan[]
+  generatedAppUsers           GeneratedAppUser[]
+  generatedRecords            GeneratedRecord[]
+  changeSets                  ChangeSet[]
+  jobRuns                     JobRun[]
+  oauthConnectionStates       OAuthConnectionState[]
+  generatedAppPayments        GeneratedAppPayment[]
+  deployments                 Deployment[]
+  exportRecords               ExportRecord[]
+  storeSubmissions            StoreSubmission[]
+  policyAcceptances           PolicyAcceptance[]
+  governanceImpactAssessments GovernanceImpactAssessment[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -716,9 +718,144 @@ model PolicyDocument {
   createdByUserId            String?
   createdAt                  DateTime             @default(now())
 
+  // P3-10: professional review is a real, recorded attestation (who, when)
+  // that a qualified reviewer looked at this draft -- Pocket Studio never
+  // performs the review itself (Master Spec §32's "not legal advice"
+  // boundary). Nullable/independent of `status`: a document can be
+  // professionally reviewed before or separately from the customer's own
+  // approval step.
+  professionallyReviewed Boolean   @default(false)
+  reviewerName           String?
+  reviewedAt             DateTime?
+
+  approvedByUserId String?
+  approvedAt       DateTime?
+  publishedAt      DateTime?
+
+  // Only meaningful when language != "en" -- which English version this
+  // translation was produced from, so a later, newer English version can
+  // be detected as making this translation stale (§35).
+  translatedFromVersion Int?
+
+  acceptances PolicyAcceptance[]
+
   @@unique([projectId, type, language, version])
   @@index([projectId])
   @@map("policy_documents")
+}
+
+// Master Spec §61 "policy publication and acceptance tracking where
+// supported". Tracks a generated product's own end user accepting a
+// specific PUBLISHED PolicyDocument version -- one row per (document,
+// user): re-accepting a newer version is a new row, preserving exactly
+// which version a given user actually agreed to.
+model PolicyAcceptance {
+  id                 String           @id @default(cuid())
+  projectId          String
+  project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  policyDocumentId   String
+  policyDocument     PolicyDocument   @relation(fields: [policyDocumentId], references: [id], onDelete: Cascade)
+  generatedAppUserId String
+  generatedAppUser   GeneratedAppUser @relation(fields: [generatedAppUserId], references: [id], onDelete: Cascade)
+  acceptedAt         DateTime         @default(now())
+
+  @@unique([policyDocumentId, generatedAppUserId])
+  @@index([projectId])
+  @@map("policy_acceptances")
+}
+
+// ---------------------------------------------------------------------------
+// Continuous governance monitoring (Master Spec §32-33, §61: "continuous
+// governance-source monitoring; governance change detection and impact;
+// customer notification and remediation; professional-review workflow").
+// GovernanceRequirement is platform-wide (append-only per requirementKey,
+// same versioning shape as CapabilityRegistryEntry/PlanDefinition) --
+// recording what a real authoritative source says is an operator action,
+// not a customer one, so these functions carry no requireProjectAccess
+// check, the same posture already established for
+// upsertCapabilityVersion. No real external source is monitored
+// automatically (no live legal/regulatory API is named or authorized,
+// the same "no real provider" honesty already applied to hosting (P3-08)
+// and app-store review (P3-09)) -- a requirement is recorded once a real,
+// disclosed operator has verified it against a real source.
+// GovernanceImpactAssessment is the project-scoped "affected-project
+// mapping" through the rest of the pipeline: remediation proposal →
+// customer notification → approval → implementation → validation.
+// ---------------------------------------------------------------------------
+
+enum GovernanceInterpretationStatus {
+  UNVERIFIED
+  VERIFIED_NO_IMPACT
+  VERIFIED_MATERIAL
+  PROFESSIONAL_REVIEW_PENDING
+  PROFESSIONAL_REVIEW_COMPLETE
+}
+
+model GovernanceRequirement {
+  id             String @id @default(cuid())
+  requirementKey String
+  version        Int
+
+  domain                     String
+  jurisdiction               String
+  authority                  String
+  officialSource             String
+  applicability              String
+  affectedCapabilities       Json
+  effectiveDate              DateTime?
+  enforcementDate            DateTime?
+  verificationDate           DateTime
+  changeSummary              String
+  interpretationStatus       GovernanceInterpretationStatus
+  professionalReviewRequired Boolean
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  impactAssessments GovernanceImpactAssessment[]
+
+  @@unique([requirementKey, version])
+  @@index([requirementKey])
+  @@map("governance_requirements")
+}
+
+enum GovernanceImpactMateriality {
+  NOT_MATERIAL
+  MATERIAL
+}
+
+enum GovernanceImpactStatus {
+  IDENTIFIED
+  NOTIFIED
+  APPROVED
+  IMPLEMENTED
+  VALIDATED
+  DISMISSED
+}
+
+model GovernanceImpactAssessment {
+  id                      String                      @id @default(cuid())
+  projectId               String
+  project                 Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  governanceRequirementId String
+  governanceRequirement   GovernanceRequirement       @relation(fields: [governanceRequirementId], references: [id], onDelete: Cascade)
+  materiality             GovernanceImpactMateriality
+  status                  GovernanceImpactStatus
+  remediationProposal     String?
+  dismissedReason         String?
+
+  notifiedAt       DateTime?
+  approvedByUserId String?
+  approvedAt       DateTime?
+  implementedAt    DateTime?
+  validatedAt      DateTime?
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  @@index([projectId])
+  @@index([governanceRequirementId])
+  @@map("governance_impact_assessments")
 }
 
 // ---------------------------------------------------------------------------
@@ -1003,8 +1140,9 @@ model GeneratedAppUser {
   // (src/lib/generation/blueprint-templates.ts), not a platform-wide set.
   role         String
 
-  ownedRecords GeneratedRecord[]
-  payments     GeneratedAppPayment[]
+  ownedRecords      GeneratedRecord[]
+  payments          GeneratedAppPayment[]
+  policyAcceptances PolicyAcceptance[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -30,3 +30,34 @@ export async function sendWelcomeEmail(input: {
     return null;
   }
 }
+
+/**
+ * Master Spec §61 "customer notification and remediation" — the
+ * governance-monitoring pipeline's notification step (§33: "... →
+ * customer notification → approval → ..."). Same await-and-swallow
+ * pattern as sendWelcomeEmail: a failed send must never block the
+ * governance workflow itself, and the attempt is always durably recorded
+ * via sendEmail() regardless of outcome.
+ */
+export async function sendGovernanceImpactNotificationEmail(input: {
+  userId: string;
+  toAddress: string;
+  projectName: string;
+  changeSummary: string;
+  remediationProposal: string | null;
+}): Promise<SentEmail | null> {
+  const remediationLine = input.remediationProposal
+    ? `Proposed remediation: ${input.remediationProposal}`
+    : "A remediation proposal has not been drafted yet.";
+  try {
+    return await sendEmail({
+      userId: input.userId,
+      to: input.toAddress,
+      subject: `Governance update affecting "${input.projectName}"`,
+      text: `A governance or legal requirement change has been identified as affecting "${input.projectName}".\n\n${input.changeSummary}\n\n${remediationLine}\n\nSign in to Pocket Studio to review and approve remediation.`,
+      html: `<p>A governance or legal requirement change has been identified as affecting "${input.projectName}".</p><p>${input.changeSummary}</p><p>${remediationLine}</p><p>Sign in to Pocket Studio to review and approve remediation.</p>`,
+    });
+  } catch {
+    return null;
+  }
+}
