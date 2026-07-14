@@ -78,6 +78,18 @@ describe("exportProject", () => {
     expect(bundle.generatedRecords).toEqual([]);
   });
 
+  it("records a real, queryable ExportRecord for every export attempt (Master Spec §61 production exports)", async () => {
+    const { owner, project } = await seedProject();
+
+    await exportProject(owner.id, project.id);
+    await exportProject(owner.id, project.id);
+
+    const records = await db.exportRecord.findMany({ where: { projectId: project.id } });
+    expect(records).toHaveLength(2);
+    expect(records[0]?.createdByUserId).toBe(owner.id);
+    expect(records[0]?.exportVersion).toBe("1.0");
+  });
+
   it("includes real generated records and generated-app users, never a password hash", async () => {
     const { owner, project } = await seedProject();
     await generateProductIntelligence(

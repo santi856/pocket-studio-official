@@ -161,6 +161,8 @@ model Project {
   jobRuns                 JobRun[]
   oauthConnectionStates   OAuthConnectionState[]
   generatedAppPayments    GeneratedAppPayment[]
+  deployments             Deployment[]
+  exportRecords           ExportRecord[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -482,6 +484,7 @@ enum ProductEvidenceType {
   REQUIREMENT_DERIVATION
   STRUCTURED_MANUAL_VERIFICATION
   QUALITY_GATE_CHECK
+  DEPLOYMENT_ATTEMPT
 }
 
 // Backs Truth Status claims with a verifiable record, mirroring the
@@ -1040,6 +1043,70 @@ model GeneratedAppPayment {
 
   @@index([projectId])
   @@map("generated_app_payments")
+}
+
+// ---------------------------------------------------------------------------
+// Deployment (Master Spec §61: "Development, Preview, Staging, and
+// Production environments; supported deployment; deployment evidence and
+// rollback"). `environment` is modeled as a field on this append-only
+// record rather than a separate Environment entity -- there is nothing to
+// configure per environment beyond which one a given deployment targets.
+// No specific hosting vendor is named or implemented (unlike payments,
+// where "e.g. Stripe" was already a named illustrative example in this
+// codebase's own seed data) -- DeploymentProvider is a real interface with
+// only a mock implementation today (see src/lib/deployment). The record
+// keeping and rollback state machine here are real regardless of which
+// provider performs the underlying push.
+// ---------------------------------------------------------------------------
+
+enum DeploymentEnvironment {
+  DEVELOPMENT
+  PREVIEW
+  STAGING
+  PRODUCTION
+}
+
+enum DeploymentStatus {
+  SUCCEEDED
+  FAILED
+  ROLLED_BACK
+}
+
+model Deployment {
+  id          String                @id @default(cuid())
+  projectId   String
+  project     Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environment DeploymentEnvironment
+  status      DeploymentStatus
+
+  blueprintVersion Int
+  buildPlanVersion Int
+
+  provider             String
+  providerDeploymentId String?
+  failureReason        String?
+
+  createdAt       DateTime @default(now())
+  createdByUserId String
+
+  @@index([projectId, environment, createdAt])
+  @@map("deployments")
+}
+
+// Master Spec §61 "production exports" -- a real, append-only audit fact
+// for every export attempt (who, when, which project), independent of the
+// export bundle's own content (see src/lib/generation/export.ts).
+model ExportRecord {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  exportVersion   String
+  createdAt       DateTime @default(now())
+  createdByUserId String
+
+  @@index([projectId, createdAt])
+  @@map("export_records")
 }
 
 // Generic per-project record store. `modelKey` corresponds to a name in the

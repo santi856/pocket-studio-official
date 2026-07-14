@@ -17,9 +17,9 @@ export async function resetDatabase(): Promise<void> {
   // Project cascades to ProductState, ProductDNA, ProductMemoryEntry,
   // ProductKnowledgeNode/Edge, Decision, ProductEvent, ProductEvidence,
   // TruthStatusEntry, IntegrationRequirement (-> CredentialReference),
-  // GovernanceProfile, PolicyDocument, and OAuthConnectionState — no need
-  // to delete those separately. Organization cascades to
-  // OrganizationSubscription (-> BillingEvent).
+  // GovernanceProfile, PolicyDocument, OAuthConnectionState, Deployment,
+  // and ExportRecord — no need to delete those separately. Organization
+  // cascades to OrganizationSubscription (-> BillingEvent).
   await db.project.deleteMany();
   await db.membership.deleteMany();
   await db.organization.deleteMany();
@@ -31,4 +31,8 @@ export async function resetDatabase(): Promise<void> {
   // Not a relation of anything else — identified only by its own
   // (provider, providerEventId) pair, so not covered by any cascade above.
   await db.processedWebhookEvent.deleteMany();
+  // userId is a plain correlation field, not a `@relation` (see the
+  // SentEmail model comment, prisma/schema.prisma) — not covered by
+  // User's cascade above.
+  await db.sentEmail.deleteMany();
 }

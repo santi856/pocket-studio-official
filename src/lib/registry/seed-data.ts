@@ -275,6 +275,43 @@ export const INITIAL_CAPABILITIES: readonly CapabilityDefinition[] = [
       "AUTH LOGIN only, and implicit TLS only (no STARTTLS negotiation) -- a disclosed, deliberate scope limit for a V1 client speaking to one already-configured server, not a universal SMTP client.",
     ],
   },
+  {
+    // P3-08: a real Deployment record-keeping and rollback state machine
+    // (createDeployment/getActiveDeployment/rollbackDeployment) -- tested
+    // and correct independent of which provider performs the underlying
+    // push. PROTOTYPE_ONLY, not SUPPORTED_LATER_PHASE, because this half
+    // (evidence + rollback) is genuinely real today, unlike the hosting
+    // push itself (see platform.deployment_hosting).
+    capabilityKey: "platform.deployment_evidence_and_rollback",
+    label: "Deployment record-keeping, evidence, and rollback",
+    category: "platform",
+    implementationLevel: "PROTOTYPE_ONLY",
+    riskClass: "LOW",
+    limitations: [
+      "Every deployment attempt (succeeded or failed) is durably recorded, mirrored into the Evidence Ledger and Truth Status, and can be rolled back to the prior successful deployment for the same environment -- all tested against the real service functions and a real Postgres database, not exercised against a live hosting provider.",
+      "Production deployments require the Quality Gate (quality.gate Truth Status) to currently read IMPLEMENTED; development/preview/staging do not.",
+      "Rollback only reverts Pocket Studio's own deployment record and marks the prior one active again -- it does not (and, with only a mock provider, cannot) re-push any bytes to a real host.",
+    ],
+  },
+  {
+    // No hosting vendor is named anywhere in Master Spec (unlike
+    // payments, where "e.g. Stripe" was already a named illustrative
+    // example in this codebase's own seed data) -- picking one (Vercel,
+    // Netlify, AWS, etc.) here would be an unauthorized product decision
+    // this build has no authority to make. SUPPORTED_LATER_PHASE, not
+    // PROTOTYPE_ONLY: unlike every other provider abstraction this phase
+    // (AI/billing/payments/email), there is no real implementation at all
+    // here yet, mock-only.
+    capabilityKey: "platform.deployment_hosting",
+    label: "Deployment to a real hosting provider",
+    category: "platform",
+    implementationLevel: "SUPPORTED_LATER_PHASE",
+    riskClass: "LOW",
+    limitations: [
+      "DeploymentProvider has only a mock implementation -- MockDeploymentProvider always succeeds (for valid Blueprint/Build Plan versions) without ever pushing any bytes anywhere. No real hosting vendor is implemented or named.",
+      "Development, Preview, Staging, and Production are modeled as an environment field on each Deployment record; there is no separate environment-configuration entity (secrets per environment, custom domains, etc.).",
+    ],
+  },
 ] as const;
 
 export async function seedCapabilityRegistry(actorUserId?: string): Promise<void> {

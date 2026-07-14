@@ -1,4 +1,5 @@
 import "server-only";
+import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import { assertExportAllowed } from "@/lib/billing/entitlements";
 import { getLatestProductState } from "@/lib/product/product-state";
@@ -77,6 +78,12 @@ export async function exportProject(
 ): Promise<ProjectExportBundle> {
   const project = await requireProjectAccess(actorUserId, projectId, "MEMBER");
   await assertExportAllowed(actorUserId, project.organizationId);
+
+  // Master Spec §61 "production exports": a real, append-only audit fact
+  // for every export attempt, independent of the bundle's own content.
+  await db.exportRecord.create({
+    data: { projectId, exportVersion: EXPORT_VERSION, createdByUserId: actorUserId },
+  });
 
   const [
     productState,
