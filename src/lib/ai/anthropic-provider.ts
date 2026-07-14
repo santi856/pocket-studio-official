@@ -78,6 +78,7 @@ type AnthropicContentBlock = AnthropicToolUseBlock | { type: string };
 
 type AnthropicMessagesResponse = {
   content: AnthropicContentBlock[];
+  usage?: { input_tokens: number; output_tokens: number };
 };
 
 /**
@@ -166,6 +167,11 @@ export class AnthropicAIProvider implements AIProvider {
       );
     }
 
-    return parsed.data;
+    const usage =
+      typeof data.usage?.input_tokens === "number" && typeof data.usage?.output_tokens === "number"
+        ? { inputTokens: data.usage.input_tokens, outputTokens: data.usage.output_tokens }
+        : null;
+
+    return { ...parsed.data, usage };
   }
 }

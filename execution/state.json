@@ -77,7 +77,8 @@
         {
           "id": "P3-11",
           "name": "Observability: monitoring/analytics, audit logs, cost tracking, incident response",
-          "status": "pending"
+          "status": "complete",
+          "evidence": "EV-0103"
         },
         {
           "id": "P3-12",
@@ -105,9 +106,9 @@
   "milestone": {
     "current": "M3-real-billing-infrastructure",
     "previousMilestone": "M2-hardening-and-verification-tooling (P3-02, P3-03, complete)",
-    "description": "P3-04 through P3-10 complete. Every real external-provider integration built in Phase 3 so far (billing, OAuth, generated-app payments, email) follows the same pattern: real protocol/API implementation via raw fetch/crypto/tls (no SDK dependency), a deterministic mock as the safe default, honest PROTOTYPE_ONLY Capability Registry disclosure. P3-08 (deployment) and P3-09 (mobile/store) both have no such universal protocol to implement in their place, so each has only a mock provider behind a real, tested record-keeping/workflow state machine. P3-10 (governance) follows the same shape once more: no real external legal/regulatory source is monitored automatically (none is named or authorized), but the policy publication/acceptance workflow, translation-staleness detection, and the governance-requirement/impact-assessment pipeline (through a real email notification, customer approval, and Evidence/Truth Status on validation) are all real and tested. Next: P3-11, observability."
+    "description": "P3-04 through P3-11 complete. Every real external-provider integration built in Phase 3 so far follows the same pattern: real protocol/API implementation, a deterministic mock as the safe default, honest disclosure of what has never been exercised against a live external account. P3-08 (deployment), P3-09 (mobile/store), and P3-10 (governance) each have no such universal protocol to implement in their place, so each has only a mock/operator-only provider behind a real, tested record-keeping/workflow state machine. P3-11 (observability) follows the same shape: real audit logging for 3 security-sensitive actions, real AI token-usage tracking (cost only computed once an operator configures a verified rate, never hardcoded), and a real incident-response state machine, with no live monitoring/alerting vendor named or integrated. Next: P3-12, product and business analytics."
   },
-  "activeImplementationUnit": "P3-11: Observability \u2014 monitoring/analytics, audit logs, cost tracking, incident response \u2014 next unblocked unit per the P3-01..P3-14 decomposition (D-0046)",
+  "activeImplementationUnit": "P3-12: Product and business analytics + grounded business-health recommendations \u2014 next unblocked unit per the P3-01..P3-14 decomposition (D-0046)",
   "architecturalStandards": [
     {
       "id": "AS-0001",

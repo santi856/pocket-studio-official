@@ -35,4 +35,12 @@ describe("MockAIProvider.resolveIntent", () => {
     });
     expect(result.summary).toBe("Build a booking app.");
   });
+
+  it("reports null usage — no real API call was made, so there is no real token count to report", async () => {
+    const result = await provider.resolveIntent({
+      rawText: "Build a booking app.",
+      hasExistingProductState: false,
+    });
+    expect(result.usage).toBeNull();
+  });
 });

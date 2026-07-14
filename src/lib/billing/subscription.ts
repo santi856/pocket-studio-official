@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireOrganizationMembership } from "@/lib/tenancy/authz";
 import { getLatestPlan } from "@/lib/billing/plans";
 import { nextBillingState } from "@/lib/billing/access";
+import { recordAuditLogEntry } from "@/lib/observability/audit-log";
 import type { BillingLifecycleEvent } from "@/lib/billing/access";
 import type { OrganizationSubscription, PlanKey } from "@/generated/prisma/client";
 
@@ -130,7 +131,22 @@ export async function transitionBillingState(
   event: BillingLifecycleEvent,
 ): Promise<OrganizationSubscription> {
   await requireOrganizationMembership(actorUserId, organizationId, "OWNER");
-  return applyBillingStateTransition(organizationId, event);
+  const updated = await applyBillingStateTransition(organizationId, event);
+
+  // BillingEvent (above) already records fromState/toState/summary but
+  // has no actorUserId field — this is the only place that captures
+  // *which member* triggered a member-driven transition (the
+  // webhook-driven path below has no actor to record, by design).
+  await recordAuditLogEntry({
+    organizationId,
+    actorUserId,
+    action: "BILLING_STATE_TRANSITIONED",
+    targetType: "OrganizationSubscription",
+    targetId: updated.id,
+    metadata: { event, billingState: updated.billingState },
+  });
+
+  return updated;
 }
 
 /**

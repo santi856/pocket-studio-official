@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import { decryptSecret, encryptSecret } from "@/lib/credentials/crypto";
+import { recordAuditLogEntry } from "@/lib/observability/audit-log";
 import type { CredentialReference } from "@/generated/prisma/client";
 
 export class IntegrationRequirementNotFoundError extends Error {
@@ -23,7 +24,7 @@ export async function storeCredential(
   projectId: string,
   input: { integrationRequirementId: string; provider: string; secret: string },
 ): Promise<{ id: string; provider: string; createdAt: Date }> {
-  await requireProjectAccess(actorUserId, projectId, "MEMBER");
+  const project = await requireProjectAccess(actorUserId, projectId, "MEMBER");
 
   const requirement = await db.integrationRequirement.findFirst({
     where: { id: input.integrationRequirementId, projectId },
@@ -53,6 +54,18 @@ export async function storeCredential(
     },
   });
 
+  await recordAuditLogEntry({
+    organizationId: project.organizationId,
+    actorUserId,
+    action: "CREDENTIAL_STORED",
+    targetType: "CredentialReference",
+    targetId: record.id,
+    metadata: {
+      provider: input.provider,
+      integrationRequirementId: input.integrationRequirementId,
+    },
+  });
+
   return { id: record.id, provider: record.provider, createdAt: record.createdAt };
 }
 
@@ -68,7 +81,7 @@ export async function retrieveCredentialSecret(
   projectId: string,
   integrationRequirementId: string,
 ): Promise<string | null> {
-  await requireProjectAccess(actorUserId, projectId, "MEMBER");
+  const project = await requireProjectAccess(actorUserId, projectId, "MEMBER");
 
   const record = await db.credentialReference.findFirst({
     where: { integrationRequirementId, projectId },
@@ -76,6 +89,15 @@ export async function retrieveCredentialSecret(
   if (!record) {
     return null;
   }
+
+  await recordAuditLogEntry({
+    organizationId: project.organizationId,
+    actorUserId,
+    action: "CREDENTIAL_ACCESSED",
+    targetType: "CredentialReference",
+    targetId: record.id,
+    metadata: { provider: record.provider },
+  });
 
   return decryptSecret({ ciphertext: record.ciphertext, iv: record.iv, authTag: record.authTag });
 }

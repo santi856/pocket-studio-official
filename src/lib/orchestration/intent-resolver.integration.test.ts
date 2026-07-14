@@ -65,4 +65,15 @@ describe("resolveIntent", () => {
       ForbiddenError,
     );
   });
+
+  it("records no AiUsageEvent in mock mode — there is no real usage to report (P3-11)", async () => {
+    const { owner, project } = await seedProject();
+
+    await resolveIntent(owner.id, project.id, "Build a premium booking app for mobile detailers.");
+
+    const events = await db.aiUsageEvent.findMany({
+      where: { organizationId: project.organizationId },
+    });
+    expect(events).toHaveLength(0);
+  });
 });

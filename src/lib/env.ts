@@ -16,6 +16,13 @@ const serverEnvSchema = z.object({
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters"),
   AI_PROVIDER: z.enum(["mock", "anthropic"]).default("mock"),
   ANTHROPIC_API_KEY: z.string().optional(),
+  // Optional, deliberately unset by default (Master Spec §61 "cost
+  // tracking") — this build never hardcodes a specific dollar-per-token
+  // rate it cannot verify is current; real token counts are always
+  // recorded, but a dollar estimate is only computed once an operator
+  // configures a real, current rate here.
+  AI_COST_PER_1K_INPUT_TOKENS_CENTS: z.coerce.number().nonnegative().optional(),
+  AI_COST_PER_1K_OUTPUT_TOKENS_CENTS: z.coerce.number().nonnegative().optional(),
   BILLING_PROVIDER: z.enum(["mock", "stripe"]).default("mock"),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),

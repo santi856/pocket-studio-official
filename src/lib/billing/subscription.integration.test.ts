@@ -84,6 +84,18 @@ describe("Organization billing subscription", () => {
     ).rejects.toBeInstanceOf(SubscriptionNotFoundError);
   });
 
+  it("records a real audit log entry capturing which member triggered the transition (P3-11)", async () => {
+    const { owner, org } = await seedOrg();
+    await createSubscription(owner.id, org.id);
+    await transitionBillingState(owner.id, org.id, "CANCEL_REQUESTED");
+
+    const entries = await db.auditLogEntry.findMany({
+      where: { organizationId: org.id, action: "BILLING_STATE_TRANSITIONED" },
+    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.actorUserId).toBe(owner.id);
+  });
+
   it("resolves entitlements from the plan the organization is actually subscribed to", async () => {
     const { owner, org } = await seedOrg();
     await createSubscription(owner.id, org.id);

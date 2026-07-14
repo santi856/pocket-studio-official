@@ -109,11 +109,106 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships  Membership[]
-  projects     Project[]
-  subscription OrganizationSubscription?
+  memberships     Membership[]
+  projects        Project[]
+  subscription    OrganizationSubscription?
+  auditLogEntries AuditLogEntry[]
+  aiUsageEvents   AiUsageEvent[]
 
   @@map("organizations")
+}
+
+// ---------------------------------------------------------------------------
+// Observability (Master Spec §61: "monitoring and analytics; audit logs;
+// cost tracking"; §31's "audit logs" security requirement). onDelete:
+// SetNull (not Cascade, unlike almost every other organization-scoped
+// model in this schema) is deliberate here: an audit trail or a real
+// dollar-cost record must survive the deletion of the organization it
+// describes, for the same forensic/compliance reason real audit systems
+// never cascade-delete their own history.
+// ---------------------------------------------------------------------------
+
+enum AuditLogAction {
+  CREDENTIAL_STORED
+  CREDENTIAL_ACCESSED
+  BILLING_STATE_TRANSITIONED
+}
+
+model AuditLogEntry {
+  id             String         @id @default(cuid())
+  organizationId String?
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actorUserId    String?
+  action         AuditLogAction
+  targetType     String
+  targetId       String
+  metadata       Json?
+  createdAt      DateTime       @default(now())
+
+  @@index([organizationId, createdAt])
+  @@map("audit_log_entries")
+}
+
+// Real token counts from the AI provider's own response (Anthropic's
+// Messages API returns exact input/output token counts) -- never
+// estimated or guessed. estimatedCostCents is deliberately nullable: this
+// build does not hardcode a specific dollar-per-token rate it cannot
+// verify is current (the same "never fabricate, unknowns remain open"
+// discipline already applied to legal-document generation, §34) -- cost
+// is only computed when an operator explicitly configures a real,
+// current rate (AI_COST_PER_1K_INPUT_TOKENS_CENTS/
+// AI_COST_PER_1K_OUTPUT_TOKENS_CENTS, src/lib/env.ts).
+model AiUsageEvent {
+  id                 String        @id @default(cuid())
+  organizationId     String?
+  organization       Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  provider           String
+  inputTokens        Int
+  outputTokens       Int
+  estimatedCostCents Int?
+  createdAt          DateTime      @default(now())
+
+  @@index([organizationId, createdAt])
+  @@map("ai_usage_events")
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+}
+
+// Platform-wide, not organization-scoped (an incident can affect many
+// tenants, or none in particular -- e.g. a provider outage). Operator-only
+// record-keeping (Master Spec §31/§61 "incident response") -- no live
+// monitoring/alerting integration exists or is authorized (no vendor
+// named, the same honesty already applied to deployment hosting and
+// governance-source monitoring); an incident is recorded once a real
+// operator has identified one.
+model IncidentReport {
+  id          String           @id @default(cuid())
+  title       String
+  severity    IncidentSeverity
+  status      IncidentStatus
+  description String
+  rootCause   String?
+  remediation String?
+  detectedAt  DateTime
+  resolvedAt  DateTime?
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, detectedAt])
+  @@map("incident_reports")
 }
 
 model Membership {

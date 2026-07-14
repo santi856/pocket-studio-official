@@ -2,6 +2,7 @@ import "server-only";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import { getLatestProductState } from "@/lib/product/product-state";
 import { getAIProvider } from "@/lib/ai/get-provider";
+import { recordAiUsageEvent } from "@/lib/observability/ai-usage";
 import type { ResolvedIntent } from "@/lib/ai/provider";
 
 /**
@@ -15,13 +16,27 @@ export async function resolveIntent(
   projectId: string,
   rawText: string,
 ): Promise<ResolvedIntent> {
-  await requireProjectAccess(actorUserId, projectId, "MEMBER");
+  const project = await requireProjectAccess(actorUserId, projectId, "MEMBER");
 
   const existingState = await getLatestProductState(actorUserId, projectId);
 
   const provider = getAIProvider();
-  return provider.resolveIntent({
+  const result = await provider.resolveIntent({
     rawText,
     hasExistingProductState: existingState !== null,
   });
+
+  // Master Spec §61 "cost tracking" — only a real provider call has real
+  // usage to record; mock mode's null usage is never recorded as a
+  // fabricated zero-cost event.
+  if (result.usage) {
+    await recordAiUsageEvent({
+      organizationId: project.organizationId,
+      provider: provider.name,
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+    });
+  }
+
+  return result;
 }

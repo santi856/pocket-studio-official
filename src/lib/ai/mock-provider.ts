@@ -23,6 +23,7 @@ export class MockAIProvider implements AIProvider {
         type: "unclear",
         summary: trimmed,
         confidence: "low",
+        usage: null,
       };
     }
 
@@ -30,6 +31,7 @@ export class MockAIProvider implements AIProvider {
       type: input.hasExistingProductState ? "edit_request" : "describe_idea",
       summary: trimmed,
       confidence: "high",
+      usage: null,
     };
   }
 }

@@ -324,6 +324,26 @@ export const INITIAL_CAPABILITIES: readonly CapabilityDefinition[] = [
       "Development, Preview, Staging, and Production are modeled as an environment field on each Deployment record; there is no separate environment-configuration entity (secrets per environment, custom domains, etc.).",
     ],
   },
+  {
+    // P3-11: real audit logging (credential store/access, member-driven
+    // billing state transitions -- all tested against a real Postgres
+    // database), real AI cost tracking (actual token counts from a real
+    // Anthropic response, never estimated), and a real incident-response
+    // state machine. PROTOTYPE_ONLY: genuinely implemented and tested,
+    // but with real, disclosed gaps below rather than a complete
+    // observability platform.
+    capabilityKey: "platform.observability",
+    label: "Audit logs, AI cost tracking, and incident response",
+    category: "platform",
+    implementationLevel: "PROTOTYPE_ONLY",
+    riskClass: "LOW",
+    limitations: [
+      "Audit logging covers 3 real, security-sensitive actions (credential stored, credential accessed, member-driven billing state transition) -- not a comprehensive audit of every sensitive action in the codebase. Viewing an organization's audit trail requires ADMIN role.",
+      "AI cost tracking records real, exact token counts from every live Anthropic API call (never estimated) -- but a dollar cost is only computed once an operator configures a real, current per-token rate (AI_COST_PER_1K_INPUT_TOKENS_CENTS/AI_COST_PER_1K_OUTPUT_TOKENS_CENTS); this build never hardcodes a rate it cannot verify is current. Mock-mode AI calls record no usage event at all, by design -- there is no real cost to report.",
+      "Incident response is a real, tested state machine (OPEN -> INVESTIGATING -> RESOLVED, requiring a real root cause and remediation to resolve) but has no live monitoring/alerting integration -- no vendor is named or authorized; an incident is recorded only once a real human operator has identified one. No customer-facing incident status page exists.",
+      "No platform-wide analytics/monitoring dashboard exists in the Studio UI yet -- this is real, queryable service-layer infrastructure (getAiUsageSummary, listAuditLogEntries, listIncidents), not yet a rendered page.",
+    ],
+  },
 ] as const;
 
 export async function seedCapabilityRegistry(actorUserId?: string): Promise<void> {

@@ -7,11 +7,15 @@ function setEnv(overrides: Record<string, string | undefined>) {
   process.env = { ...ORIGINAL_ENV, ...overrides };
 }
 
-function toolUseResponse(input: unknown, name = "resolve_intent") {
+function toolUseResponse(
+  input: unknown,
+  name = "resolve_intent",
+  usage: { input_tokens: number; output_tokens: number } = { input_tokens: 42, output_tokens: 17 },
+) {
   return {
     ok: true,
     status: 200,
-    json: async () => ({ content: [{ type: "tool_use", name, input }] }),
+    json: async () => ({ content: [{ type: "tool_use", name, input }], usage }),
     text: async () => "",
   } as Response;
 }
@@ -52,6 +56,7 @@ describe("AnthropicAIProvider", () => {
       type: "describe_idea",
       summary: "A booking app.",
       confidence: "high",
+      usage: { inputTokens: 42, outputTokens: 17 },
     });
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
@@ -60,6 +65,34 @@ describe("AnthropicAIProvider", () => {
     const body = JSON.parse(init.body as string);
     expect(body.tool_choice).toEqual({ type: "tool", name: "resolve_intent" });
     expect(body.messages).toEqual([{ role: "user", content: "Build a booking app." }]);
+  });
+
+  it("returns null usage when the response omits real token counts, never fabricating them", async () => {
+    const { AnthropicAIProvider } = await import("./anthropic-provider");
+    const provider = new AnthropicAIProvider();
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        content: [
+          {
+            type: "tool_use",
+            name: "resolve_intent",
+            input: { type: "describe_idea", summary: "A booking app.", confidence: "high" },
+          },
+        ],
+        // No `usage` field at all.
+      }),
+      text: async () => "",
+    } as Response);
+
+    const result = await provider.resolveIntent({
+      rawText: "Build a booking app.",
+      hasExistingProductState: false,
+    });
+
+    expect(result.usage).toBeNull();
   });
 
   it("throws AnthropicRequestError on a non-2xx response", async () => {

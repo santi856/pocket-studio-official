@@ -135,4 +135,28 @@ describe("Credential vault", () => {
       retrieveCredentialSecret(outsider.id, project.id, requirement.id),
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
+
+  it("records a real audit log entry for storing and retrieving a credential (P3-11)", async () => {
+    const { owner, project, requirement } = await seedProjectWithRequirement();
+
+    await storeCredential(owner.id, project.id, {
+      integrationRequirementId: requirement.id,
+      provider: "stripe",
+      secret: "sk_test_abc123",
+    });
+    await retrieveCredentialSecret(owner.id, project.id, requirement.id);
+
+    const entries = await db.auditLogEntry.findMany({
+      where: { organizationId: project.organizationId },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(entries.map((entry) => entry.action)).toEqual([
+      "CREDENTIAL_STORED",
+      "CREDENTIAL_ACCESSED",
+    ]);
+    expect(entries.every((entry) => entry.actorUserId === owner.id)).toBe(true);
+    for (const entry of entries) {
+      expect(JSON.stringify(entry.metadata)).not.toContain("sk_test_abc123");
+    }
+  });
 });

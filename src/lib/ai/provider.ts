@@ -12,6 +12,12 @@ export type ResolvedIntent = {
   /** Not a paraphrase in mock mode — see MockAIProvider for why. */
   summary: string;
   confidence: "high" | "medium" | "low";
+  /**
+   * Real token counts from a live provider call, for cost tracking
+   * (Master Spec §61). null in mock mode — no real API call was made, so
+   * there is no real usage to report; never a fabricated placeholder.
+   */
+  usage: { inputTokens: number; outputTokens: number } | null;
 };
 
 /**

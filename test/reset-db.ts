@@ -14,6 +14,12 @@ export async function resetDatabase(): Promise<void> {
   // Not a User relation (see the LoginAttempt model comment,
   // prisma/schema.prisma), so not covered by User's cascade below.
   await db.loginAttempt.deleteMany();
+  // AuditLogEntry/AiUsageEvent use onDelete: SetNull on organizationId
+  // (deliberately, so a real audit/cost record survives organization
+  // deletion) — not covered by Organization's cascade below, so deleted
+  // explicitly here instead.
+  await db.auditLogEntry.deleteMany();
+  await db.aiUsageEvent.deleteMany();
   // Project cascades to ProductState, ProductDNA, ProductMemoryEntry,
   // ProductKnowledgeNode/Edge, Decision, ProductEvent, ProductEvidence,
   // TruthStatusEntry, IntegrationRequirement (-> CredentialReference),
@@ -30,6 +36,7 @@ export async function resetDatabase(): Promise<void> {
   await db.capabilityRegistryEntry.deleteMany();
   await db.planDefinition.deleteMany();
   await db.governanceRequirement.deleteMany();
+  await db.incidentReport.deleteMany();
   // Not a relation of anything else — identified only by its own
   // (provider, providerEventId) pair, so not covered by any cascade above.
   await db.processedWebhookEvent.deleteMany();
