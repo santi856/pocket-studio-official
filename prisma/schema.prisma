@@ -14,12 +14,19 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String    @id @default(cuid())
+  email        String    @unique
   passwordHash String
   name         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  // P3-02 regression repair: the last time this user authenticated
+  // successfully. Used to bound login-rate-limit enforcement to attempts
+  // that happened *after* the account was last proven to belong to its
+  // owner, without deleting the LoginAttempt history itself (Master Spec
+  // §31 — a security audit trail must survive a subsequent successful
+  // login, not be silently erased by it).
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   sessions    Session[]
   memberships Membership[]
@@ -47,9 +54,20 @@ model Session {
 model LoginAttempt {
   id        String   @id @default(cuid())
   email     String
+  // P3-02 regression repair: rate-limiting keyed by email alone let anyone
+  // who merely knew a victim's email address lock them out of their own
+  // account from anywhere (a real, confirmed denial-of-service — OWASP
+  // ASVS explicitly warns against pure-account lockout for exactly this
+  // reason). Keying by (email, ipAddress) means an attacker can only
+  // throttle their own vantage point against a given email, not the
+  // victim's own access to it. Residual, disclosed limitation: users
+  // genuinely sharing one IP (NAT, office network) can still interfere
+  // with each other — accepted as proportional for a V1 control, not
+  // eliminated with heavier device/session fingerprinting.
+  ipAddress String
   createdAt DateTime @default(now())
 
-  @@index([email, createdAt])
+  @@index([email, ipAddress, createdAt])
   @@map("login_attempts")
 }
 

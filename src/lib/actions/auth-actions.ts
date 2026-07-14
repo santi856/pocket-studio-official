@@ -15,6 +15,7 @@ import {
   clearSessionCookie,
   getSessionTokenFromCookies,
 } from "@/lib/auth/cookies";
+import { getClientIp } from "@/lib/web/client-ip";
 
 export async function signUpAction(formData: FormData): Promise<void> {
   const email = String(formData.get("email") ?? "");
@@ -40,9 +41,11 @@ export async function signInAction(formData: FormData): Promise<void> {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
 
+  const ipAddress = await getClientIp();
+
   let user;
   try {
-    user = await authenticateUser({ email, password });
+    user = await authenticateUser({ email, password, ipAddress });
   } catch (error) {
     if (error instanceof InvalidCredentialsError || error instanceof TooManyLoginAttemptsError) {
       redirect(`/sign-in?error=${encodeURIComponent(error.message)}`);

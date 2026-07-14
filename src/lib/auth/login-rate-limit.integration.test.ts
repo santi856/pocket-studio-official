@@ -4,7 +4,6 @@ import { db } from "@/lib/db";
 import { resetDatabase } from "../../../test/reset-db";
 import {
   assertNotLoginRateLimited,
-  clearLoginAttempts,
   deleteOldLoginAttempts,
   recordFailedLoginAttempt,
   TooManyLoginAttemptsError,
@@ -20,32 +19,49 @@ describe("login rate limiting", () => {
     await db.$disconnect();
   });
 
-  it("does not rate-limit before the threshold is reached", async () => {
-    for (let i = 0; i < 4; i++) {
-      await recordFailedLoginAttempt("threshold@example.com");
+  async function recordAttempts(email: string, ipAddress: string, count: number) {
+    for (let i = 0; i < count; i++) {
+      await db.$transaction((tx) => recordFailedLoginAttempt(tx, email, ipAddress));
     }
+  }
 
-    await expect(assertNotLoginRateLimited("threshold@example.com")).resolves.toBeUndefined();
+  it("does not rate-limit before the threshold is reached", async () => {
+    await recordAttempts("threshold@example.com", "1.1.1.1", 4);
+
+    await expect(
+      db.$transaction((tx) =>
+        assertNotLoginRateLimited(tx, "threshold@example.com", "1.1.1.1", null),
+      ),
+    ).resolves.toBeUndefined();
   });
 
   it("rate-limits once the threshold is reached", async () => {
-    for (let i = 0; i < 5; i++) {
-      await recordFailedLoginAttempt("over-threshold@example.com");
-    }
+    await recordAttempts("over-threshold@example.com", "1.1.1.1", 5);
 
-    await expect(assertNotLoginRateLimited("over-threshold@example.com")).rejects.toBeInstanceOf(
-      TooManyLoginAttemptsError,
-    );
+    await expect(
+      db.$transaction((tx) =>
+        assertNotLoginRateLimited(tx, "over-threshold@example.com", "1.1.1.1", null),
+      ),
+    ).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
   });
 
-  it("normalizes email case/whitespace so a lockout cannot be bypassed by resubmitting a differently-cased address", async () => {
-    for (let i = 0; i < 5; i++) {
-      await recordFailedLoginAttempt("  Case@Example.com  ");
-    }
+  it("regression (D-0053): attempts from a different IP never count toward another IP's threshold for the same email — closes the email-only account-lockout DoS", async () => {
+    await recordAttempts("victim@example.com", "attacker.ip", 5);
 
-    await expect(assertNotLoginRateLimited("case@example.com")).rejects.toBeInstanceOf(
-      TooManyLoginAttemptsError,
-    );
+    // The legitimate owner, attempting from their own IP, is unaffected —
+    // an attacker who only knows the victim's email cannot lock them out.
+    await expect(
+      db.$transaction((tx) =>
+        assertNotLoginRateLimited(tx, "victim@example.com", "victims-real-ip", null),
+      ),
+    ).resolves.toBeUndefined();
+
+    // The attacker's own (email, ip) pair is correctly throttled.
+    await expect(
+      db.$transaction((tx) =>
+        assertNotLoginRateLimited(tx, "victim@example.com", "attacker.ip", null),
+      ),
+    ).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
   });
 
   it("ignores attempts outside the 15-minute window", async () => {
@@ -53,35 +69,74 @@ describe("login rate limiting", () => {
     await db.loginAttempt.createMany({
       data: Array.from({ length: 5 }, () => ({
         email,
+        ipAddress: "1.1.1.1",
         createdAt: new Date(Date.now() - 16 * 60 * 1000),
       })),
     });
 
-    await expect(assertNotLoginRateLimited(email)).resolves.toBeUndefined();
+    await expect(
+      db.$transaction((tx) => assertNotLoginRateLimited(tx, email, "1.1.1.1", null)),
+    ).resolves.toBeUndefined();
   });
 
-  it("clearLoginAttempts removes an email's history entirely", async () => {
-    const email = "cleared@example.com";
-    for (let i = 0; i < 5; i++) {
-      await recordFailedLoginAttempt(email);
-    }
+  it("regression (D-0053): attempts before lastLoginAt are excluded, without deleting any LoginAttempt history", async () => {
+    const email = "recovered@example.com";
+    const ipAddress = "1.1.1.1";
+    await recordAttempts(email, ipAddress, 4);
+    const loginTime = new Date();
+    await new Promise((resolve) => setTimeout(resolve, 5));
 
-    await clearLoginAttempts(email);
+    // A fresh run of failures after the successful login must not be
+    // blocked by the 4 pre-login attempts still sitting in the table.
+    await expect(
+      db.$transaction((tx) => assertNotLoginRateLimited(tx, email, ipAddress, loginTime)),
+    ).resolves.toBeUndefined();
 
-    await expect(assertNotLoginRateLimited(email)).resolves.toBeUndefined();
-    expect(await db.loginAttempt.count({ where: { email } })).toBe(0);
+    // The full history — including the pre-login attempts — is still
+    // there; nothing was deleted on success.
+    expect(await db.loginAttempt.count({ where: { email, ipAddress } })).toBe(4);
   });
 
-  it("deleteOldLoginAttempts removes only rows older than the window, keeping recent ones", async () => {
-    const email = "cleanup@example.com";
-    await db.loginAttempt.create({
-      data: { email, createdAt: new Date(Date.now() - 20 * 60 * 1000) },
+  it("normalizes are the caller's responsibility — assertNotLoginRateLimited itself matches exactly on the (email, ipAddress) pair given", async () => {
+    await recordAttempts("case@example.com", "1.1.1.1", 5);
+
+    // A differently-cased email is a *different* key at this layer — case
+    // normalization happens once, in authenticateUser, before either
+    // primitive is ever called (verified end to end in
+    // users.integration.test.ts).
+    await expect(
+      db.$transaction((tx) => assertNotLoginRateLimited(tx, "Case@Example.com", "1.1.1.1", null)),
+    ).resolves.toBeUndefined();
+  });
+
+  describe("deleteOldLoginAttempts", () => {
+    it("removes only rows older than the window, keeping recent ones", async () => {
+      const email = "cleanup@example.com";
+      await db.loginAttempt.create({
+        data: { email, ipAddress: "1.1.1.1", createdAt: new Date(Date.now() - 20 * 60 * 1000) },
+      });
+      await db.$transaction((tx) => recordFailedLoginAttempt(tx, email, "1.1.1.1"));
+
+      const deletedCount = await deleteOldLoginAttempts();
+
+      expect(deletedCount).toBe(1);
+      expect(await db.loginAttempt.count({ where: { email } })).toBe(1);
     });
-    await recordFailedLoginAttempt(email);
 
-    const deletedCount = await deleteOldLoginAttempts();
+    it("regression (D-0053): respects a batch size bound rather than deleting an unbounded number of rows at once", async () => {
+      const staleTime = new Date(Date.now() - 20 * 60 * 1000);
+      await db.loginAttempt.createMany({
+        data: Array.from({ length: 10 }, (_, i) => ({
+          email: `bulk-${i}@example.com`,
+          ipAddress: "1.1.1.1",
+          createdAt: staleTime,
+        })),
+      });
 
-    expect(deletedCount).toBe(1);
-    expect(await db.loginAttempt.count({ where: { email } })).toBe(1);
+      const deletedCount = await deleteOldLoginAttempts(3);
+
+      expect(deletedCount).toBe(3);
+      expect(await db.loginAttempt.count()).toBe(7);
+    });
   });
 });
