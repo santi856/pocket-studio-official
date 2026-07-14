@@ -344,6 +344,24 @@ export const INITIAL_CAPABILITIES: readonly CapabilityDefinition[] = [
       "No platform-wide analytics/monitoring dashboard exists in the Studio UI yet -- this is real, queryable service-layer infrastructure (getAiUsageSummary, listAuditLogEntries, listIncidents), not yet a rendered page.",
     ],
   },
+  {
+    // P3-12: real aggregation of what earlier Phase 3 units already
+    // record (product analytics) plus a deterministic, rule-based health
+    // assessment against real billing/Quality-Gate/deployment/submission
+    // state (business health) -- no new tracking mechanism, no AI-
+    // generated business advice.
+    capabilityKey: "platform.product_and_business_analytics",
+    label: "Product and business analytics, grounded business-health recommendations",
+    category: "platform",
+    implementationLevel: "PROTOTYPE_ONLY",
+    riskClass: "LOW",
+    limitations: [
+      "Product analytics (getProductAnalyticsSnapshot) is a real-time aggregation of already-recorded facts (generated-app users/records, payment outcomes, deployment outcomes by environment, latest store submission per platform, Truth Status coverage) -- not a historical trend/time-series view; every call recomputes from current state.",
+      "Business-health assessment (assessBusinessHealth) checks 4 real, bounded conditions (billing state, Quality Gate status, recent deployment failure rate, latest store submission rejections) with a fixed, pre-written recommendation template per condition -- deliberately not an AI-generated opinion, and not a comprehensive business-intelligence system. It never invents a spend threshold or budget signal that was not actually configured.",
+      "Business-health is project-scoped (recorded as real Evidence/Truth Status, subjectKey business.health), not a rolled-up organization-wide score across every project -- ProductEvidence/TruthStatusEntry are both project-scoped by design.",
+      "No Studio UI page yet renders any of these snapshots or recommendations -- reachable only from the real, tested service layer, the same disclosed pre-Studio-UI pattern already present for several other P3 units this phase.",
+    ],
+  },
 ] as const;
 
 export async function seedCapabilityRegistry(actorUserId?: string): Promise<void> {
