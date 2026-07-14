@@ -21,12 +21,14 @@ export async function resetDatabase(): Promise<void> {
   await db.auditLogEntry.deleteMany();
   await db.aiUsageEvent.deleteMany();
   // Project cascades to ProductState, ProductDNA, ProductMemoryEntry,
-  // ProductKnowledgeNode/Edge, Decision, ProductEvent, ProductEvidence,
-  // TruthStatusEntry, IntegrationRequirement (-> CredentialReference),
-  // GovernanceProfile, PolicyDocument (-> PolicyAcceptance),
-  // OAuthConnectionState, Deployment, ExportRecord, StoreSubmission, and
-  // GovernanceImpactAssessment — no need to delete those separately.
-  // Organization cascades to OrganizationSubscription (-> BillingEvent).
+  // ProductKnowledgeNode/Edge (-> ProductOutcomeRecord), Decision,
+  // ProductEvent, ProductEvidence, TruthStatusEntry, IntegrationRequirement
+  // (-> CredentialReference), GovernanceProfile, PolicyDocument (->
+  // PolicyAcceptance), OAuthConnectionState, Deployment, ExportRecord,
+  // StoreSubmission, GovernanceImpactAssessment, and ProductOutcomeRecord
+  // (also directly, for records with no knowledgeNodeId) — no need to
+  // delete those separately. Organization cascades to
+  // OrganizationSubscription (-> BillingEvent).
   await db.project.deleteMany();
   await db.membership.deleteMany();
   await db.organization.deleteMany();

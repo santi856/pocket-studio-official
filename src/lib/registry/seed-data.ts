@@ -385,6 +385,29 @@ export const INITIAL_CAPABILITIES: readonly CapabilityDefinition[] = [
       "Revoking the last remaining active admin is refused (LastPlatformAdminError) to prevent the platform from having zero administrators -- there is no recovery path other than direct database access if this were ever somehow bypassed.",
     ],
   },
+  {
+    // P3-14, the final Phase 3 implementation unit: (1) ProductOutcomeRecord
+    // ties real outcome facts to the existing Product Knowledge Graph
+    // (P1-x, §12) and gives P3-12's real-time-only analytics a real
+    // historical record. (2) proposeContinuousProductRecommendations
+    // reuses assessBusinessHealth's deterministic findings (P3-12) and
+    // only ever creates a CONSEQUENTIAL, PENDING_APPROVAL Decision Ledger
+    // entry -- never AI-generated, never auto-applied, never runs on any
+    // schedule (no scheduled-job infrastructure exists, the same
+    // disclosed gap already noted for P3-04's time-based billing
+    // transitions).
+    capabilityKey: "platform.product_outcome_and_continuous_agent_foundation",
+    label: "Product Outcome foundation + bounded Continuous Product Agent foundation",
+    category: "platform",
+    implementationLevel: "PROTOTYPE_ONLY",
+    riskClass: "LOW",
+    limitations: [
+      "This is explicitly a *foundation*, not the mature Product Outcome Graph Master Spec §48 describes as 'Maximum Vision' -- outcome facts are simple (metricKey, value, source) rows, optionally linked to one knowledge-graph node, not a rich outcome model.",
+      "proposeContinuousProductRecommendations must be called explicitly -- there is no live, autonomous loop that runs it continuously or on any schedule. It never changes prices, refunds, policies, or production behavior itself, and never updates a Decision's approvalStatus -- a human must still explicitly approve or reject every proposal it creates.",
+      "Deduplication only prevents re-proposing an identical finding while an earlier proposal for it is still PENDING_APPROVAL -- once that decision is approved or rejected, a recurring finding will be proposed again on the next call.",
+      "No Studio UI page yet renders outcome history or agent-proposed decisions -- reachable only from the real, tested service layer, the same disclosed pre-Studio-UI pattern already present for several other P3 units this phase.",
+    ],
+  },
 ] as const;
 
 export async function seedCapabilityRegistry(actorUserId?: string): Promise<void> {

@@ -286,6 +286,7 @@ model Project {
   storeSubmissions            StoreSubmission[]
   policyAcceptances           PolicyAcceptance[]
   governanceImpactAssessments GovernanceImpactAssessment[]
+  productOutcomeRecords       ProductOutcomeRecord[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -481,8 +482,9 @@ model ProductKnowledgeNode {
   createdAt DateTime                 @default(now())
   updatedAt DateTime                 @updatedAt
 
-  outgoingEdges ProductKnowledgeEdge[] @relation("SourceNode")
-  incomingEdges ProductKnowledgeEdge[] @relation("TargetNode")
+  outgoingEdges  ProductKnowledgeEdge[] @relation("SourceNode")
+  incomingEdges  ProductKnowledgeEdge[] @relation("TargetNode")
+  outcomeRecords ProductOutcomeRecord[]
 
   @@index([projectId])
   @@index([projectId, type])
@@ -502,6 +504,29 @@ model ProductKnowledgeEdge {
   @@unique([sourceNodeId, targetNodeId])
   @@index([projectId])
   @@map("product_knowledge_edges")
+}
+
+// Master Spec §61 "Product Outcome foundation" — real, recorded outcome
+// facts (never estimated) optionally tied to a specific node in the
+// existing Product Knowledge Graph (§12), giving analytics (P3-12) a real
+// historical record instead of only a recomputed-on-demand snapshot.
+// knowledgeNodeId is nullable/SetNull: an outcome fact must survive its
+// knowledge node being regenerated (Blueprint/Build Plan are full-replace
+// versioned, P2-01) — the historical fact is not invalidated just because
+// the graph node that produced it was superseded.
+model ProductOutcomeRecord {
+  id              String                @id @default(cuid())
+  projectId       String
+  project         Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  knowledgeNodeId String?
+  knowledgeNode   ProductKnowledgeNode? @relation(fields: [knowledgeNodeId], references: [id], onDelete: SetNull)
+  metricKey       String
+  value           Float
+  source          String
+  recordedAt      DateTime              @default(now())
+
+  @@index([projectId, metricKey, recordedAt])
+  @@map("product_outcome_records")
 }
 
 // ---------------------------------------------------------------------------

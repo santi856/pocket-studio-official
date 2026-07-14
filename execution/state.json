@@ -95,7 +95,8 @@
         {
           "id": "P3-14",
           "name": "Product Outcome foundation + bounded Continuous Product Agent foundation",
-          "status": "pending"
+          "status": "complete",
+          "evidence": "EV-0106"
         },
         {
           "id": "P3-EXIT",
@@ -108,9 +109,9 @@
   "milestone": {
     "current": "M3-real-billing-infrastructure",
     "previousMilestone": "M2-hardening-and-verification-tooling (P3-02, P3-03, complete)",
-    "description": "P3-04 through P3-13 complete. P3-13 closes a real, previously-disclosed gap: 8 operator-only functions built in P3-10/P3-11 (governance requirement recording, impact assessment creation/notification/dismissal, incident report/investigate/resolve/list) had genuinely no authorization check until this unit wired a real, auditable platform-admin authorization root (PlatformAdmin, requirePlatformAdmin) into every one of them. Zero platform admins exist by default -- none of this is reachable without a deliberate bootstrap step. Next: P3-14, Product Outcome foundation + bounded Continuous Product Agent foundation -- the final Phase 3 implementation unit before P3-EXIT (evidence assembly, Production Readiness Report, mandatory Level 3 independent review)."
+    "description": "P3-01 through P3-14 all complete -- every unit in the Phase 3 decomposition (D-0046) has shipped. P3-14 closes the phase with a bounded Product Outcome foundation (real outcome facts tied to the existing Product Knowledge Graph) and a bounded Continuous Product Agent foundation (deterministic, rule-based recommendations that only ever create a CONSEQUENTIAL/PENDING_APPROVAL Decision Ledger entry -- never auto-applied, never AI-generated, never scheduled). Only P3-EXIT remains: assembling Phase 3 evidence, producing the Production Readiness Report, and the mandatory Level 3 independent review gate before Phase 3 can be considered accepted."
   },
-  "activeImplementationUnit": "P3-14: Product Outcome foundation + bounded Continuous Product Agent foundation \u2014 final implementation unit per the P3-01..P3-14 decomposition (D-0046) before P3-EXIT",
+  "activeImplementationUnit": "P3-EXIT: assemble Phase 3 evidence, produce the Production Readiness Report with truthful limitations, and submit for the mandatory Level 3 independent phase-exit review (Review Protocol) -- the final gate before Phase 3 can be accepted",
   "architecturalStandards": [
     {
       "id": "AS-0001",
