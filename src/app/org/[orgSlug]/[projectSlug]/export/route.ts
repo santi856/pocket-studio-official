@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCurrentUser, UnauthenticatedError } from "@/lib/auth/current-user";
 import { resolveProjectForRoute } from "@/lib/web/resolve-project";
 import { exportProject } from "@/lib/generation/export";
+import { ExportNotAllowedError } from "@/lib/billing/entitlements";
 
 /**
  * Master Spec §6 Simple Mode: "export or prepare for launch." Streams the
@@ -29,7 +30,16 @@ export async function GET(
   }
 
   const { project } = await resolveProjectForRoute(user.id, orgSlug, projectSlug);
-  const bundle = await exportProject(user.id, project.id);
+
+  let bundle;
+  try {
+    bundle = await exportProject(user.id, project.id);
+  } catch (error) {
+    if (error instanceof ExportNotAllowedError) {
+      return new NextResponse(error.message, { status: 403 });
+    }
+    throw error;
+  }
 
   return NextResponse.json(bundle, {
     headers: {

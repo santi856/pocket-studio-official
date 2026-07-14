@@ -1,6 +1,6 @@
 import "server-only";
-import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
+import { assertExportAllowed } from "@/lib/billing/entitlements";
 import { getLatestProductState } from "@/lib/product/product-state";
 import { getLatestProductDNA } from "@/lib/product/product-dna";
 import { getLatestBlueprint } from "./blueprint";
@@ -75,12 +75,8 @@ export async function exportProject(
   actorUserId: string,
   projectId: string,
 ): Promise<ProjectExportBundle> {
-  await requireProjectAccess(actorUserId, projectId, "MEMBER");
-
-  const project = await db.project.findUniqueOrThrow({
-    where: { id: projectId },
-    select: { name: true, slug: true },
-  });
+  const project = await requireProjectAccess(actorUserId, projectId, "MEMBER");
+  await assertExportAllowed(actorUserId, project.organizationId);
 
   const [
     productState,

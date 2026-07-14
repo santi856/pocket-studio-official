@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { slugify } from "@/lib/slug";
 import { requireOrganizationMembership } from "@/lib/tenancy/authz";
+import { assertWithinProjectLimit } from "@/lib/billing/entitlements";
 import type { Project } from "@/generated/prisma/client";
 
 async function generateUniqueProjectSlug(organizationId: string, name: string): Promise<string> {
@@ -31,6 +32,7 @@ export async function createProject(input: {
   createdByUserId: string;
 }): Promise<Project> {
   await requireOrganizationMembership(input.createdByUserId, input.organizationId, "MEMBER");
+  await assertWithinProjectLimit(input.createdByUserId, input.organizationId);
 
   const slug = await generateUniqueProjectSlug(input.organizationId, input.name);
 

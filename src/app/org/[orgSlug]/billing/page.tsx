@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireUserForPage } from "@/lib/web/require-user";
 import { resolveOrganizationForRoute } from "@/lib/web/resolve-project";
 import { getEntitlements, getSubscription } from "@/lib/billing/subscription";
+import { getOrganizationUsage } from "@/lib/billing/entitlements";
 import { getAccessLevel } from "@/lib/billing/access";
 import { ForbiddenError } from "@/lib/tenancy/authz";
 import { AppNav } from "@/components/app-nav";
@@ -13,9 +14,11 @@ export default async function BillingPage({ params }: { params: Promise<{ orgSlu
 
   let subscription;
   let entitlements;
+  let usage;
   try {
     subscription = await getSubscription(user.id, organization.id);
     entitlements = subscription ? await getEntitlements(user.id, organization.id) : null;
+    usage = await getOrganizationUsage(user.id, organization.id);
   } catch (err) {
     if (err instanceof ForbiddenError) {
       notFound();
@@ -55,7 +58,11 @@ export default async function BillingPage({ params }: { params: Promise<{ orgSlu
                   <div key={key}>
                     <dt className="text-zinc-500 dark:text-zinc-500">{key}</dt>
                     <dd className="font-medium text-black dark:text-white">
-                      {value === null ? "Unlimited" : String(value)}
+                      {key === "projectLimit"
+                        ? `${usage?.projectCount ?? 0} / ${value === null ? "Unlimited" : String(value)}`
+                        : value === null
+                          ? "Unlimited"
+                          : String(value)}
                     </dd>
                   </div>
                 ))}

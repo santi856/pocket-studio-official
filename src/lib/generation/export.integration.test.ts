@@ -8,6 +8,8 @@ import { createProject } from "@/lib/services/projects";
 import { seedCapabilityRegistry } from "@/lib/registry/seed-data";
 import { ForbiddenError } from "@/lib/tenancy/authz";
 import { generateProductIntelligence } from "@/lib/orchestration/product-intelligence";
+import { seedPlans } from "@/lib/billing/seed-plans";
+import { createSubscription } from "@/lib/billing/subscription";
 import { generateInitialBlueprint } from "./blueprint-generator";
 import { generateBuildPlan } from "./build-planner";
 import { createGeneratedRecord } from "./generated-records";
@@ -18,6 +20,7 @@ describe("exportProject", () => {
   beforeEach(async () => {
     await resetDatabase();
     await seedCapabilityRegistry();
+    await seedPlans();
   });
 
   afterAll(async () => {
@@ -28,6 +31,15 @@ describe("exportProject", () => {
   async function seedProject() {
     const owner = await registerUser({ email: "owner@example.com", password: "password123" });
     const org = await createOrganization({ name: "Detailer Co", ownerUserId: owner.id });
+    // Free/Explore (the default) does not permit export (P3-02
+    // entitlements enforcement) — this file tests export *content*, not
+    // billing, so it seeds a plan that permits it. Free/Explore's own
+    // block is covered by src/lib/billing/entitlements.integration.test.ts.
+    const subscription = await createSubscription(owner.id, org.id);
+    await db.organizationSubscription.update({
+      where: { id: subscription.id },
+      data: { planKey: "BUILDER" },
+    });
     const project = await createProject({
       organizationId: org.id,
       name: "Booking App",

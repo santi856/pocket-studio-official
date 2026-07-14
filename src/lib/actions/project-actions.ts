@@ -5,6 +5,7 @@ import { requireCurrentUserForAction } from "@/lib/web/require-user";
 import { db } from "@/lib/db";
 import { createProject } from "@/lib/services/projects";
 import { ForbiddenError } from "@/lib/tenancy/authz";
+import { ProjectLimitExceededError } from "@/lib/billing/entitlements";
 
 export async function createProjectAction(formData: FormData): Promise<void> {
   const user = await requireCurrentUserForAction();
@@ -33,6 +34,9 @@ export async function createProjectAction(formData: FormData): Promise<void> {
   } catch (error) {
     if (error instanceof ForbiddenError) {
       redirect("/dashboard");
+    }
+    if (error instanceof ProjectLimitExceededError) {
+      redirect(`/org/${organizationSlug}?error=${encodeURIComponent(error.message)}`);
     }
     throw error;
   }

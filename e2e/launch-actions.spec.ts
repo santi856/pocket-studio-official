@@ -80,12 +80,13 @@ test("Studio Launch actions: Quality Gate, Store Readiness, mobile project, and 
       .getByRole("button", { name: "Regenerate draft" }),
   ).toBeVisible();
 
-  // Export (P2-13) is a real, authenticated download — not a dead link.
+  // Export (P2-13) is a real, authenticated route — not a dead link. A
+  // brand-new workspace is on Free/Explore by default, which does not
+  // include export (P3-02 entitlements enforcement) — the real outcome is
+  // a graceful 403 with the plan's actual reason, never a raw crash.
   const exportLink = page.getByRole("link", { name: "Export project" });
   const href = await exportLink.getAttribute("href");
   const response = await page.request.get(href!);
-  expect(response.status()).toBe(200);
-  expect(response.headers()["content-disposition"]).toContain("attachment");
-  const bundle = await response.json();
-  expect(bundle.blueprint.version).toBe(1);
+  expect(response.status()).toBe(403);
+  expect(await response.text()).toContain("not included in this workspace's current plan");
 });

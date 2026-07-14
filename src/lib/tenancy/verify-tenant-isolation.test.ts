@@ -104,4 +104,37 @@ describe("findTenantIsolationViolations detector correctness (against synthetic 
       { functionName: "leaksOrgData", file: expect.any(String), line: 2 },
     ]);
   });
+
+  it("does not flag a function that delegates to a private (unexported) helper which itself checks access — regression: the graph must include unexported functions as nodes, not just exported ones", () => {
+    const dir = writeFixture(`
+      async function checkedHelper(actorUserId: string, projectId: string) {
+        await requireProjectAccess(actorUserId, projectId, "MEMBER");
+        return db.project.findUnique({ where: { id: projectId } });
+      }
+
+      export async function delegatesToPrivateHelper(actorUserId: string, projectId: string) {
+        return checkedHelper(actorUserId, projectId);
+      }
+    `);
+
+    expect(findTenantIsolationViolations(dir)).toEqual([]);
+  });
+
+  it("still flags a function that delegates to a private helper which does NOT check access", () => {
+    const dir = writeFixture(`
+      async function uncheckedHelper(projectId: string) {
+        return db.project.findUnique({ where: { id: projectId } });
+      }
+
+      export async function delegatesToUncheckedHelper(actorUserId: string, projectId: string) {
+        return uncheckedHelper(projectId);
+      }
+    `);
+
+    const violations = findTenantIsolationViolations(dir);
+
+    expect(violations).toEqual([
+      { functionName: "delegatesToUncheckedHelper", file: expect.any(String), line: 6 },
+    ]);
+  });
 });

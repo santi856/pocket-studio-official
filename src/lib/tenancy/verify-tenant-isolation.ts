@@ -41,6 +41,7 @@ type FunctionInfo = {
   name: string;
   file: string;
   line: number;
+  isExported: boolean;
   isTenantScoped: boolean;
   calls: Set<string>;
 };
@@ -96,11 +97,14 @@ export function findTenantIsolationViolations(
     const sourceFile = ts.createSourceFile(file, sourceText, ts.ScriptTarget.Latest, true);
 
     const visit = (node: ts.Node) => {
-      if (
-        ts.isFunctionDeclaration(node) &&
-        node.name &&
-        node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
-      ) {
+      // Every function declaration is tracked, not just exported ones —
+      // otherwise a call routed through a private helper (e.g. an
+      // exported function delegating to a local, unexported one that
+      // itself calls requireProjectAccess) dead-ends the graph traversal
+      // at the helper and produces a false positive. Only exported,
+      // tenant-scoped functions are ever *reported* as violations
+      // (below); every function is a valid graph *node*.
+      if (ts.isFunctionDeclaration(node) && node.name) {
         const calls = new Set<string>();
         const collectCalls = (inner: ts.Node) => {
           if (ts.isCallExpression(inner) && ts.isIdentifier(inner.expression)) {
@@ -117,6 +121,7 @@ export function findTenantIsolationViolations(
           name: node.name.text,
           file: path.relative(process.cwd(), file),
           line: line + 1,
+          isExported: node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false,
           isTenantScoped: hasTenantScopedStringParam(node),
           calls,
         });
@@ -146,6 +151,7 @@ export function findTenantIsolationViolations(
 
   const violations: TenantIsolationViolation[] = [];
   for (const info of functions.values()) {
+    if (!info.isExported) continue;
     if (!info.isTenantScoped) continue;
     if (AUTHZ_ROOTS.has(info.name)) continue;
     if (ALLOWED_EXCEPTIONS.has(info.name)) continue;
