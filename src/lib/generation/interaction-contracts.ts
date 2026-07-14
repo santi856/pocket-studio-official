@@ -259,11 +259,12 @@ export const RENDERER_IMPLEMENTED_STATES: ReadonlySet<InteractionState> = new Se
 // these is correctly and completely handled by the openDecisions
 // disclosure path (blueprint-generator.ts) — it is not a capability gap,
 // so it must never be flagged unsupported just because no renderer
-// primitive exists for it. (Round-1 Level 3 review of this module's own
-// introduction found `unresolved` states were missing from this exclusion,
-// producing a false "unsupported"/BLOCKED verdict for any ordinary
-// non-monetization multi-step workflow — every one of which carries an
-// `unresolved` `confirmation` state by design. Fixed here.)
+// primitive exists for it. (`unresolved` states were originally missing
+// from this exclusion, producing a false "unsupported"/BLOCKED verdict for
+// any ordinary non-monetization multi-step workflow — every one of which
+// carries an `unresolved` `confirmation` state by design. Found while
+// writing an end-to-end regression test for the practical-completeness
+// pipeline (D-0044), not by a review round. Fixed here.)
 const DISCLOSED_NOT_AUTO_RENDERED_CLASSIFICATIONS: ReadonlySet<InferenceClassification> = new Set([
   "consequential_decision",
   "unresolved",

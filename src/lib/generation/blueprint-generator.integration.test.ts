@@ -107,7 +107,7 @@ describe("generateInitialBlueprint", () => {
     );
   });
 
-  it("flags open decisions when target users or a primary data entity are unknown", async () => {
+  it("flags open decisions when target users are unknown or a primary data entity was defaulted", async () => {
     const { owner, project } = await seedProject();
     await generateProductIntelligence(owner.id, project.id, "Build a booking app.");
 
@@ -116,9 +116,22 @@ describe("generateInitialBlueprint", () => {
     expect(blueprint.openDecisions).toEqual(
       expect.arrayContaining([
         "Confirm the primary target user/customer for this product.",
-        "Confirm the primary data entity this product needs to persist.",
+        'No data category was detected from the idea text, so a generic "Record" data entity was assumed as the primary thing this product persists — confirm or rename it.',
       ]),
     );
+  });
+
+  it("always has at least one data model — Home is unconditionally a list-view screen that needs a real data binding, even when the idea text triggers no 'data' category (regression, Level 3 review round 3 finding 1)", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build a premium booking app for mobile detailers.",
+    );
+
+    const blueprint = await generateInitialBlueprint(owner.id, project.id);
+
+    expect((blueprint.dataModels as unknown as { name: string }[]).length).toBeGreaterThan(0);
   });
 
   it("creates SCREEN, WORKFLOW, DATA_MODEL, and ACTION knowledge nodes matching the generated Blueprint", async () => {

@@ -255,9 +255,10 @@ function checkListViewScreensAreDataBound(
   // per workflow), so evaluating a workflow's pattern against
   // componentStructure[workflowKey] was always a category error: every
   // workflow always has a form-submission pattern, so this previously
-  // false-flagged "no Form node" for any Blueprint with a workflow at all
-  // (Level 3 review round 1 finding, discovered via a real, uncorrupted
-  // pipeline run, not synthetic corruption).
+  // false-flagged screens for any Blueprint with a workflow at all.
+  // Discovered via a real, uncorrupted pipeline run while writing an
+  // end-to-end regression test (D-0044), not synthetic corruption and not
+  // by a review round.
   for (const [screen, node] of Object.entries(componentStructure)) {
     const contract = contracts[screen];
     if (!contract?.patterns.includes("list-view")) continue;

@@ -62,9 +62,32 @@ export async function generateInitialBlueprint(
   const workflows = categories
     .map((category) => BLUEPRINT_CATEGORY_TEMPLATES[category]?.workflow)
     .filter((workflow): workflow is { name: string; steps: string[] } => Boolean(workflow));
-  const dataModels = categories
+  const categoryDataModels = categories
     .map((category) => BLUEPRINT_CATEGORY_TEMPLATES[category]?.dataModel)
     .filter((model): model is { name: string; fields: string[] } => Boolean(model));
+  // Home (BASE_SCREENS) is unconditionally a list-view screen
+  // (LIST_LIKE_SCREEN_NAMES, interaction-contracts.ts) for every product,
+  // since almost every real product's home screen browses some primary
+  // entity — but before this fix, a data model only existed when the idea
+  // text happened to match the "data" category's narrow keyword set
+  // ("database", "record", "field", "schema"...), leaving Home unbound and
+  // permanently failing the Quality Gate's data-binding check for ordinary
+  // plain-language ideas, including the official §56/§59 demonstration
+  // sentence itself (Level 3 review round 3 finding 1). The check that
+  // actually matters is a *primary* (non-Payment) model existing —
+  // deriveDataDependencies (build-planner.ts) explicitly excludes Payment
+  // when picking what Home/Browse bind to, since Payment exists to back
+  // Checkout, not a browsable list — so the fallback triggers whenever no
+  // primary model was category-matched, not merely when the list is empty
+  // (a monetization-only idea matches a Payment model but still has no
+  // primary model to fall back on). Defaulting to the same generic
+  // "Record" model the "data" category template already uses closes that
+  // gap without inventing new architecture — GeneratedRecord storage is
+  // already keyed generically by model name.
+  const hasPrimaryDataModel = categoryDataModels.some((model) => model.name !== "Payment");
+  const dataModels = hasPrimaryDataModel
+    ? categoryDataModels
+    : [...categoryDataModels, { name: "Record", fields: ["id", "status", "createdAt"] }];
   const businessRules = categories
     .map((category) => BLUEPRINT_CATEGORY_TEMPLATES[category]?.businessRule)
     .filter((rule): rule is string => Boolean(rule));
@@ -116,8 +139,10 @@ export async function generateInitialBlueprint(
   if (targetUsers.length === 0) {
     openDecisions.push("Confirm the primary target user/customer for this product.");
   }
-  if (dataModels.length === 0) {
-    openDecisions.push("Confirm the primary data entity this product needs to persist.");
+  if (!hasPrimaryDataModel) {
+    openDecisions.push(
+      'No data category was detected from the idea text, so a generic "Record" data entity was assumed as the primary thing this product persists — confirm or rename it.',
+    );
   }
   // Inference Boundaries (D-0022): a consequential_decision-classified
   // interaction state (e.g. payment confirmation) is never silently

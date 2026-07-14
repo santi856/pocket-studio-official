@@ -12,6 +12,7 @@ import { generateInitialBlueprint } from "@/lib/generation/blueprint-generator";
 import { generateBuildPlan } from "@/lib/generation/build-planner";
 import { beginChangeFlow } from "./change-flow";
 import { listEvents } from "@/lib/product/events";
+import { respondToChangeSetDecision } from "./change-flow";
 import {
   BlueprintVersionNotFoundError,
   getProjectVersionHistory,
@@ -86,14 +87,22 @@ describe("version history and restore", () => {
     it("computes a real diff between the target and current Blueprint versions", async () => {
       const { owner, project } = await seedProject();
       await generateProductIntelligence(owner.id, project.id, "Build a booking app.");
-      await generateInitialBlueprint(owner.id, project.id); // v1: Home, Browse
-      await beginChangeFlow(owner.id, project.id, "Add a database of customer records."); // v2: adds Record data model
+      await generateInitialBlueprint(owner.id, project.id); // v1: Home, Browse, default Record model
+      // Monetization is a consequential category (Master Spec §4.2) — the
+      // change stays PENDING until explicitly approved, never silently
+      // applied.
+      const { decision } = await beginChangeFlow(
+        owner.id,
+        project.id,
+        "Add payment collection to the booking workflow.",
+      );
+      await respondToChangeSetDecision(owner.id, project.id, decision.id, { approve: true }); // v2: adds a Payment data model
 
       const diff = await previewBlueprintRestore(owner.id, project.id, 1);
 
       expect(diff.currentVersion).toBe(2);
       expect(diff.targetVersion).toBe(1);
-      expect(diff.dataModelsRemoved).toContain("Record");
+      expect(diff.dataModelsRemoved).toContain("Payment");
       expect(diff.dataModelsAdded).toEqual([]);
     });
 
@@ -133,13 +142,20 @@ describe("version history and restore", () => {
     it("creates a new top version with the target's content, never mutating history in between", async () => {
       const { owner, project } = await seedProject();
       await generateProductIntelligence(owner.id, project.id, "Build a booking app.");
-      await generateInitialBlueprint(owner.id, project.id); // v1: no data models
-      await beginChangeFlow(owner.id, project.id, "Add a database of customer records."); // v2: has Record
+      await generateInitialBlueprint(owner.id, project.id); // v1: only the default Record model
+      const { decision } = await beginChangeFlow(
+        owner.id,
+        project.id,
+        "Add payment collection to the booking workflow.",
+      );
+      await respondToChangeSetDecision(owner.id, project.id, decision.id, { approve: true }); // v2: also has Payment
 
       const restored = await restoreBlueprintVersion(owner.id, project.id, 1);
 
       expect(restored.version).toBe(3);
-      expect(restored.dataModels).toEqual([]);
+      expect(restored.dataModels).toEqual([
+        { name: "Record", fields: ["id", "status", "createdAt"] },
+      ]);
       expect(restored.generationMetadata).toMatchObject({ restoredFromVersion: 1 });
 
       // v1 and v2 remain exactly as they were.

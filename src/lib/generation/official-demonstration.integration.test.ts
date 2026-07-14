@@ -8,6 +8,7 @@ import { createProject } from "@/lib/services/projects";
 import { seedCapabilityRegistry } from "@/lib/registry/seed-data";
 import { generateProductIntelligence } from "@/lib/orchestration/product-intelligence";
 import { generateApplication } from "./generation-orchestrator";
+import { runQualityGate } from "./quality-gate";
 import { getLatestTruthStatus } from "@/lib/product/truth-status";
 
 // Master Spec §54's exact required text, quoted verbatim — not a
@@ -30,8 +31,12 @@ const OFFICIAL_DEMONSTRATION_IDEA = "Build a premium booking app for mobile deta
  * (blueprint-templates.ts) derives its output from Impact Analysis
  * keyword categories, not domain understanding — from this one sentence
  * alone (no "database", "deposit", "workflow", etc. keywords) it produces
- * only the base recommended screens (Home, Browse), no data models, and no
- * business logic. This test intentionally does NOT assert §56's full
+ * only the base recommended screens (Home, Browse) and no business logic.
+ * It does get a generic "Record" data model, defaulted (not
+ * category-matched) since Home is unconditionally a list-view screen that
+ * needs a real data binding for every product, not only ones whose idea
+ * text happens to use data-category keywords (Level 3 review round 3
+ * finding 1). This test intentionally does NOT assert §56's full
  * customer/owner/data lists are produced, because they are not — asserting
  * otherwise would misrepresent what this system currently does. Closing
  * that gap honestly requires either a deliberately expanded, reusable
@@ -80,7 +85,23 @@ describe("official Phase 2 demonstration product (Master Spec §56)", () => {
     const { blueprint } = await generateApplication(owner.id, project.id);
 
     expect(blueprint.screens).toEqual(["Home", "Browse"]);
-    expect(blueprint.dataModels).toEqual([]);
+    expect(blueprint.dataModels).toEqual([
+      { name: "Record", fields: ["id", "status", "createdAt"] },
+    ]);
+  });
+
+  it("passes the Quality Gate's data-binding checks — Home/Browse are real list-view screens bound to the defaulted Record data model (regression, Level 3 review round 3 finding 1)", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(owner.id, project.id, OFFICIAL_DEMONSTRATION_IDEA);
+    await generateApplication(owner.id, project.id);
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    const dataBoundCheck = result.checks.find(
+      (check) => check.name === "List-view screens are wired to a real data dependency",
+    );
+    expect(dataBoundCheck?.passed).toBe(true);
+    expect(result.passed).toBe(true);
   });
 
   it("syncs Truth Status honestly, extracting the correct target customer from the official sentence", async () => {
