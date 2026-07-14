@@ -30,6 +30,7 @@ export async function resetDatabase(): Promise<void> {
   await db.project.deleteMany();
   await db.membership.deleteMany();
   await db.organization.deleteMany();
+  // User cascades to PlatformAdmin — no need to delete separately.
   await db.user.deleteMany();
   // Not project- or organization-scoped (platform-wide registries), so
   // not covered by the cascades above.

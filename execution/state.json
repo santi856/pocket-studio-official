@@ -89,7 +89,8 @@
         {
           "id": "P3-13",
           "name": "Internal administrative operations",
-          "status": "pending"
+          "status": "complete",
+          "evidence": "EV-0105"
         },
         {
           "id": "P3-14",
@@ -107,9 +108,9 @@
   "milestone": {
     "current": "M3-real-billing-infrastructure",
     "previousMilestone": "M2-hardening-and-verification-tooling (P3-02, P3-03, complete)",
-    "description": "P3-04 through P3-12 complete. Every real external-provider integration built in Phase 3 so far follows the same pattern: real protocol/API implementation, a deterministic mock as the safe default, honest disclosure of what has never been exercised against a live external account. P3-08 through P3-11 each have no universal protocol/vendor to implement in their place, so each has only a mock/operator-only provider behind a real, tested record-keeping/workflow state machine. P3-12 (analytics) is pure real-time aggregation over facts those units already record, plus a deterministic, rule-based business-health assessment with fixed recommendation templates -- never AI-generated business advice. Next: P3-13, internal administrative operations."
+    "description": "P3-04 through P3-13 complete. P3-13 closes a real, previously-disclosed gap: 8 operator-only functions built in P3-10/P3-11 (governance requirement recording, impact assessment creation/notification/dismissal, incident report/investigate/resolve/list) had genuinely no authorization check until this unit wired a real, auditable platform-admin authorization root (PlatformAdmin, requirePlatformAdmin) into every one of them. Zero platform admins exist by default -- none of this is reachable without a deliberate bootstrap step. Next: P3-14, Product Outcome foundation + bounded Continuous Product Agent foundation -- the final Phase 3 implementation unit before P3-EXIT (evidence assembly, Production Readiness Report, mandatory Level 3 independent review)."
   },
-  "activeImplementationUnit": "P3-13: Internal administrative operations \u2014 next unblocked unit per the P3-01..P3-14 decomposition (D-0046)",
+  "activeImplementationUnit": "P3-14: Product Outcome foundation + bounded Continuous Product Agent foundation \u2014 final implementation unit per the P3-01..P3-14 decomposition (D-0046) before P3-EXIT",
   "architecturalStandards": [
     {
       "id": "AS-0001",

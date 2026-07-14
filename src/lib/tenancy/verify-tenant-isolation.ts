@@ -70,31 +70,34 @@ const ALLOWED_EXCEPTIONS: ReadonlyMap<string, string> = new Map([
     "Maps a real, operator-verified governance requirement " +
       "(GovernanceRequirement, platform-wide, not tenant-scoped) onto a " +
       "specific customer project (P3-10, " +
-      "src/lib/governance/governance-requirements.ts) — deliberately has " +
-      "no actorUserId. Judging which projects a real legal/regulatory " +
-      "requirement applies to, and whether that application is material, " +
-      "is Pocket Studio's own operator judgment call, not a customer " +
-      "self-service action; no customer-facing route exists (or should " +
-      "exist) that lets a signed-in user invoke this against an arbitrary " +
-      "project.",
+      "src/lib/governance/governance-requirements.ts) — deliberately does " +
+      "not call requireProjectAccess. As of P3-13 it does require real " +
+      "platform-admin access (requirePlatformAdmin, " +
+      "src/lib/tenancy/platform-admin.ts), which is intentionally " +
+      "cross-tenant: judging which projects a real legal/regulatory " +
+      "requirement applies to is Pocket Studio's own operator judgment " +
+      "call, not derived from that project's own organization's " +
+      "membership.",
   ],
   [
     "notifyCustomerOfGovernanceImpact",
     "The 'customer notification' step of the governance-monitoring " +
-      "pipeline (P3-10, Master Spec §33) — deliberately has no " +
-      "actorUserId, same operator-only posture as " +
-      "createGovernanceImpactAssessment above: the system notifying a " +
-      "customer that a real governance change affects their project is " +
-      "not something the customer requests for themselves.",
+      "pipeline (P3-10, Master Spec §33) — deliberately does not call " +
+      "requireProjectAccess, same cross-tenant platform-admin posture as " +
+      "createGovernanceImpactAssessment above (requires " +
+      "requirePlatformAdmin as of P3-13): the system notifying a customer " +
+      "that a real governance change affects their project is not " +
+      "something the customer requests for themselves.",
   ],
   [
     "dismissGovernanceImpactAssessment",
     "Closes a NOT_MATERIAL governance impact assessment without any " +
-      "customer-facing workflow (P3-10) — deliberately has no " +
-      "actorUserId, same operator-only posture as " +
-      "createGovernanceImpactAssessment above: judging that a real " +
-      "requirement does not actually apply to a project is Pocket " +
-      "Studio's own call, not the customer's.",
+      "customer-facing workflow (P3-10) — deliberately does not call " +
+      "requireProjectAccess, same cross-tenant platform-admin posture as " +
+      "createGovernanceImpactAssessment above (requires " +
+      "requirePlatformAdmin as of P3-13): judging that a real requirement " +
+      "does not actually apply to a project is Pocket Studio's own call, " +
+      "not the customer's.",
   ],
 ]);
 

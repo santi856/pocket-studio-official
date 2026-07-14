@@ -2,6 +2,9 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { resetDatabase } from "../../../test/reset-db";
+import { registerUser } from "@/lib/services/users";
+import { ForbiddenError } from "@/lib/tenancy/authz";
+import { grantPlatformAdmin } from "@/lib/tenancy/platform-admin";
 import {
   IncidentNotFoundError,
   InvalidIncidentTransitionError,
@@ -21,6 +24,12 @@ describe("incident response", () => {
     await db.$disconnect();
   });
 
+  async function seedAdmin() {
+    const admin = await registerUser({ email: "admin@example.com", password: "password123" });
+    await grantPlatformAdmin(admin.id, admin.id);
+    return admin;
+  }
+
   const INCIDENT_INPUT = {
     title: "Elevated 5xx rate on /api/webhooks/stripe",
     severity: "HIGH" as const,
@@ -29,19 +38,30 @@ describe("incident response", () => {
   };
 
   it("reports a new incident as OPEN", async () => {
-    const incident = await reportIncident(INCIDENT_INPUT);
+    const admin = await seedAdmin();
+
+    const incident = await reportIncident(admin.id, INCIDENT_INPUT);
 
     expect(incident.status).toBe("OPEN");
     expect(incident.severity).toBe("HIGH");
   });
 
-  it("moves OPEN -> INVESTIGATING -> RESOLVED, requiring a real root cause and remediation", async () => {
-    const incident = await reportIncident(INCIDENT_INPUT);
+  it("denies reporting an incident to a non-admin", async () => {
+    const nonAdmin = await registerUser({ email: "nonadmin@example.com", password: "password123" });
 
-    const investigating = await beginIncidentInvestigation(incident.id);
+    await expect(reportIncident(nonAdmin.id, INCIDENT_INPUT)).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+  });
+
+  it("moves OPEN -> INVESTIGATING -> RESOLVED, requiring a real root cause and remediation", async () => {
+    const admin = await seedAdmin();
+    const incident = await reportIncident(admin.id, INCIDENT_INPUT);
+
+    const investigating = await beginIncidentInvestigation(admin.id, incident.id);
     expect(investigating.status).toBe("INVESTIGATING");
 
-    const resolved = await resolveIncident(incident.id, {
+    const resolved = await resolveIncident(admin.id, incident.id, {
       rootCause: "A dependency bump changed the webhook signing secret's expected encoding.",
       remediation: "Reverted the dependency bump and added a regression test.",
     });
@@ -52,39 +72,50 @@ describe("incident response", () => {
   });
 
   it("rejects resolving an incident that has not begun investigation", async () => {
-    const incident = await reportIncident(INCIDENT_INPUT);
+    const admin = await seedAdmin();
+    const incident = await reportIncident(admin.id, INCIDENT_INPUT);
 
     await expect(
-      resolveIncident(incident.id, { rootCause: "x", remediation: "y" }),
+      resolveIncident(admin.id, incident.id, { rootCause: "x", remediation: "y" }),
     ).rejects.toBeInstanceOf(InvalidIncidentTransitionError);
   });
 
   it("rejects investigating an already-resolved incident", async () => {
-    const incident = await reportIncident(INCIDENT_INPUT);
-    await beginIncidentInvestigation(incident.id);
-    await resolveIncident(incident.id, { rootCause: "x", remediation: "y" });
+    const admin = await seedAdmin();
+    const incident = await reportIncident(admin.id, INCIDENT_INPUT);
+    await beginIncidentInvestigation(admin.id, incident.id);
+    await resolveIncident(admin.id, incident.id, { rootCause: "x", remediation: "y" });
 
-    await expect(beginIncidentInvestigation(incident.id)).rejects.toBeInstanceOf(
+    await expect(beginIncidentInvestigation(admin.id, incident.id)).rejects.toBeInstanceOf(
       InvalidIncidentTransitionError,
     );
   });
 
   it("throws IncidentNotFoundError for an unknown id", async () => {
-    await expect(beginIncidentInvestigation("nonexistent-id")).rejects.toBeInstanceOf(
+    const admin = await seedAdmin();
+
+    await expect(beginIncidentInvestigation(admin.id, "nonexistent-id")).rejects.toBeInstanceOf(
       IncidentNotFoundError,
     );
   });
 
-  it("lists incidents, optionally filtered by status", async () => {
-    const open = await reportIncident(INCIDENT_INPUT);
-    const resolved = await reportIncident({ ...INCIDENT_INPUT, title: "A second incident" });
-    await beginIncidentInvestigation(resolved.id);
-    await resolveIncident(resolved.id, { rootCause: "x", remediation: "y" });
+  it("lists incidents, optionally filtered by status, denying a non-admin", async () => {
+    const admin = await seedAdmin();
+    const open = await reportIncident(admin.id, INCIDENT_INPUT);
+    const resolved = await reportIncident(admin.id, {
+      ...INCIDENT_INPUT,
+      title: "A second incident",
+    });
+    await beginIncidentInvestigation(admin.id, resolved.id);
+    await resolveIncident(admin.id, resolved.id, { rootCause: "x", remediation: "y" });
 
-    const all = await listIncidents();
+    const all = await listIncidents(admin.id);
     expect(all).toHaveLength(2);
 
-    const openOnly = await listIncidents({ status: "OPEN" });
+    const openOnly = await listIncidents(admin.id, { status: "OPEN" });
     expect(openOnly.map((incident) => incident.id)).toEqual([open.id]);
+
+    const nonAdmin = await registerUser({ email: "nonadmin@example.com", password: "password123" });
+    await expect(listIncidents(nonAdmin.id)).rejects.toBeInstanceOf(ForbiddenError);
   });
 });

@@ -362,6 +362,29 @@ export const INITIAL_CAPABILITIES: readonly CapabilityDefinition[] = [
       "No Studio UI page yet renders any of these snapshots or recommendations -- reachable only from the real, tested service layer, the same disclosed pre-Studio-UI pattern already present for several other P3 units this phase.",
     ],
   },
+  {
+    // P3-13: a real, auditable platform-admin grant (PlatformAdmin --
+    // who, by whom, when, any revocation) and requirePlatformAdmin, a
+    // genuine second authorization root alongside
+    // requireProjectAccess/requireOrganizationMembership. Closes a real,
+    // previously-disclosed gap: several P3-10/P3-11 operator-only
+    // functions (recordGovernanceRequirement, createGovernanceImpactAssessment,
+    // notifyCustomerOfGovernanceImpact, dismissGovernanceImpactAssessment,
+    // reportIncident, beginIncidentInvestigation, resolveIncident,
+    // listIncidents) had genuinely no authorization check at all until
+    // this unit wired requirePlatformAdmin into every one of them.
+    capabilityKey: "platform.internal_administrative_operations",
+    label: "Platform-admin authorization, cross-tenant support visibility",
+    category: "platform",
+    implementationLevel: "PROTOTYPE_ONLY",
+    riskClass: "MEDIUM",
+    limitations: [
+      "The very first platform administrator is bootstrapped by any authenticated user calling grantPlatformAdmin while zero active admins exist -- the standard 'first user becomes admin' pattern. Once at least one active admin exists, only an existing admin may grant another. No separate out-of-band verification (e.g. a signed invitation link) exists for this bootstrap step.",
+      "listAllOrganizations/getPlatformOverview are real, tested, admin-gated cross-tenant reads -- but no Studio UI page renders them yet, and there is no support-impersonation ('view as this customer') workflow.",
+      "getPlatformOverview's AI cost total is null unless an operator has configured a real per-token rate (P3-11) -- the same 'never fabricate a cost' discipline applied there.",
+      "Revoking the last remaining active admin is refused (LastPlatformAdminError) to prevent the platform from having zero administrators -- there is no recovery path other than direct database access if this were ever somehow bypassed.",
+    ],
+  },
 ] as const;
 
 export async function seedCapabilityRegistry(actorUserId?: string): Promise<void> {

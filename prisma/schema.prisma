@@ -28,10 +28,35 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  sessions    Session[]
-  memberships Membership[]
+  sessions           Session[]
+  memberships        Membership[]
+  platformAdminGrant PlatformAdmin?
 
   @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Internal administrative operations (Master Spec §61). A real, auditable
+// admin grant -- who was granted access, by whom, when, and (if
+// applicable) when it was revoked -- rather than a bare boolean flag on
+// User, which would have no history. Platform-admin authority is
+// deliberately cross-tenant (requirePlatformAdmin, src/lib/tenancy/
+// platform-admin.ts) -- it is a separate authorization root from
+// requireProjectAccess/requireOrganizationMembership, never derived from
+// any organization's own membership.
+// ---------------------------------------------------------------------------
+
+model PlatformAdmin {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  grantedByUserId String?
+  grantedAt       DateTime  @default(now())
+  revokedAt       DateTime?
+  revokedByUserId String?
+
+  @@map("platform_admins")
 }
 
 model Session {

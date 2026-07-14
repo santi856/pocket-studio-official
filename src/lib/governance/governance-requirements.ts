@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
+import { requirePlatformAdmin } from "@/lib/tenancy/platform-admin";
 import { setTruthStatus } from "@/lib/product/truth-status";
 import { recordEvidence } from "@/lib/product/evidence";
 import { sendGovernanceImpactNotificationEmail } from "@/lib/email/transactional";
@@ -34,21 +35,22 @@ export type RecordGovernanceRequirementInput = {
  * requirementKey — same versioning shape as
  * upsertCapabilityVersion/PlanDefinition, not project-scoped, since a
  * legal or regulatory requirement is a fact about the world, not about
- * any one customer's project. Deliberately has no actorUserId-based
- * authorization check (same posture as upsertCapabilityVersion) — this
- * records what a real, disclosed operator has verified against a real
- * authoritative source; recording it is an operator action, not a
- * customer one. No automated scraping or live source polling exists or
- * is authorized here — this build never invents which external legal/
- * regulatory sources it monitors (the same "no real, unauthorized
+ * any one customer's project. Requires real platform-admin access (P3-13,
+ * src/lib/tenancy/platform-admin.ts) — recording what a real authoritative
+ * source says is an internal administrative operation, not a customer
+ * self-service action. No automated scraping or live source polling
+ * exists or is authorized here — this build never invents which external
+ * legal/regulatory sources it monitors (the same "no real, unauthorized
  * vendor/source" honesty already applied to deployment hosting (P3-08)
  * and app-store review (P3-09)); a requirement is recorded once a human
- * has actually verified it.
+ * operator has actually verified it.
  */
 export async function recordGovernanceRequirement(
+  actorUserId: string,
   input: RecordGovernanceRequirementInput,
-  actorUserId?: string,
 ): Promise<GovernanceRequirement> {
+  await requirePlatformAdmin(actorUserId);
+
   const previous = await db.governanceRequirement.findFirst({
     where: { requirementKey: input.requirementKey },
     orderBy: { version: "desc" },
@@ -101,21 +103,23 @@ export type CreateGovernanceImpactAssessmentInput = {
  * Master Spec §33's pipeline: "requirement update → affected-project
  * mapping → remediation proposal → customer notification → approval →
  * implementation → validation → evidence." This function is the
- * "affected-project mapping" + "remediation proposal" step — deliberately
- * has no actorUserId, the same operator-only posture as
- * recordGovernanceRequirement: deciding which of a customer's projects a
- * real legal requirement actually applies to, and whether that
- * application is material, is Pocket Studio's own judgment call, not a
- * customer self-service action. projectId is a lookup-scoping key, not an
- * authorization-check subject (no customer-facing route exists yet that
- * would let a signed-in user call this against an arbitrary project — see
- * verify-tenant-isolation.ts's reviewed exception for the exact reasoning
- * behind this specific gap).
+ * "affected-project mapping" + "remediation proposal" step — requires
+ * real platform-admin access (P3-13): deciding which of a customer's
+ * projects a real legal requirement actually applies to, and whether
+ * that application is material, is Pocket Studio's own judgment call,
+ * not a customer self-service action. projectId is a lookup-scoping key,
+ * not itself an authorization-check subject — this deliberately does not
+ * call requireProjectAccess, since platform-admin authority is
+ * cross-tenant by design (see verify-tenant-isolation.ts's reviewed
+ * exception).
  */
 export async function createGovernanceImpactAssessment(
+  actorUserId: string,
   projectId: string,
   input: CreateGovernanceImpactAssessmentInput,
 ): Promise<GovernanceImpactAssessment> {
+  await requirePlatformAdmin(actorUserId);
+
   const requirement = await db.governanceRequirement.findUnique({
     where: { id: input.governanceRequirementId },
   });
@@ -162,8 +166,8 @@ async function getOwnedAssessment(
 }
 
 /**
- * The "customer notification" step. Operator-triggered (no actorUserId,
- * same posture as createGovernanceImpactAssessment above) — notifies the
+ * The "customer notification" step. Requires real platform-admin access
+ * (same posture as createGovernanceImpactAssessment above) — notifies the
  * project's creator by real email (P3-07 infrastructure) that a
  * governance change affects their project. A failed send never blocks
  * the workflow itself (sendGovernanceImpactNotificationEmail swallows its
@@ -172,9 +176,12 @@ async function getOwnedAssessment(
  * regardless of delivery outcome.
  */
 export async function notifyCustomerOfGovernanceImpact(
+  actorUserId: string,
   projectId: string,
   assessmentId: string,
 ): Promise<GovernanceImpactAssessment> {
+  await requirePlatformAdmin(actorUserId);
+
   const assessment = await getOwnedAssessment(projectId, assessmentId);
   if (assessment.status !== "IDENTIFIED") {
     throw new InvalidGovernanceImpactTransitionError(assessment.status, "NOTIFIED");
@@ -279,16 +286,19 @@ export async function validateGovernanceRemediation(
 
 /**
  * Closes out a NOT_MATERIAL assessment without any customer-facing
- * workflow — the same operator-only posture as
+ * workflow — requires real platform-admin access, the same posture as
  * createGovernanceImpactAssessment: judging that a real requirement does
  * not actually apply to this project is Pocket Studio's own call, not
  * something the customer needs to act on.
  */
 export async function dismissGovernanceImpactAssessment(
+  actorUserId: string,
   projectId: string,
   assessmentId: string,
   reason: string,
 ): Promise<GovernanceImpactAssessment> {
+  await requirePlatformAdmin(actorUserId);
+
   const assessment = await getOwnedAssessment(projectId, assessmentId);
   if (assessment.status !== "IDENTIFIED") {
     throw new InvalidGovernanceImpactTransitionError(assessment.status, "DISMISSED");

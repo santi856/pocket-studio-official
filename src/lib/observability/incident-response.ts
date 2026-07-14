@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { requirePlatformAdmin } from "@/lib/tenancy/platform-admin";
 import type { IncidentReport, IncidentSeverity, IncidentStatus } from "@/generated/prisma/client";
 
 export type ReportIncidentInput = {
@@ -11,19 +12,20 @@ export type ReportIncidentInput = {
 
 /**
  * Master Spec §31/§61 "incident response". Platform-wide, not
- * organization-scoped — deliberately has no actorUserId-based
- * authorization check, the same operator-only posture as
- * recordGovernanceRequirement (src/lib/governance/governance-requirements.ts):
- * identifying and recording a real platform incident is Pocket Studio's
- * own operational action, not a customer self-service one. No live
- * monitoring/alerting integration exists or is authorized here (no
- * vendor named) — an incident is recorded once a real operator has
- * actually identified one.
+ * organization-scoped — requires real platform-admin access (P3-13,
+ * src/lib/tenancy/platform-admin.ts): identifying and recording a real
+ * platform incident is Pocket Studio's own internal administrative
+ * operation, not a customer self-service one. No live monitoring/
+ * alerting integration exists or is authorized here (no vendor named) —
+ * an incident is recorded once a real operator has actually identified
+ * one.
  */
 export async function reportIncident(
+  actorUserId: string,
   input: ReportIncidentInput,
-  actorUserId?: string,
 ): Promise<IncidentReport> {
+  await requirePlatformAdmin(actorUserId);
+
   return db.incidentReport.create({
     data: {
       title: input.title,
@@ -58,7 +60,12 @@ async function getIncident(incidentId: string): Promise<IncidentReport> {
   return incident;
 }
 
-export async function beginIncidentInvestigation(incidentId: string): Promise<IncidentReport> {
+export async function beginIncidentInvestigation(
+  actorUserId: string,
+  incidentId: string,
+): Promise<IncidentReport> {
+  await requirePlatformAdmin(actorUserId);
+
   const incident = await getIncident(incidentId);
   if (incident.status !== "OPEN") {
     throw new InvalidIncidentTransitionError(incident.status, "INVESTIGATING");
@@ -75,9 +82,12 @@ export async function beginIncidentInvestigation(incidentId: string): Promise<In
  * recorded about what happened or what was done about it.
  */
 export async function resolveIncident(
+  actorUserId: string,
   incidentId: string,
   input: { rootCause: string; remediation: string },
 ): Promise<IncidentReport> {
+  await requirePlatformAdmin(actorUserId);
+
   const incident = await getIncident(incidentId);
   if (incident.status !== "INVESTIGATING") {
     throw new InvalidIncidentTransitionError(incident.status, "RESOLVED");
@@ -93,9 +103,12 @@ export async function resolveIncident(
   });
 }
 
-export async function listIncidents(filter?: {
-  status?: IncidentStatus;
-}): Promise<IncidentReport[]> {
+export async function listIncidents(
+  actorUserId: string,
+  filter?: { status?: IncidentStatus },
+): Promise<IncidentReport[]> {
+  await requirePlatformAdmin(actorUserId);
+
   return db.incidentReport.findMany({
     where: { status: filter?.status },
     orderBy: { detectedAt: "desc" },

@@ -6,6 +6,7 @@ import { registerUser } from "@/lib/services/users";
 import { createOrganization } from "@/lib/services/organizations";
 import { createProject } from "@/lib/services/projects";
 import { ForbiddenError } from "@/lib/tenancy/authz";
+import { grantPlatformAdmin } from "@/lib/tenancy/platform-admin";
 import { getLatestTruthStatus } from "@/lib/product/truth-status";
 import { listEvidence } from "@/lib/product/evidence";
 import {
@@ -44,6 +45,12 @@ describe("governance requirements and impact assessments", () => {
     return { owner, project };
   }
 
+  async function seedAdmin() {
+    const admin = await registerUser({ email: "admin@example.com", password: "password123" });
+    await grantPlatformAdmin(admin.id, admin.id);
+    return admin;
+  }
+
   const REQUIREMENT_INPUT = {
     requirementKey: "ca-ccpa-2026-update",
     domain: "privacy",
@@ -60,15 +67,18 @@ describe("governance requirements and impact assessments", () => {
 
   describe("recordGovernanceRequirement", () => {
     it("creates version 1 for a new requirementKey", async () => {
-      const requirement = await recordGovernanceRequirement(REQUIREMENT_INPUT);
+      const admin = await seedAdmin();
+
+      const requirement = await recordGovernanceRequirement(admin.id, REQUIREMENT_INPUT);
 
       expect(requirement.version).toBe(1);
       expect(requirement.requirementKey).toBe("ca-ccpa-2026-update");
     });
 
     it("increments the version for the same requirementKey, preserving history", async () => {
-      await recordGovernanceRequirement(REQUIREMENT_INPUT);
-      const v2 = await recordGovernanceRequirement({
+      const admin = await seedAdmin();
+      await recordGovernanceRequirement(admin.id, REQUIREMENT_INPUT);
+      const v2 = await recordGovernanceRequirement(admin.id, {
         ...REQUIREMENT_INPUT,
         changeSummary: "Further clarification issued.",
       });
@@ -83,14 +93,23 @@ describe("governance requirements and impact assessments", () => {
       });
       expect(history).toHaveLength(2);
     });
+
+    it("denies a non-admin", async () => {
+      const { owner } = await seedProject();
+
+      await expect(recordGovernanceRequirement(owner.id, REQUIREMENT_INPUT)).rejects.toBeInstanceOf(
+        ForbiddenError,
+      );
+    });
   });
 
   describe("createGovernanceImpactAssessment", () => {
     it("throws GovernanceRequirementNotFoundError for an unknown requirement", async () => {
+      const admin = await seedAdmin();
       const { project } = await seedProject();
 
       await expect(
-        createGovernanceImpactAssessment(project.id, {
+        createGovernanceImpactAssessment(admin.id, project.id, {
           governanceRequirementId: "nonexistent-id",
           materiality: "MATERIAL",
         }),
@@ -98,10 +117,11 @@ describe("governance requirements and impact assessments", () => {
     });
 
     it("creates an IDENTIFIED assessment for a real requirement", async () => {
+      const admin = await seedAdmin();
       const { project } = await seedProject();
-      const requirement = await recordGovernanceRequirement(REQUIREMENT_INPUT);
+      const requirement = await recordGovernanceRequirement(admin.id, REQUIREMENT_INPUT);
 
-      const assessment = await createGovernanceImpactAssessment(project.id, {
+      const assessment = await createGovernanceImpactAssessment(admin.id, project.id, {
         governanceRequirementId: requirement.id,
         materiality: "MATERIAL",
         remediationProposal: "Update the Privacy Policy's automated-decision-making section.",
@@ -110,24 +130,38 @@ describe("governance requirements and impact assessments", () => {
       expect(assessment.status).toBe("IDENTIFIED");
       expect(assessment.materiality).toBe("MATERIAL");
     });
+
+    it("denies a non-admin, even a MEMBER of the affected project", async () => {
+      const admin = await seedAdmin();
+      const { owner, project } = await seedProject();
+      const requirement = await recordGovernanceRequirement(admin.id, REQUIREMENT_INPUT);
+
+      await expect(
+        createGovernanceImpactAssessment(owner.id, project.id, {
+          governanceRequirementId: requirement.id,
+          materiality: "MATERIAL",
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
   });
 
   describe("full remediation pipeline", () => {
     async function seedAssessment() {
+      const admin = await seedAdmin();
       const { owner, project } = await seedProject();
-      const requirement = await recordGovernanceRequirement(REQUIREMENT_INPUT);
-      const assessment = await createGovernanceImpactAssessment(project.id, {
+      const requirement = await recordGovernanceRequirement(admin.id, REQUIREMENT_INPUT);
+      const assessment = await createGovernanceImpactAssessment(admin.id, project.id, {
         governanceRequirementId: requirement.id,
         materiality: "MATERIAL",
         remediationProposal: "Update the Privacy Policy.",
       });
-      return { owner, project, requirement, assessment };
+      return { admin, owner, project, requirement, assessment };
     }
 
     it("moves IDENTIFIED -> NOTIFIED -> APPROVED -> IMPLEMENTED -> VALIDATED", async () => {
-      const { owner, project, requirement, assessment } = await seedAssessment();
+      const { admin, owner, project, requirement, assessment } = await seedAssessment();
 
-      const notified = await notifyCustomerOfGovernanceImpact(project.id, assessment.id);
+      const notified = await notifyCustomerOfGovernanceImpact(admin.id, project.id, assessment.id);
       expect(notified.status).toBe("NOTIFIED");
       expect(notified.notifiedAt).not.toBeNull();
 
@@ -171,15 +205,23 @@ describe("governance requirements and impact assessments", () => {
     });
 
     it("denies the customer-facing steps to a non-member", async () => {
-      const { project, assessment } = await seedAssessment();
+      const { admin, project, assessment } = await seedAssessment();
       const outsider = await registerUser({
         email: "outsider@example.com",
         password: "password123",
       });
-      await notifyCustomerOfGovernanceImpact(project.id, assessment.id);
+      await notifyCustomerOfGovernanceImpact(admin.id, project.id, assessment.id);
 
       await expect(
         approveGovernanceRemediation(outsider.id, project.id, assessment.id),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+
+    it("denies notifyCustomerOfGovernanceImpact to a non-admin, even the project owner", async () => {
+      const { owner, project, assessment } = await seedAssessment();
+
+      await expect(
+        notifyCustomerOfGovernanceImpact(owner.id, project.id, assessment.id),
       ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
@@ -194,14 +236,16 @@ describe("governance requirements and impact assessments", () => {
 
   describe("dismissGovernanceImpactAssessment", () => {
     it("dismisses a NOT_MATERIAL assessment with a reason, bypassing the customer workflow", async () => {
+      const admin = await seedAdmin();
       const { project } = await seedProject();
-      const requirement = await recordGovernanceRequirement(REQUIREMENT_INPUT);
-      const assessment = await createGovernanceImpactAssessment(project.id, {
+      const requirement = await recordGovernanceRequirement(admin.id, REQUIREMENT_INPUT);
+      const assessment = await createGovernanceImpactAssessment(admin.id, project.id, {
         governanceRequirementId: requirement.id,
         materiality: "NOT_MATERIAL",
       });
 
       const dismissed = await dismissGovernanceImpactAssessment(
+        admin.id,
         project.id,
         assessment.id,
         "This project does not process California residents' personal information.",
@@ -212,25 +256,41 @@ describe("governance requirements and impact assessments", () => {
     });
 
     it("rejects dismissing an assessment that already moved past IDENTIFIED", async () => {
+      const admin = await seedAdmin();
       const { project } = await seedProject();
-      const requirement = await recordGovernanceRequirement(REQUIREMENT_INPUT);
-      const assessment = await createGovernanceImpactAssessment(project.id, {
+      const requirement = await recordGovernanceRequirement(admin.id, REQUIREMENT_INPUT);
+      const assessment = await createGovernanceImpactAssessment(admin.id, project.id, {
         governanceRequirementId: requirement.id,
         materiality: "MATERIAL",
       });
-      await notifyCustomerOfGovernanceImpact(project.id, assessment.id);
+      await notifyCustomerOfGovernanceImpact(admin.id, project.id, assessment.id);
 
       await expect(
-        dismissGovernanceImpactAssessment(project.id, assessment.id, "too late"),
+        dismissGovernanceImpactAssessment(admin.id, project.id, assessment.id, "too late"),
       ).rejects.toBeInstanceOf(InvalidGovernanceImpactTransitionError);
+    });
+
+    it("denies a non-admin", async () => {
+      const admin = await seedAdmin();
+      const { owner, project } = await seedProject();
+      const requirement = await recordGovernanceRequirement(admin.id, REQUIREMENT_INPUT);
+      const assessment = await createGovernanceImpactAssessment(admin.id, project.id, {
+        governanceRequirementId: requirement.id,
+        materiality: "NOT_MATERIAL",
+      });
+
+      await expect(
+        dismissGovernanceImpactAssessment(owner.id, project.id, assessment.id, "not applicable"),
+      ).rejects.toBeInstanceOf(ForbiddenError);
     });
   });
 
   describe("listGovernanceImpactAssessments", () => {
     it("lists every assessment for a project, denies a non-member", async () => {
+      const admin = await seedAdmin();
       const { owner, project } = await seedProject();
-      const requirement = await recordGovernanceRequirement(REQUIREMENT_INPUT);
-      await createGovernanceImpactAssessment(project.id, {
+      const requirement = await recordGovernanceRequirement(admin.id, REQUIREMENT_INPUT);
+      await createGovernanceImpactAssessment(admin.id, project.id, {
         governanceRequirementId: requirement.id,
         materiality: "MATERIAL",
       });
