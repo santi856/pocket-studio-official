@@ -1,0 +1,158 @@
+import fs from "node:fs";
+import path from "node:path";
+import ts from "typescript";
+
+// The single choke point every tenant-scoped function must transitively
+// reach (src/lib/tenancy/authz.ts). This tool exists so that invariant is
+// mechanically enforced going forward, not re-verified by hand each phase
+// the way it was for P3-02 itself.
+const AUTHZ_ROOTS = new Set(["requireProjectAccess", "requireOrganizationMembership"]);
+
+// Every entry here must be a *deliberate, disclosed* exception, not a
+// convenience escape hatch — this tool's entire value is that this set
+// stays small and each entry is individually justified in code review.
+const ALLOWED_EXCEPTIONS: ReadonlyMap<string, string> = new Map([
+  [
+    "authenticateGeneratedAppUser",
+    "Authenticates a project's own generated-app end user (GeneratedAppUser) " +
+      "— a separate identity domain from Pocket Studio's own User/Membership " +
+      "system, with no actorUserId to check a membership for. projectId here " +
+      "is a lookup-scoping key (disambiguating the same email across " +
+      "different generated apps' isolated user tables), not an " +
+      "authorization-check subject. Not yet wired into any live route " +
+      "(src/lib/generation/generated-app-auth.ts's own docstring); today's " +
+      "access boundary is the caller's existing platform session + " +
+      "requireProjectAccess, not this function.",
+  ],
+]);
+
+export type TenantIsolationViolation = {
+  functionName: string;
+  file: string;
+  line: number;
+};
+
+/** Exposed so tests can assert the exception list stays exactly what was reviewed, not silently grown. */
+export function getAllowedExceptionNames(): string[] {
+  return [...ALLOWED_EXCEPTIONS.keys()].sort();
+}
+
+type FunctionInfo = {
+  name: string;
+  file: string;
+  line: number;
+  isTenantScoped: boolean;
+  calls: Set<string>;
+};
+
+function collectSourceFiles(rootDir: string): string[] {
+  const entries = fs.readdirSync(rootDir, { recursive: true, withFileTypes: true }) as fs.Dirent[];
+  const files: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".ts")) continue;
+    if (entry.name.endsWith(".test.ts")) continue;
+    files.push(path.join(entry.parentPath, entry.name));
+  }
+  return files;
+}
+
+const TENANT_SCOPE_PARAM_NAMES = new Set(["projectId", "organizationId"]);
+
+function hasTenantScopedStringParam(node: ts.FunctionDeclaration): boolean {
+  return node.parameters.some((param) => {
+    if (!ts.isIdentifier(param.name) || !TENANT_SCOPE_PARAM_NAMES.has(param.name.text)) {
+      return false;
+    }
+    const typeText = param.type?.getText();
+    return typeText === "string";
+  });
+}
+
+/**
+ * Parses every `.ts` file under `src/lib` (excluding tests) and, for every
+ * exported async function whose parameter list includes `projectId:
+ * string` or `organizationId: string`, computes whether it transitively
+ * calls `requireProjectAccess` or `requireOrganizationMembership` —
+ * directly, or through any chain of calls to other functions in this same
+ * codebase. A function that never reaches either is a real tenant-isolation
+ * gap: it can read or write tenant-scoped data without ever checking the
+ * caller belongs to that tenant.
+ *
+ * This is a name-based call graph, not a fully type-resolved one — two
+ * unrelated functions sharing the same name in different files would be
+ * conflated. Proportional for this codebase's actual size and its
+ * consistent one-function-one-name convention; a full TypeScript
+ * type-checker-based resolution would be the next step if that convention
+ * is ever violated.
+ */
+export function findTenantIsolationViolations(
+  rootDir = path.resolve(process.cwd(), "src/lib"),
+): TenantIsolationViolation[] {
+  const files = collectSourceFiles(rootDir);
+  const functions = new Map<string, FunctionInfo>();
+
+  for (const file of files) {
+    const sourceText = fs.readFileSync(file, "utf8");
+    const sourceFile = ts.createSourceFile(file, sourceText, ts.ScriptTarget.Latest, true);
+
+    const visit = (node: ts.Node) => {
+      if (
+        ts.isFunctionDeclaration(node) &&
+        node.name &&
+        node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+      ) {
+        const calls = new Set<string>();
+        const collectCalls = (inner: ts.Node) => {
+          if (ts.isCallExpression(inner) && ts.isIdentifier(inner.expression)) {
+            calls.add(inner.expression.text);
+          }
+          ts.forEachChild(inner, collectCalls);
+        };
+        if (node.body) {
+          ts.forEachChild(node.body, collectCalls);
+        }
+
+        const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+        functions.set(node.name.text, {
+          name: node.name.text,
+          file: path.relative(process.cwd(), file),
+          line: line + 1,
+          isTenantScoped: hasTenantScopedStringParam(node),
+          calls,
+        });
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+  }
+
+  const reachesAuthzRoot = (startName: string): boolean => {
+    const seen = new Set<string>();
+    const stack = [startName];
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      if (seen.has(current)) continue;
+      seen.add(current);
+
+      const info = functions.get(current);
+      const calls = info?.calls ?? new Set<string>();
+      for (const called of calls) {
+        if (AUTHZ_ROOTS.has(called)) return true;
+        if (!seen.has(called)) stack.push(called);
+      }
+    }
+    return false;
+  };
+
+  const violations: TenantIsolationViolation[] = [];
+  for (const info of functions.values()) {
+    if (!info.isTenantScoped) continue;
+    if (AUTHZ_ROOTS.has(info.name)) continue;
+    if (ALLOWED_EXCEPTIONS.has(info.name)) continue;
+    if (!reachesAuthzRoot(info.name)) {
+      violations.push({ functionName: info.name, file: info.file, line: info.line });
+    }
+  }
+
+  return violations.sort((a, b) => a.functionName.localeCompare(b.functionName));
+}

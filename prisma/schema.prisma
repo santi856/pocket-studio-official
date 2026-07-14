@@ -39,6 +39,20 @@ model Session {
   @@map("sessions")
 }
 
+// P3-02: production auth hardening — brute-force protection. Deliberately
+// not a User relation: recording an attempt against an email that has no
+// account must behave identically to one that does, so a caller can never
+// distinguish "no such account" from "account exists, wrong password" by
+// timing or rate-limit behavior either.
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@map("login_attempts")
+}
+
 enum MembershipRole {
   OWNER
   ADMIN

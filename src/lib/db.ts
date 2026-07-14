@@ -28,8 +28,40 @@ function resolveConnectionString(): string {
   return env.DATABASE_URL;
 }
 
+// P3-02 production hardening: previously an unbounded pg.Pool default —
+// under real concurrent load, an unbounded pool can itself exhaust
+// Postgres's own connection limit (a self-inflicted outage, not a
+// database problem). These are conservative, documented starting values
+// for a single-process deployment, not load-tested against a specific
+// production topology yet — revisit once real deployment infrastructure
+// (P3-08) is in place.
+const POOL_MAX_CONNECTIONS = 10;
+const POOL_IDLE_TIMEOUT_MS = 30_000;
+const POOL_CONNECTION_TIMEOUT_MS = 10_000;
+// Guards against one runaway query holding a connection indefinitely and
+// starving the rest of the pool.
+const STATEMENT_TIMEOUT_MS = 30_000;
+
 function createPrismaClient(): PrismaClient {
-  const adapter = new PrismaPg({ connectionString: resolveConnectionString() });
+  const adapter = new PrismaPg(
+    {
+      connectionString: resolveConnectionString(),
+      max: POOL_MAX_CONNECTIONS,
+      idleTimeoutMillis: POOL_IDLE_TIMEOUT_MS,
+      connectionTimeoutMillis: POOL_CONNECTION_TIMEOUT_MS,
+      statement_timeout: STATEMENT_TIMEOUT_MS,
+    },
+    {
+      // pg.Pool emits 'error' on idle-client failures (e.g. the database
+      // restarting); without a listener, that is an uncaught event that
+      // crashes the whole Node process — a well-known pg.Pool footgun, not
+      // hypothetical. Logging and continuing is correct: the pool recovers
+      // affected connections on its own for the next query.
+      onPoolError: (error) => {
+        console.error("Postgres connection pool error:", error);
+      },
+    },
+  );
   return new PrismaClient({ adapter });
 }
 

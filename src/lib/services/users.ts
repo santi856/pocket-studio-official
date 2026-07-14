@@ -1,6 +1,12 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import {
+  assertNotLoginRateLimited,
+  clearLoginAttempts,
+  deleteOldLoginAttempts,
+  recordFailedLoginAttempt,
+} from "@/lib/auth/login-rate-limit";
 import type { User } from "@/generated/prisma/client";
 
 export class EmailAlreadyRegisteredError extends Error {
@@ -61,16 +67,29 @@ export async function registerUser(input: {
 
 export async function authenticateUser(input: { email: string; password: string }): Promise<User> {
   const normalizedEmail = input.email.trim().toLowerCase();
+
+  // Checked before any database lookup or password verification — an
+  // email under lockout gets the exact same fast rejection whether or not
+  // an account exists for it (Master Spec §31, P3-02).
+  await assertNotLoginRateLimited(normalizedEmail);
+
   const user = await db.user.findUnique({ where: { email: normalizedEmail } });
 
   if (!user) {
+    await recordFailedLoginAttempt(normalizedEmail);
     throw new InvalidCredentialsError();
   }
 
   const passwordMatches = await verifyPassword(input.password, user.passwordHash);
   if (!passwordMatches) {
+    await recordFailedLoginAttempt(normalizedEmail);
     throw new InvalidCredentialsError();
   }
+
+  await clearLoginAttempts(normalizedEmail);
+  // Best-effort, non-blocking storage hygiene — a failure here must never
+  // fail a real sign-in.
+  void deleteOldLoginAttempts().catch(() => {});
 
   return user;
 }

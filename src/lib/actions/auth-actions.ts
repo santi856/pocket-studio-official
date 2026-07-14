@@ -8,6 +8,7 @@ import {
   InvalidCredentialsError,
   WeakPasswordError,
 } from "@/lib/services/users";
+import { TooManyLoginAttemptsError } from "@/lib/auth/login-rate-limit";
 import { createSession, deleteSessionByToken } from "@/lib/auth/session";
 import {
   setSessionCookie,
@@ -43,7 +44,7 @@ export async function signInAction(formData: FormData): Promise<void> {
   try {
     user = await authenticateUser({ email, password });
   } catch (error) {
-    if (error instanceof InvalidCredentialsError) {
+    if (error instanceof InvalidCredentialsError || error instanceof TooManyLoginAttemptsError) {
       redirect(`/sign-in?error=${encodeURIComponent(error.message)}`);
     }
     throw error;

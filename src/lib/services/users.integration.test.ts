@@ -9,6 +9,7 @@ import {
   registerUser,
   WeakPasswordError,
 } from "@/lib/services/users";
+import { TooManyLoginAttemptsError } from "@/lib/auth/login-rate-limit";
 
 describe("registerUser / authenticateUser", () => {
   beforeEach(async () => {
@@ -72,5 +73,51 @@ describe("registerUser / authenticateUser", () => {
     await expect(
       authenticateUser({ email: "nobody@example.com", password: "anything" }),
     ).rejects.toBeInstanceOf(InvalidCredentialsError);
+  });
+
+  it("locks out further attempts after 5 failed logins within the window, even with the correct password (P3-02 brute-force protection)", async () => {
+    await registerUser({ email: "lockout@example.com", password: "the-right-password" });
+
+    for (let i = 0; i < 5; i++) {
+      await expect(
+        authenticateUser({ email: "lockout@example.com", password: "wrong" }),
+      ).rejects.toBeInstanceOf(InvalidCredentialsError);
+    }
+
+    await expect(
+      authenticateUser({ email: "lockout@example.com", password: "the-right-password" }),
+    ).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
+  });
+
+  it("locks out an email with no account identically to one that exists — an attacker cannot distinguish the two by rate-limit behavior", async () => {
+    for (let i = 0; i < 5; i++) {
+      await expect(
+        authenticateUser({ email: "never-registered@example.com", password: "anything" }),
+      ).rejects.toBeInstanceOf(InvalidCredentialsError);
+    }
+
+    await expect(
+      authenticateUser({ email: "never-registered@example.com", password: "anything" }),
+    ).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
+  });
+
+  it("clears the attempt history on a successful login, so a fresh run of failures can occur again afterward", async () => {
+    await registerUser({ email: "recovers@example.com", password: "the-right-password" });
+
+    for (let i = 0; i < 4; i++) {
+      await expect(
+        authenticateUser({ email: "recovers@example.com", password: "wrong" }),
+      ).rejects.toBeInstanceOf(InvalidCredentialsError);
+    }
+
+    await authenticateUser({ email: "recovers@example.com", password: "the-right-password" });
+
+    // Still under the 5-attempt threshold post-reset — proves the counter
+    // was cleared, not merely not-yet-tripped.
+    for (let i = 0; i < 4; i++) {
+      await expect(
+        authenticateUser({ email: "recovers@example.com", password: "wrong" }),
+      ).rejects.toBeInstanceOf(InvalidCredentialsError);
+    }
   });
 });

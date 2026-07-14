@@ -11,6 +11,9 @@ export async function resetDatabase(): Promise<void> {
   }
 
   await db.session.deleteMany();
+  // Not a User relation (see the LoginAttempt model comment,
+  // prisma/schema.prisma), so not covered by User's cascade below.
+  await db.loginAttempt.deleteMany();
   // Project cascades to ProductState, ProductDNA, ProductMemoryEntry,
   // ProductKnowledgeNode/Edge, Decision, ProductEvent, ProductEvidence,
   // TruthStatusEntry, IntegrationRequirement (-> CredentialReference),
