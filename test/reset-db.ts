@@ -17,9 +17,9 @@ export async function resetDatabase(): Promise<void> {
   // Project cascades to ProductState, ProductDNA, ProductMemoryEntry,
   // ProductKnowledgeNode/Edge, Decision, ProductEvent, ProductEvidence,
   // TruthStatusEntry, IntegrationRequirement (-> CredentialReference),
-  // GovernanceProfile, and PolicyDocument — no need to delete those
-  // separately. Organization cascades to OrganizationSubscription (->
-  // BillingEvent).
+  // GovernanceProfile, PolicyDocument, and OAuthConnectionState — no need
+  // to delete those separately. Organization cascades to
+  // OrganizationSubscription (-> BillingEvent).
   await db.project.deleteMany();
   await db.membership.deleteMany();
   await db.organization.deleteMany();

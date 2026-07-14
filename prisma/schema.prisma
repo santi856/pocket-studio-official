@@ -116,6 +116,7 @@ model Project {
   generatedRecords        GeneratedRecord[]
   changeSets              ChangeSet[]
   jobRuns                 JobRun[]
+  oauthConnectionStates   OAuthConnectionState[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -580,6 +581,25 @@ model CredentialReference {
   @@map("credential_references")
 }
 
+// P3-05: a real OAuth2 authorization-code flow needs a server-tracked
+// `state` value to verify a callback genuinely continues the request this
+// project's own member initiated (CSRF protection) — a client-supplied
+// state alone proves nothing. Single-use: deleted the moment
+// completeOAuthConnection consumes it, so a replayed callback can never
+// succeed twice.
+model OAuthConnectionState {
+  id                       String   @id @default(cuid())
+  state                    String   @unique
+  projectId                String
+  project                  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  integrationRequirementId String
+  createdByUserId          String
+  createdAt                DateTime @default(now())
+
+  @@index([projectId])
+  @@map("oauth_connection_states")
+}
+
 // One mutable profile per project (Master Spec §32). Deliberately does
 // *not* include the full Governance Requirement Registry (external legal-
 // source tracking, effective/enforcement dates, etc.) — that requires
@@ -741,10 +761,10 @@ model OrganizationSubscription {
 // a redelivered event is a safe no-op, never a double-applied billing
 // state transition.
 model ProcessedWebhookEvent {
-  id                 String   @id @default(cuid())
-  provider           String
-  providerEventId    String
-  processedAt        DateTime @default(now())
+  id              String   @id @default(cuid())
+  provider        String
+  providerEventId String
+  processedAt     DateTime @default(now())
 
   @@unique([provider, providerEventId])
   @@map("processed_webhook_events")
@@ -1028,14 +1048,14 @@ enum JobStatus {
 }
 
 model JobRun {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   projectId      String
-  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   jobType        JobType
   status         JobStatus
   idempotencyKey String?
   checkpoint     Json?
-  attempt        Int      @default(1)
+  attempt        Int       @default(1)
   error          String?
 
   createdAt   DateTime  @default(now())

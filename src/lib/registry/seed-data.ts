@@ -221,6 +221,26 @@ export const INITIAL_CAPABILITIES: readonly CapabilityDefinition[] = [
       "Only 3 of the 8 BillingLifecycleEvent transitions (src/lib/billing/access.ts) are wired to real webhook triggers today: PAYMENT_FAILED, PAYMENT_RECOVERED, and CANCEL_REQUESTED (from invoice.payment_failed/succeeded and customer.subscription.deleted). PAYMENT_RETRY_EXHAUSTED, GRACE_PERIOD_EXPIRED, RESTRICTION_ESCALATED, RETENTION_PERIOD_EXPIRED, and DELETION_EXECUTED are time-based, not event-based, and require scheduled-job infrastructure this codebase does not have yet (the same disclosed gap as P2-13's orphaned durable jobs) -- reachable only via the manual, OWNER-driven transitionBillingState today, never automatically.",
     ],
   },
+  {
+    // P3-05: a real, generic OAuth2 authorization-code flow (state
+    // generation/verification, single-use replay protection, real token
+    // exchange, storage through the existing credential vault) -- but no
+    // concrete third-party provider (Google, GitHub, Stripe Connect,
+    // etc.) has been selected for Pocket Studio to support yet, so the
+    // provider registry (src/lib/integrations/oauth-provider-registry.ts)
+    // is genuinely empty. PROTOTYPE_ONLY: real, tested infrastructure
+    // with no live provider instantiated, same honest bar as P3-01/P3-04.
+    capabilityKey: "integrations.oauth_connections",
+    label: "Customer-owned integration connections via OAuth2",
+    category: "integrations",
+    implementationLevel: "PROTOTYPE_ONLY",
+    riskClass: "MEDIUM",
+    limitations: [
+      "The flow itself (CSRF-safe state, single-use replay protection, real token exchange, credential-vault storage) is implemented and integration-tested against a real database with mocked provider HTTP responses. No concrete provider is registered -- which third-party services to support first is a product decision, not invented here -- so no customer can complete a real connection today.",
+      "No Studio UI page exists yet to browse or manage a project's IntegrationRequirements at all (a pre-existing Phase 1 gap, not new to this unit) -- the flow is reachable via its real, live Route Handler (/api/integrations/oauth/callback) and service functions, not yet from any customer-facing page.",
+      "Token refresh is not implemented -- getConnectedTokenSet returns whatever was stored at connection time, including an expired token, without attempting to use a stored refresh_token to obtain a new one.",
+    ],
+  },
 ] as const;
 
 export async function seedCapabilityRegistry(actorUserId?: string): Promise<void> {
