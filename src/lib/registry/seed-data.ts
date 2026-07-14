@@ -171,13 +171,54 @@ export const INITIAL_CAPABILITIES: readonly CapabilityDefinition[] = [
     ],
   },
   {
+    // P3-03/P3-04: entitlement enforcement and webhook/reconciliation
+    // infrastructure are now real (see the two entries below) -- but a
+    // customer still cannot actually pay Pocket Studio money (no checkout
+    // flow exists to create a real billing-provider customer/subscription
+    // in the first place), so the umbrella "can subscribe and pay"
+    // capability honestly stays SUPPORTED_LATER_PHASE.
     capabilityKey: "billing.pocket_studio_subscription",
     label: "Pocket Studio's own paid subscription plans",
     category: "platform-billing",
     implementationLevel: "SUPPORTED_LATER_PHASE",
     riskClass: "MEDIUM",
     limitations: [
-      "Live Pocket Studio billing, entitlements, and webhooks are Phase 3 scope (§62).",
+      "Entitlement enforcement, the billing state machine, and webhook/portal/reconciliation infrastructure are real (P3-03, P3-04) -- but no checkout flow exists yet to create a real billing-provider customer, so no customer can actually subscribe and pay yet.",
+    ],
+  },
+  {
+    // Real and always active regardless of BILLING_PROVIDER -- project
+    // limits and export gating are enforced deterministically from the
+    // Plan Registry, not dependent on a live Stripe connection.
+    capabilityKey: "billing.entitlement_enforcement",
+    label: "Real plan-entitlement enforcement (project limits, export gating)",
+    category: "platform-billing",
+    implementationLevel: "SUPPORTED_NOW",
+    riskClass: "LOW",
+    limitations: [
+      "Only projectLimit and exportAllowed are enforced today; storageMb has no real metering behind it (no blob/byte tracking exists), and teamSeats/deploymentAllowed have no feature to enforce against yet (no team-invitation or deployment feature exists in this codebase).",
+    ],
+  },
+  {
+    // P3-04: real webhook signature verification (Stripe's own documented
+    // HMAC-SHA256 scheme, implemented and unit-tested against
+    // self-constructed valid/invalid signatures), idempotent event
+    // processing, and a real billing-provider connection (portal
+    // sessions, subscription-status reconciliation) -- but never
+    // exercised against the real Stripe API, since no STRIPE_SECRET_KEY
+    // is configured in this environment. PROTOTYPE_ONLY, matching the
+    // same honest bar P3-01 set for the Anthropic connection.
+    capabilityKey: "billing.webhook_processing",
+    label: "Real Stripe webhook verification, portal sessions, and reconciliation",
+    category: "platform-billing",
+    implementationLevel: "PROTOTYPE_ONLY",
+    riskClass: "MEDIUM",
+    requiredIntegrations: [
+      "STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET (platform-level, not customer-owned)",
+    ],
+    limitations: [
+      "Implemented and tested (real HMAC signature construction/verification, mocked-fetch portal/reconciliation requests) but never exercised against the real Stripe API in this environment -- no STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET is configured. Set BILLING_PROVIDER=stripe and both real keys to activate it; MockBillingProvider remains the default and requires no credentials. No checkout flow exists yet to link a real customer, so even with real keys configured, no organization has a billing-provider customer id to test against live.",
+      "Only 3 of the 8 BillingLifecycleEvent transitions (src/lib/billing/access.ts) are wired to real webhook triggers today: PAYMENT_FAILED, PAYMENT_RECOVERED, and CANCEL_REQUESTED (from invoice.payment_failed/succeeded and customer.subscription.deleted). PAYMENT_RETRY_EXHAUSTED, GRACE_PERIOD_EXPIRED, RESTRICTION_ESCALATED, RETENTION_PERIOD_EXPIRED, and DELETION_EXECUTED are time-based, not event-based, and require scheduled-job infrastructure this codebase does not have yet (the same disclosed gap as P2-13's orphaned durable jobs) -- reachable only via the manual, OWNER-driven transitionBillingState today, never automatically.",
     ],
   },
 ] as const;

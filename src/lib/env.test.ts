@@ -46,4 +46,24 @@ describe("getServerEnv", () => {
     const { getServerEnv } = await import("./env");
     expect(() => getServerEnv()).toThrow(/ANTHROPIC_API_KEY/);
   });
+
+  it("defaults BILLING_PROVIDER to mock", async () => {
+    process.env.DATABASE_URL = "postgresql://user:pass@localhost:5432/db";
+    process.env.SESSION_SECRET = "a".repeat(32);
+    delete process.env.BILLING_PROVIDER;
+
+    const { getServerEnv } = await import("./env");
+    expect(getServerEnv().BILLING_PROVIDER).toBe("mock");
+  });
+
+  it("requires STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET when BILLING_PROVIDER=stripe", async () => {
+    process.env.DATABASE_URL = "postgresql://user:pass@localhost:5432/db";
+    process.env.SESSION_SECRET = "a".repeat(32);
+    process.env.BILLING_PROVIDER = "stripe";
+    delete process.env.STRIPE_SECRET_KEY;
+    delete process.env.STRIPE_WEBHOOK_SECRET;
+
+    const { getServerEnv } = await import("./env");
+    expect(() => getServerEnv()).toThrow(/STRIPE_SECRET_KEY/);
+  });
 });

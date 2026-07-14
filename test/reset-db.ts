@@ -28,4 +28,7 @@ export async function resetDatabase(): Promise<void> {
   // not covered by the cascades above.
   await db.capabilityRegistryEntry.deleteMany();
   await db.planDefinition.deleteMany();
+  // Not a relation of anything else — identified only by its own
+  // (provider, providerEventId) pair, so not covered by any cascade above.
+  await db.processedWebhookEvent.deleteMany();
 }

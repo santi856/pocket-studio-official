@@ -715,6 +715,14 @@ model OrganizationSubscription {
   planKey        PlanKey      @default(FREE_EXPLORE)
   billingState   BillingState @default(TRIALING)
 
+  // P3-04: null until this organization connects real billing (Pocket
+  // Studio's own provider, not the customer-owned integrations
+  // CredentialReference already covers) — nullable and unique so a real
+  // provider customer/subscription id can never be silently attached to
+  // more than one organization.
+  billingProviderCustomerId     String? @unique
+  billingProviderSubscriptionId String? @unique
+
   trialEndsAt       DateTime?
   currentPeriodEnd  DateTime?
   gracePeriodEndsAt DateTime?
@@ -726,6 +734,20 @@ model OrganizationSubscription {
   events BillingEvent[]
 
   @@map("organization_subscriptions")
+}
+
+// P3-04: webhook delivery is at-least-once, never exactly-once (Stripe's
+// own documented guarantee) -- every processed event is recorded here so
+// a redelivered event is a safe no-op, never a double-applied billing
+// state transition.
+model ProcessedWebhookEvent {
+  id                 String   @id @default(cuid())
+  provider           String
+  providerEventId    String
+  processedAt        DateTime @default(now())
+
+  @@unique([provider, providerEventId])
+  @@map("processed_webhook_events")
 }
 
 enum BillingEventType {

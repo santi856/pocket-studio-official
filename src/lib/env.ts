@@ -16,6 +16,9 @@ const serverEnvSchema = z.object({
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters"),
   AI_PROVIDER: z.enum(["mock", "anthropic"]).default("mock"),
   ANTHROPIC_API_KEY: z.string().optional(),
+  BILLING_PROVIDER: z.enum(["mock", "stripe"]).default("mock"),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
   // Base64-encoded 32-byte (256-bit) AES-256-GCM key for the credential
   // vault (Master Spec §4.7, §30). Generate with: openssl rand -base64 32
   CREDENTIAL_ENCRYPTION_KEY: z
@@ -52,6 +55,16 @@ export function getServerEnv(): ServerEnv {
   if (parsed.data.AI_PROVIDER === "anthropic" && !parsed.data.ANTHROPIC_API_KEY) {
     throw new Error(
       "AI_PROVIDER=anthropic requires ANTHROPIC_API_KEY. Set AI_PROVIDER=mock to run without a live provider.",
+    );
+  }
+
+  if (
+    parsed.data.BILLING_PROVIDER === "stripe" &&
+    (!parsed.data.STRIPE_SECRET_KEY || !parsed.data.STRIPE_WEBHOOK_SECRET)
+  ) {
+    throw new Error(
+      "BILLING_PROVIDER=stripe requires both STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET. " +
+        "Set BILLING_PROVIDER=mock to run without a live provider.",
     );
   }
 

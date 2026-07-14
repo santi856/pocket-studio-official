@@ -24,6 +24,17 @@ const ALLOWED_EXCEPTIONS: ReadonlyMap<string, string> = new Map([
       "access boundary is the caller's existing platform session + " +
       "requireProjectAccess, not this function.",
   ],
+  [
+    "applyBillingLifecycleEventFromWebhook",
+    "The webhook-driven counterpart to transitionBillingState (P3-04, " +
+      "src/lib/billing/subscription.ts) — deliberately has no actorUserId. " +
+      "A cryptographically verified webhook event IS the authorization; " +
+      "there is no Pocket Studio member 'acting' when Stripe reports what " +
+      "already happened on its own side. The signature is verified by the " +
+      "caller (src/lib/billing/webhook-processing.ts) before this function " +
+      "is ever reached — same shape of exception as " +
+      "authenticateGeneratedAppUser above.",
+  ],
 ]);
 
 export type TenantIsolationViolation = {

@@ -7,9 +7,12 @@ import { createOrganization } from "@/lib/services/organizations";
 import { ForbiddenError } from "@/lib/tenancy/authz";
 import { seedPlans } from "./seed-plans";
 import {
+  applyBillingLifecycleEventFromWebhook,
   createSubscription,
+  findOrganizationIdByBillingProviderCustomerId,
   getEntitlements,
   getSubscription,
+  linkBillingProviderCustomer,
   SubscriptionAlreadyExistsError,
   SubscriptionNotFoundError,
   transitionBillingState,
@@ -95,5 +98,47 @@ describe("Organization billing subscription", () => {
     await createSubscription(owner.id, org.id);
 
     await expect(getSubscription(outsider.id, org.id)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("links a billing-provider customer id and resolves it back to the organization", async () => {
+    const { owner, org } = await seedOrg();
+    await createSubscription(owner.id, org.id);
+
+    const updated = await linkBillingProviderCustomer(owner.id, org.id, "cus_real_123");
+    expect(updated.billingProviderCustomerId).toBe("cus_real_123");
+
+    const resolved = await findOrganizationIdByBillingProviderCustomerId("cus_real_123");
+    expect(resolved).toBe(org.id);
+  });
+
+  it("returns null resolving a billing-provider customer id no organization is linked to", async () => {
+    expect(await findOrganizationIdByBillingProviderCustomerId("cus_unknown")).toBeNull();
+  });
+
+  it("denies linking a billing-provider customer for a non-member (tenant isolation)", async () => {
+    const { owner, outsider, org } = await seedOrg();
+    await createSubscription(owner.id, org.id);
+
+    await expect(
+      linkBillingProviderCustomer(outsider.id, org.id, "cus_forged"),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("applyBillingLifecycleEventFromWebhook applies the same real transition as transitionBillingState, with no actor", async () => {
+    const { owner, org } = await seedOrg();
+    const subscription = await createSubscription(owner.id, org.id);
+    await db.organizationSubscription.update({
+      where: { id: subscription.id },
+      data: { billingState: "ACTIVE" },
+    });
+
+    const updated = await applyBillingLifecycleEventFromWebhook(org.id, "PAYMENT_FAILED");
+
+    expect(updated.billingState).toBe("PAST_DUE");
+    const events = await db.billingEvent.findMany({
+      where: { organizationSubscriptionId: subscription.id },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(events[events.length - 1]?.type).toBe("PAYMENT_FAILED");
   });
 });

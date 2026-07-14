@@ -12,7 +12,10 @@ describe("findTenantIsolationViolations against the real codebase", () => {
   });
 
   it("the allowed-exceptions list is exactly what was reviewed and justified — a diff here means a new exception was added and must be re-reviewed, not silently grown", () => {
-    expect(getAllowedExceptionNames()).toEqual(["authenticateGeneratedAppUser"]);
+    expect(getAllowedExceptionNames()).toEqual([
+      "applyBillingLifecycleEventFromWebhook",
+      "authenticateGeneratedAppUser",
+    ]);
   });
 });
 

@@ -6,10 +6,21 @@ import { getOrganizationUsage } from "@/lib/billing/entitlements";
 import { getAccessLevel } from "@/lib/billing/access";
 import { ForbiddenError } from "@/lib/tenancy/authz";
 import { AppNav } from "@/components/app-nav";
+import {
+  createBillingPortalSessionAction,
+  reconcileSubscriptionAction,
+} from "@/lib/actions/billing-actions";
 
-export default async function BillingPage({ params }: { params: Promise<{ orgSlug: string }> }) {
+export default async function BillingPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ orgSlug: string }>;
+  searchParams: Promise<{ error?: string; notice?: string }>;
+}) {
   const user = await requireUserForPage();
   const { orgSlug } = await params;
+  const { error, notice } = await searchParams;
   const organization = await resolveOrganizationForRoute(orgSlug);
 
   let subscription;
@@ -33,6 +44,17 @@ export default async function BillingPage({ params }: { params: Promise<{ orgSlu
       <AppNav userName={user.name} />
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-10 sm:px-10">
         <h1 className="text-xl font-semibold text-black dark:text-white">Billing</h1>
+
+        {error && (
+          <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-400">
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p className="mt-4 rounded-md bg-zinc-50 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+            {notice}
+          </p>
+        )}
 
         {!subscription ? (
           <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
@@ -69,10 +91,33 @@ export default async function BillingPage({ params }: { params: Promise<{ orgSlu
               </dl>
             )}
 
-            <p className="mt-6 text-xs text-zinc-500 dark:text-zinc-500">
-              Live billing, checkout, and plan changes are not yet available. Pocket Studio does not
-              charge you during this phase.
-            </p>
+            {subscription.billingProviderCustomerId ? (
+              <div className="mt-6 flex gap-3">
+                <form action={createBillingPortalSessionAction}>
+                  <input type="hidden" name="organizationSlug" value={orgSlug} />
+                  <button
+                    type="submit"
+                    className="rounded-full bg-black px-4 py-2 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                  >
+                    Manage billing
+                  </button>
+                </form>
+                <form action={reconcileSubscriptionAction}>
+                  <input type="hidden" name="organizationSlug" value={orgSlug} />
+                  <button
+                    type="submit"
+                    className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-medium text-black hover:bg-zinc-50 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-900"
+                  >
+                    Sync with billing provider
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <p className="mt-6 text-xs text-zinc-500 dark:text-zinc-500">
+                Live billing, checkout, and plan changes are not yet available. Pocket Studio does
+                not charge you during this phase.
+              </p>
+            )}
           </div>
         )}
       </main>
