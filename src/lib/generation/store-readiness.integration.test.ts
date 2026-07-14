@@ -13,6 +13,7 @@ import { generateMobileProject } from "./mobile";
 import { createPolicyDocumentDraft } from "@/lib/product/policy-documents";
 import { getLatestTruthStatus } from "@/lib/product/truth-status";
 import { listEvidence } from "@/lib/product/evidence";
+import { connectDeveloperAccount } from "./store-submissions";
 import { NoBlueprintForStoreReadinessError, assessStoreReadiness } from "./store-readiness";
 
 describe("assessStoreReadiness", () => {
@@ -90,6 +91,36 @@ describe("assessStoreReadiness", () => {
       (c) => c.name === "Mobile project generated and syntax-validated",
     );
     expect(mobileCheck?.ready).toBe(true);
+  });
+
+  it("marks the developer-account check ready once a real account is connected (P3-09), still NOT_READY overall", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build a premium booking app for mobile detailers with appointment deposits.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+    await generateMobileProject(owner.id, project.id);
+    await createPolicyDocumentDraft(owner.id, project.id, {
+      type: "TERMS_OF_SERVICE",
+      content: "Terms.",
+    });
+    await createPolicyDocumentDraft(owner.id, project.id, {
+      type: "PRIVACY_POLICY",
+      content: "Privacy.",
+    });
+    await connectDeveloperAccount(owner.id, project.id, "IOS", "sk_test_apple");
+
+    const result = await assessStoreReadiness(owner.id, project.id);
+
+    expect(result.readinessStatus).toBe("NOT_READY");
+    expect(result.blockers).toEqual([]);
+    const accountCheck = result.checks.find(
+      (c) => c.name === "Apple/Google developer account connected",
+    );
+    expect(accountCheck?.ready).toBe(true);
+    expect(accountCheck?.details).toContain("apple_developer_account");
   });
 
   it("records evidence and syncs store.readiness Truth Status to BLOCKED", async () => {

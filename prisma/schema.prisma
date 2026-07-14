@@ -163,6 +163,7 @@ model Project {
   generatedAppPayments    GeneratedAppPayment[]
   deployments             Deployment[]
   exportRecords           ExportRecord[]
+  storeSubmissions        StoreSubmission[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -485,6 +486,7 @@ enum ProductEvidenceType {
   STRUCTURED_MANUAL_VERIFICATION
   QUALITY_GATE_CHECK
   DEPLOYMENT_ATTEMPT
+  STORE_SUBMISSION_ATTEMPT
 }
 
 // Backs Truth Status claims with a verifiable record, mirroring the
@@ -1107,6 +1109,59 @@ model ExportRecord {
 
   @@index([projectId, createdAt])
   @@map("export_records")
+}
+
+// ---------------------------------------------------------------------------
+// Store submission workflow (Master Spec §61: "iOS/Android build workflows,
+// testing tracks, submission packages, approval, status tracking,
+// rejection/remediation, releases/updates"). Developer-account connection
+// itself reuses the existing generic IntegrationRequirement/
+// CredentialReference vault (P3-05) rather than a parallel credential
+// system -- category "apple_developer_account" / "google_play_account".
+// One row per submission attempt (mutable in place across its own
+// lifecycle, unlike Deployment's one-row-per-attempt shape) -- "rejection/
+// remediation" is a new submission with a new version/buildNumber, the
+// same append-more-attempts pattern as Deployment, not an edit of the
+// rejected row.
+// ---------------------------------------------------------------------------
+
+enum StoreSubmissionPlatform {
+  IOS
+  ANDROID
+}
+
+enum StoreSubmissionTrack {
+  INTERNAL_TESTING
+  BETA
+  PRODUCTION
+}
+
+enum StoreSubmissionStatus {
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  RELEASED
+}
+
+model StoreSubmission {
+  id          String                  @id @default(cuid())
+  projectId   String
+  project     Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  platform    StoreSubmissionPlatform
+  track       StoreSubmissionTrack
+  version     String
+  buildNumber Int
+  status      StoreSubmissionStatus
+
+  basedOnBlueprintVersion Int
+  rejectionReason         String?
+
+  createdAt       DateTime @default(now())
+  createdByUserId String
+  updatedAt       DateTime @updatedAt
+
+  @@index([projectId, platform, createdAt])
+  @@map("store_submissions")
 }
 
 // Generic per-project record store. `modelKey` corresponds to a name in the

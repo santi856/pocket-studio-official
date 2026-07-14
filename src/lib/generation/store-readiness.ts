@@ -1,4 +1,5 @@
 import "server-only";
+import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import { getLatestProductState } from "@/lib/product/product-state";
 import { getLatestBlueprint } from "./blueprint";
@@ -121,12 +122,14 @@ export type StoreReadinessResult = {
 /**
  * Master Spec §44's Store Readiness Engine — real checks against real
  * project state (mirroring the Quality Gate's discipline, P2-10), never a
- * self-report. `readinessStatus` is honestly always `NOT_READY`: no Apple
- * or Google developer account integration exists in this build (Phase 3
- * scope, §61/§65), and §44 itself requires explicit customer approval
- * before submitting a production application or accepting a marketplace
- * agreement — neither of which this build can perform on a customer's
- * behalf regardless of how many other checks pass.
+ * self-report. `readinessStatus` is honestly always `NOT_READY` regardless
+ * of how many individual checks pass: §44 itself requires explicit
+ * customer approval before submitting a production application or
+ * accepting a marketplace agreement, which this build can never perform
+ * on a customer's behalf. The "developer account connected" check itself
+ * is real (P3-09, src/lib/generation/store-submissions.ts) — it queries
+ * the actual IntegrationRequirement connection state, not a hardcoded
+ * value.
  */
 export async function assessStoreReadiness(
   actorUserId: string,
@@ -145,10 +148,19 @@ export async function assessStoreReadiness(
   const monetization = asStringArray(blueprint.monetization);
   const mobileCommerce = classifyMobileCommerce(productState?.originalIdea ?? "", monetization);
 
-  const [iosStatus, policies] = await Promise.all([
+  const [iosStatus, policies, developerAccounts] = await Promise.all([
     getLatestTruthStatus(actorUserId, projectId, "output.ios"),
     listPolicyDocuments(actorUserId, projectId),
+    db.integrationRequirement.findMany({
+      where: {
+        projectId,
+        category: { in: ["apple_developer_account", "google_play_account"] },
+      },
+    }),
   ]);
+  const connectedDeveloperAccounts = developerAccounts.filter(
+    (account) => account.connectionStatus === "CONNECTED",
+  );
 
   const checks: StoreReadinessCheck[] = [
     {
@@ -177,9 +189,11 @@ export async function assessStoreReadiness(
     },
     {
       name: "Apple/Google developer account connected",
-      ready: false,
+      ready: connectedDeveloperAccounts.length > 0,
       details:
-        "No developer account integration exists in this build — required before any real store submission (Phase 3, §61/§65).",
+        connectedDeveloperAccounts.length > 0
+          ? `Connected: ${connectedDeveloperAccounts.map((account) => account.category).join(", ")}.`
+          : "No Apple or Google developer account is connected yet — required before any real store submission (P3-09, src/lib/generation/store-submissions.ts).",
     },
   ];
 

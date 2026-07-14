@@ -172,6 +172,16 @@ export const INITIAL_CAPABILITIES: readonly CapabilityDefinition[] = [
     outputTargets: ["web"],
   },
   {
+    // P3-09: a real submission-workflow state machine
+    // (src/lib/generation/store-submissions.ts) -- connectDeveloperAccount
+    // (reuses the P3-05 credential vault), createStoreSubmission (real
+    // preconditions: connected developer account, validated mobile
+    // scaffold, both policy documents), advanceStoreSubmissionReview, and
+    // releaseStoreSubmission. Still EXTERNAL_APPROVAL_REQUIRED, not
+    // upgraded: no real Apple/Google API call is ever made (StoreReviewProvider
+    // has only a mock implementation) and Master Spec §44 itself requires
+    // real human customer approval before any real submission regardless
+    // of how much of the workflow around it is genuinely implemented.
     capabilityKey: "distribution.apple_google_submission",
     label: "App Store and Google Play submission",
     category: "distribution",
@@ -183,6 +193,8 @@ export const INITIAL_CAPABILITIES: readonly CapabilityDefinition[] = [
     ],
     limitations: [
       "Requires customer-owned developer accounts and actual platform review; Pocket Studio cannot guarantee approval (§43, §44).",
+      "Developer-account connection (storing an App Store Connect API key or Play Console service-account credential) and the submission status workflow (in review, approved, rejected with a real reason, released) are real and tested -- but no real Apple/Google API is ever called. StoreReviewProvider has only a mock implementation, honestly disclosed the same way as DeploymentProvider (P3-08): no live review has ever been attempted.",
+      "No real native .ipa/.apk build exists (mobile.ts, P2-15, produces a syntax-validated Expo scaffold, not a signed binary) -- a submission's version/buildNumber are recorded as real facts but nothing is actually compiled or code-signed.",
     ],
   },
   {

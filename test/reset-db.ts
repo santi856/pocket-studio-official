@@ -18,8 +18,9 @@ export async function resetDatabase(): Promise<void> {
   // ProductKnowledgeNode/Edge, Decision, ProductEvent, ProductEvidence,
   // TruthStatusEntry, IntegrationRequirement (-> CredentialReference),
   // GovernanceProfile, PolicyDocument, OAuthConnectionState, Deployment,
-  // and ExportRecord — no need to delete those separately. Organization
-  // cascades to OrganizationSubscription (-> BillingEvent).
+  // ExportRecord, and StoreSubmission — no need to delete those
+  // separately. Organization cascades to OrganizationSubscription (->
+  // BillingEvent).
   await db.project.deleteMany();
   await db.membership.deleteMany();
   await db.organization.deleteMany();
