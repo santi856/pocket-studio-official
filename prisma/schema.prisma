@@ -117,6 +117,7 @@ model Project {
   changeSets              ChangeSet[]
   jobRuns                 JobRun[]
   oauthConnectionStates   OAuthConnectionState[]
+  generatedAppPayments    GeneratedAppPayment[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -548,6 +549,7 @@ model IntegrationRequirement {
   fallbackBehavior  String?
 
   credential CredentialReference?
+  payments   GeneratedAppPayment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -954,6 +956,7 @@ model GeneratedAppUser {
   role         String
 
   ownedRecords GeneratedRecord[]
+  payments     GeneratedAppPayment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -961,6 +964,39 @@ model GeneratedAppUser {
   @@unique([projectId, email])
   @@index([projectId])
   @@map("generated_app_users")
+}
+
+enum GeneratedAppPaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+// P3-06: a real charge or subscription payment collected by a generated
+// product from its own end user, through the *customer's own* connected
+// payment-provider account (IntegrationRequirement owner=CUSTOMER,
+// category=payments — Master Spec §61 "customer-owned generated-app
+// payment and subscription connections"). Distinct from BillingEvent
+// (Pocket Studio's own subscription revenue, P3-04) — this is the
+// generated product's revenue, never Pocket Studio's.
+model GeneratedAppPayment {
+  id                       String                    @id @default(cuid())
+  projectId                String
+  project                  Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  integrationRequirementId String
+  integrationRequirement   IntegrationRequirement    @relation(fields: [integrationRequirementId], references: [id], onDelete: Cascade)
+  generatedAppUserId       String?
+  generatedAppUser         GeneratedAppUser?         @relation(fields: [generatedAppUserId], references: [id], onDelete: SetNull)
+  amountCents              Int
+  currency                 String                    @default("usd")
+  description              String
+  status                   GeneratedAppPaymentStatus
+  providerChargeId         String?
+  failureReason            String?
+  createdAt                DateTime                  @default(now())
+
+  @@index([projectId])
+  @@map("generated_app_payments")
 }
 
 // Generic per-project record store. `modelKey` corresponds to a name in the

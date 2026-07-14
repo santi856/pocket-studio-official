@@ -63,17 +63,32 @@ export const INITIAL_CAPABILITIES: readonly CapabilityDefinition[] = [
     outputTargets: ["ios", "android"],
   },
   {
+    // P3-06: a real charge-creation mechanism now exists
+    // (createGeneratedAppCharge, src/lib/generation/generated-app-payments.ts)
+    // -- charges against the customer's own connected payment-provider
+    // account (via P3-05's OAuth connection), real GeneratedAppPayment
+    // records for every attempt including declines. Still PROTOTYPE_ONLY,
+    // not SUPPORTED_NOW: no generated-app checkout UI calls it yet (P2-05's
+    // renderer was never extended to), and no client-side card
+    // tokenization exists to produce a real paymentMethodToken.
     capabilityKey: "payments.deposits",
     label: "Appointment deposit collection",
     category: "monetization",
-    implementationLevel: "SUPPORTED_LATER_PHASE",
+    implementationLevel: "PROTOTYPE_ONLY",
     riskClass: "HIGH",
     requiredIntegrations: ["customer-owned payment provider (e.g. Stripe)"],
     limitations: [
-      "Payment architecture generation is Phase 2 (§55); live production charges are Phase 3 (§61).",
+      "Real charge creation exists (P3-06) against the customer's own connected account, tested with a mocked provider response -- but no generated-app checkout UI calls it yet (the Structured Renderer/Interactive Runtime, P2-05, was never extended to), and no client-side card-tokenization flow exists to produce a real payment method token, so no live charge has ever been attempted end to end.",
     ],
   },
   {
+    // P3-06: the same createGeneratedAppCharge mechanism supports a
+    // recurring charge exactly as it supports a one-time deposit -- no
+    // separate subscription-specific code exists (or is needed) at the
+    // charge layer; what's still entirely missing is real recurrence
+    // (a schedule that re-invokes it), which needs the same scheduled-job
+    // infrastructure already disclosed as missing for P3-04's time-based
+    // billing transitions.
     capabilityKey: "payments.subscriptions",
     label: "Recurring membership/subscription billing",
     category: "monetization",
@@ -81,7 +96,7 @@ export const INITIAL_CAPABILITIES: readonly CapabilityDefinition[] = [
     riskClass: "HIGH",
     requiredIntegrations: ["customer-owned payment provider (e.g. Stripe)"],
     limitations: [
-      "Subscription architecture generation is Phase 2 (§55); live billing is Phase 3 (§61).",
+      "A single charge can be created for real (P3-06, payments.deposits) against a customer's connected account, but nothing schedules or repeats it -- this codebase has no scheduled-job infrastructure at all yet (the same gap already disclosed for P3-04's time-based billing transitions), so recurring billing itself remains not yet real.",
     ],
   },
   {

@@ -35,16 +35,17 @@ describe("syncTruthStatusFromFeasibility", () => {
 
   it("maps a SUPPORTED_LATER_PHASE capability to PLANNED, never IMPLEMENTED", async () => {
     const { owner, project } = await seedProject();
-    // payments.deposits is still genuinely SUPPORTED_LATER_PHASE (live
-    // production charges are Phase 3 scope) — generation.full_stack_web_app
-    // was moved to SUPPORTED_NOW at P2-EXIT since Phase 2 actually ships it,
-    // so it's no longer a valid example of this mapping.
-    const report = await assessFeasibility(["payments.deposits"]);
+    // payments.subscriptions is still genuinely SUPPORTED_LATER_PHASE (no
+    // scheduled-job infrastructure exists to make billing actually
+    // recur, P3-06/D-0052) — payments.deposits moved to PROTOTYPE_ONLY at
+    // P3-06 since a real charge-creation mechanism now exists, so it's no
+    // longer a valid example of this specific mapping.
+    const report = await assessFeasibility(["payments.subscriptions"]);
 
     await syncTruthStatusFromFeasibility(owner.id, project.id, report);
 
     const statuses = await listLatestTruthStatuses(owner.id, project.id);
-    const entry = statuses.find((s) => s.subjectKey === "payments.deposits");
+    const entry = statuses.find((s) => s.subjectKey === "payments.subscriptions");
     expect(entry?.status).toBe("PLANNED");
   });
 

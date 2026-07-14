@@ -25,11 +25,22 @@ describe("assessFeasibility", () => {
   });
 
   it("reports overallSupported false when any capability is deferred", async () => {
-    const report = await assessFeasibility(["auth.email_password", "payments.deposits"]);
+    const report = await assessFeasibility(["auth.email_password", "payments.subscriptions"]);
+
+    expect(report.overallSupported).toBe(false);
+    const subscriptions = report.assessments.find(
+      (a) => a.capabilityKey === "payments.subscriptions",
+    );
+    expect(subscriptions?.implementationLevel).toBe("SUPPORTED_LATER_PHASE");
+    expect(subscriptions?.limitations.length).toBeGreaterThan(0);
+  });
+
+  it("reports a real-but-prototype capability (payments.deposits, P3-06) as not yet overall supported", async () => {
+    const report = await assessFeasibility(["payments.deposits"]);
 
     expect(report.overallSupported).toBe(false);
     const deposits = report.assessments.find((a) => a.capabilityKey === "payments.deposits");
-    expect(deposits?.implementationLevel).toBe("SUPPORTED_LATER_PHASE");
+    expect(deposits?.implementationLevel).toBe("PROTOTYPE_ONLY");
     expect(deposits?.limitations.length).toBeGreaterThan(0);
   });
 

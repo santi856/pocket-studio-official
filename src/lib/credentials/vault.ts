@@ -80,6 +80,34 @@ export async function retrieveCredentialSecret(
   return decryptSecret({ ciphertext: record.ciphertext, iv: record.iv, authTag: record.authTag });
 }
 
+/**
+ * The generated-app-runtime counterpart to retrieveCredentialSecret —
+ * deliberately has no actorUserId and performs no membership check. A
+ * generated product's own backend charging its own end user (P3-06,
+ * src/lib/generation/generated-app-payments.ts) has no Pocket Studio
+ * member "acting"; the customer already authorized this exact use when
+ * they connected the credential in the first place (Master Spec §61
+ * "customer-owned generated-app payment connections"). Same class of
+ * deliberate, disclosed exception as authenticateGeneratedAppUser
+ * (src/lib/generation/generated-app-auth.ts, P3-02) and
+ * applyBillingLifecycleEventFromWebhook (src/lib/billing/subscription.ts,
+ * P3-04) — recorded in
+ * src/lib/tenancy/verify-tenant-isolation.ts's ALLOWED_EXCEPTIONS.
+ */
+export async function retrieveCredentialSecretForGeneratedApp(
+  projectId: string,
+  integrationRequirementId: string,
+): Promise<string | null> {
+  const record = await db.credentialReference.findFirst({
+    where: { integrationRequirementId, projectId },
+  });
+  if (!record) {
+    return null;
+  }
+
+  return decryptSecret({ ciphertext: record.ciphertext, iv: record.iv, authTag: record.authTag });
+}
+
 /** Safe to expose broadly — deliberately excludes ciphertext/iv/authTag. */
 export type CredentialMetadata = Pick<
   CredentialReference,

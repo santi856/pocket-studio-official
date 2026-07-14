@@ -19,6 +19,11 @@ const serverEnvSchema = z.object({
   BILLING_PROVIDER: z.enum(["mock", "stripe"]).default("mock"),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  // No platform-level secret to validate here — unlike BILLING_PROVIDER
+  // (Pocket Studio's own Stripe account), a real charge always
+  // authenticates with the *customer's own* connected account token
+  // (P3-05 OAuth), never a platform-wide credential.
+  GENERATED_APP_PAYMENT_PROVIDER: z.enum(["mock", "stripe"]).default("mock"),
   // Base64-encoded 32-byte (256-bit) AES-256-GCM key for the credential
   // vault (Master Spec §4.7, §30). Generate with: openssl rand -base64 32
   CREDENTIAL_ENCRYPTION_KEY: z

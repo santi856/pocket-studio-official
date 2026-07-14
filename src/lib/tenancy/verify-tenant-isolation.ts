@@ -35,6 +35,26 @@ const ALLOWED_EXCEPTIONS: ReadonlyMap<string, string> = new Map([
       "is ever reached — same shape of exception as " +
       "authenticateGeneratedAppUser above.",
   ],
+  [
+    "createGeneratedAppCharge",
+    "A generated product's own runtime charging its own end user (P3-06, " +
+      "src/lib/generation/generated-app-payments.ts) — deliberately has no " +
+      "actorUserId. There is no Pocket Studio member 'acting' when a " +
+      "generated app processes its customer's payment; the Pocket Studio " +
+      "member already authorized this exact use when they connected the " +
+      "payment credential in the first place. Same shape of exception as " +
+      "authenticateGeneratedAppUser and applyBillingLifecycleEventFromWebhook " +
+      "above.",
+  ],
+  [
+    "retrieveCredentialSecretForGeneratedApp",
+    "The generated-app-runtime counterpart to retrieveCredentialSecret " +
+      "(P3-06, src/lib/credentials/vault.ts) — deliberately has no " +
+      "actorUserId, for the same reason createGeneratedAppCharge (its only " +
+      "caller) does not: a generated product reading its own connected " +
+      "payment credential to charge its own customer has no Pocket Studio " +
+      "member 'acting' in that moment.",
+  ],
 ]);
 
 export type TenantIsolationViolation = {
