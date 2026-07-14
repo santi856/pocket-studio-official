@@ -16,6 +16,7 @@ import {
   getSessionTokenFromCookies,
 } from "@/lib/auth/cookies";
 import { getClientIp } from "@/lib/web/client-ip";
+import { sendWelcomeEmail } from "@/lib/email/transactional";
 
 export async function signUpAction(formData: FormData): Promise<void> {
   const email = String(formData.get("email") ?? "");
@@ -31,6 +32,8 @@ export async function signUpAction(formData: FormData): Promise<void> {
     }
     throw error;
   }
+
+  await sendWelcomeEmail({ userId: user.id, toAddress: user.email, name: user.name });
 
   const { token, expiresAt } = await createSession(user.id);
   await setSessionCookie(token, expiresAt);

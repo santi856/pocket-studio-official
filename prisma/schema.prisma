@@ -71,6 +71,31 @@ model LoginAttempt {
   @@map("login_attempts")
 }
 
+enum EmailSendStatus {
+  SENT
+  FAILED
+}
+
+// P3-07: every send attempt, real or mock, is recorded — a failed send is
+// a real, queryable fact (Master Spec §61 "production email"), never
+// silently dropped. Not scoped to a project (email is a platform-level
+// concern like auth, not a per-customer generated-app capability) —
+// userId is optional correlation, not a tenant-isolation boundary.
+model SentEmail {
+  id                String          @id @default(cuid())
+  userId            String?
+  provider          String
+  toAddress         String
+  subject           String
+  status            EmailSendStatus
+  providerMessageId String?
+  failureReason     String?
+  createdAt         DateTime        @default(now())
+
+  @@index([userId])
+  @@map("sent_emails")
+}
+
 enum MembershipRole {
   OWNER
   ADMIN

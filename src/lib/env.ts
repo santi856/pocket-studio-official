@@ -24,6 +24,17 @@ const serverEnvSchema = z.object({
   // authenticates with the *customer's own* connected account token
   // (P3-05 OAuth), never a platform-wide credential.
   GENERATED_APP_PAYMENT_PROVIDER: z.enum(["mock", "stripe"]).default("mock"),
+  // SMTP, not a specific vendor's REST API — the one universal,
+  // vendor-agnostic standard for sending email (RFC 5321), so this works
+  // with any real provider (SES, Postmark, SendGrid, a plain relay, etc.)
+  // via configuration alone, the same "pick no specific vendor" posture
+  // already taken for OAuth (P3-05).
+  EMAIL_PROVIDER: z.enum(["mock", "smtp"]).default("mock"),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().optional(),
+  SMTP_USERNAME: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  EMAIL_FROM_ADDRESS: z.string().optional(),
   // Base64-encoded 32-byte (256-bit) AES-256-GCM key for the credential
   // vault (Master Spec §4.7, §30). Generate with: openssl rand -base64 32
   CREDENTIAL_ENCRYPTION_KEY: z
@@ -70,6 +81,20 @@ export function getServerEnv(): ServerEnv {
     throw new Error(
       "BILLING_PROVIDER=stripe requires both STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET. " +
         "Set BILLING_PROVIDER=mock to run without a live provider.",
+    );
+  }
+
+  if (
+    parsed.data.EMAIL_PROVIDER === "smtp" &&
+    (!parsed.data.SMTP_HOST ||
+      !parsed.data.SMTP_PORT ||
+      !parsed.data.SMTP_USERNAME ||
+      !parsed.data.SMTP_PASSWORD ||
+      !parsed.data.EMAIL_FROM_ADDRESS)
+  ) {
+    throw new Error(
+      "EMAIL_PROVIDER=smtp requires SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, and " +
+        "EMAIL_FROM_ADDRESS. Set EMAIL_PROVIDER=mock to run without a live provider.",
     );
   }
 

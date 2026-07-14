@@ -256,6 +256,25 @@ export const INITIAL_CAPABILITIES: readonly CapabilityDefinition[] = [
       "Token refresh is not implemented -- getConnectedTokenSet returns whatever was stored at connection time, including an expired token, without attempting to use a stored refresh_token to obtain a new one.",
     ],
   },
+  {
+    // P3-07: a real SMTP client (RFC 5321, implemented directly over
+    // node:tls -- no library dependency) plus a real transactional
+    // trigger (a welcome email on every real sign-up, wired into
+    // signUpAction). Every send attempt is durably recorded (SentEmail),
+    // sent or failed. PROTOTYPE_ONLY: real and tested against a fully
+    // scripted fake SMTP conversation, never exercised against a real
+    // mail server, since no SMTP_HOST/credentials are configured here.
+    capabilityKey: "platform.production_email",
+    label: "Real transactional email sending",
+    category: "platform",
+    implementationLevel: "PROTOTYPE_ONLY",
+    riskClass: "LOW",
+    limitations: [
+      "Implemented and tested (a real SMTP client speaking the actual protocol against a fully scripted fake connection: greeting, EHLO, AUTH LOGIN, MAIL FROM/RCPT TO/DATA, and every real failure path) but never exercised against a real mail server in this environment -- no SMTP_HOST/SMTP_USERNAME/SMTP_PASSWORD/EMAIL_FROM_ADDRESS is configured. Set EMAIL_PROVIDER=smtp and all five values to activate it; MockEmailProvider remains the default and requires no credentials.",
+      "Only one transactional trigger exists today: a welcome email on sign-up. No password-reset flow exists in this codebase yet to trigger a reset email, and no other lifecycle notification (billing/entitlement events already generated this phase, governance changes, etc.) is wired to send an email yet.",
+      "AUTH LOGIN only, and implicit TLS only (no STARTTLS negotiation) -- a disclosed, deliberate scope limit for a V1 client speaking to one already-configured server, not a universal SMTP client.",
+    ],
+  },
 ] as const;
 
 export async function seedCapabilityRegistry(actorUserId?: string): Promise<void> {
