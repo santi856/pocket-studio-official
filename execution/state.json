@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "generatedBy": "execution-protocol-v1.0-session-init",
-  "lastUpdated": "2026-07-15T00:00:00Z",
+  "lastUpdated": "2026-07-15T06:30:00Z",
   "governanceCommit": "25a33f0",
   "phase": {
     "current": "phase-3",
@@ -206,7 +206,28 @@
     "D-0040",
     "D-0041",
     "D-0042",
-    "D-0043"
+    "D-0043",
+    "D-0044",
+    "D-0045",
+    "D-0046",
+    "D-0047",
+    "D-0048",
+    "D-0049",
+    "D-0050",
+    "D-0051",
+    "D-0052",
+    "D-0053",
+    "D-0054",
+    "D-0055",
+    "D-0056",
+    "D-0057",
+    "D-0058",
+    "D-0059",
+    "D-0060",
+    "D-0061",
+    "D-0062",
+    "D-0063",
+    "D-0064"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -224,16 +245,31 @@
     "20260712143138_change_sets",
     "20260712145358_blueprint_restored_event",
     "20260712150636_quality_gate_events",
-    "20260712203120_job_runs"
+    "20260712203120_job_runs",
+    "20260714004443_auth_login_attempts",
+    "20260714100000_billing_provider_and_webhooks",
+    "20260714120000_oauth_connection_states",
+    "20260714140000_generated_app_payments",
+    "20260714160000_login_rate_limit_hardening",
+    "20260714180000_sent_emails",
+    "20260714200000_deployments_and_export_records",
+    "20260714220000_store_submissions",
+    "20260714240000_governance_workflow",
+    "20260714260000_observability",
+    "20260714280000_platform_admin",
+    "20260714300000_product_outcomes"
   ],
   "testStatus": {
     "typecheck": "pass",
     "lint": "pass",
     "formatCheck": "pass",
-    "unit": "pass (130/130)",
-    "integration": "pass (253/253)",
-    "e2e": "pass (12/12)",
-    "productionBuild": "pass"
+    "unit": "pass (678/678, 96 test files)",
+    "integration": "pass (678/678 combined with unit -- vitest reports unit+integration as one suite; verified live 2026-07-15 against commit db5c4d0)",
+    "e2e": "pass (24/24)",
+    "productionBuild": "pass",
+    "verifiedAt": "2026-07-15T06:00:00Z",
+    "verifiedAgainstCommit": "db5c4d0",
+    "note": "Supersedes the prior stale figures (130/130 unit, 253/253 integration, 12/12 e2e), which predated Phase 3. Also see: one intermittent, low-severity display-ordering flake in src/lib/observability/audit-log.integration.test.ts under full-suite load, not reproduced in this verification run -- see POCKET_STUDIO_DEFINITIVE_FOUNDER_REPORT.md §13 for the root cause (millisecond timestamp resolution, no secondary sort key)."
   },
   "evidenceRefs": [
     "EV-0001",
@@ -323,7 +359,28 @@
     "EV-0085",
     "EV-0086",
     "EV-0087",
-    "EV-0088"
+    "EV-0088",
+    "EV-0089",
+    "EV-0090",
+    "EV-0091",
+    "EV-0092",
+    "EV-0093",
+    "EV-0094",
+    "EV-0095",
+    "EV-0096",
+    "EV-0097",
+    "EV-0098",
+    "EV-0099",
+    "EV-0100",
+    "EV-0101",
+    "EV-0102",
+    "EV-0103",
+    "EV-0104",
+    "EV-0105",
+    "EV-0106",
+    "EV-0107",
+    "EV-0108",
+    "EV-0109"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories \u2014 not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (\u00a761).",
@@ -348,9 +405,32 @@
     "The Studio page (P2-17) has no dedicated 'Operate' surface (\u00a76's sixth Simple Mode tab \u2014 product health, live business activity, payment/subscription health, integration health, alerts, recommended improvements): these describe production monitoring systems that do not exist in this build (Phase 3 scope, \u00a745/\u00a746/\u00a761). Migration planning (P2-12) still has no UI surface at all \u2014 it remains a standalone, explicitly-invoked service-layer tool.",
     "createNextVersion's (src/lib/db-versioning.ts) retry-with-backoff fix for concurrent version creation (Level 3 review round 1, finding 1) is a retry strategy, not a stronger isolation guarantee \u2014 under extremely high, sustained concurrent write load against one project's version sequence, a caller could in principle still exhaust its 20-attempt retry budget, though this was not observed at 10 concurrent writers in testing (round 2's adversarial pass reached 100 without failure). requireCurrentUserForAction (src/lib/web/require-user.ts, finding 2) covers Server Actions only; Route Handlers use their own already-correct pattern. startOrGetJobRun's (src/lib/generation/job-runs.ts) idempotency-conflict fix (D-0041, round 2 finding) covers the one concurrent-caller race the round 2 reviewer found; runGenerationJob/startOrGetJobRun remain unreachable from any live Server Action or route in this build (P2-13's own disclosed scope), so this fix closes a latent defect before it could ever become customer-reachable, not a currently-exploitable one.",
     "Practical-completeness repair (commit d912048, forward-committed on phase-2-complete) has been through its own Level 3 independent review round (round 3, execution/reviews/level3/phase-2/ROUND_3_REVIEW.md, verdict conditionally accept, one blocking finding \u2014 the Quality Gate falsely blocking the official \u00a756 demonstration sentence and ordinary plain-language ideas for lack of a data-model binding \u2014 fixed and adversarially self-verified, D-0045/EV-0090). Two non-blocking documentation-honesty findings from the same round (misattributed review-provenance code comments; D-0022's ledger wording listing a since-superseded 'UNSUPPORTED' classification value) were also corrected/noted.",
-    "Vitest full-suite non-determinism observed and documented by the pre-Phase-3 audit (execution/audits/TEST_AND_EVIDENCE_AUDIT.md) has been root-caused and resolved: stale Postgres connections left by an abruptly killed (kill -9) manually-started dev server during earlier live debugging in this same build session, not a defect in fileParallelism:false, resetDatabase(), or any application code. Confirmed via 3 consecutive full clean vitest runs (425/425 each) after a Postgres container restart cleared the stale connections (D-0043, EV-0088). No structural code-level safeguard against a future operator repeating an abrupt process kill was added \u2014 judged disproportionate to an operational-discipline risk, not a design flaw \u2014 and is disclosed here rather than silently assumed impossible."
+    "Vitest full-suite non-determinism observed and documented by the pre-Phase-3 audit (execution/audits/TEST_AND_EVIDENCE_AUDIT.md) has been root-caused and resolved: stale Postgres connections left by an abruptly killed (kill -9) manually-started dev server during earlier live debugging in this same build session, not a defect in fileParallelism:false, resetDatabase(), or any application code. Confirmed via 3 consecutive full clean vitest runs (425/425 each) after a Postgres container restart cleared the stale connections (D-0043, EV-0088). No structural code-level safeguard against a future operator repeating an abrupt process kill was added \u2014 judged disproportionate to an operational-discipline risk, not a design flaw \u2014 and is disclosed here rather than silently assumed impossible.",
+    "PHASE 3 RECONCILIATION (execution/final-audit/POCKET_STUDIO_DEFINITIVE_FOUNDER_REPORT.md, 2026-07-15, verified against db5c4d0): customer data deletion is NOT real. OrganizationSubscription's DELETION_EXECUTED transition is a state-machine label only -- Project, IntegrationRequirement, CredentialReference, and GeneratedRecord rows are confirmed left completely untouched through CANCELED -> RETENTION_PERIOD -> DELETED (src/lib/billing/customer-data-protection.integration.test.ts). This is the single highest-priority known limitation in the current build and must not be represented to any real customer as data deletion.",
+    "PHASE 3 RECONCILIATION: Deployment and Apple/Google store review/submission have NO real provider implementation at all (not a missing credential -- no real DeploymentProvider or StoreReviewProvider exists, and neither has an env-based toggle to a live provider). Store submission additionally has zero UI/action surface. This is the top engineering gap before any paid pilot or commercial launch.",
+    "PHASE 3 RECONCILIATION: A generated application has no live, unauthenticated end-user signup/login route. authenticateGeneratedAppUser (src/lib/generation/generated-app-auth.ts) performs real credential verification but establishes no session and is called from nowhere in src/app or src/lib/actions. Only the founder's own Pocket Studio session can view a generated app's screens today -- a generated product's own customers cannot use it yet.",
+    "PHASE 3 RECONCILIATION: OAuth customer-owned integrations (P3-05) have a real, tested protocol layer but zero registered providers (oauth-provider-registry.ts is empty) and zero UI entry point -- beginOAuthConnection is called from nowhere except its own test file. No real customer-owned payment connection is reachable today as a result, which also means generated-app monetization (P3-06) is unreachable in practice despite being real, tested code.",
+    "PHASE 3 RECONCILIATION: Expert Mode (src/app/org/[orgSlug]/[projectSlug]/expert/page.tsx) is a 4-panel, strictly read-only dashboard with zero forms and zero mutation actions -- it cannot approve a pending decision. This is materially thinner than Master Spec \u00a77's 'product control room' framing and today shows LESS than Simple Mode, not more.",
+    "PHASE 3 RECONCILIATION: a CRITICAL DEFECT existed in production billing through implementation and its own unit tests -- the real Stripe webhook handler crashed on invoice.payment_succeeded for an already-ACTIVE/TRIALING subscription (the single most common real-world renewal event), with idempotency committed before the transition succeeded, making the failure permanent per event. Found only by an independent Level 3 reviewer (Phase 3 round 1), fixed and adversarially self-verified (D-0062/EV-0107), extended to cover every non-failure-adjacent origin state in round 2 (D-0063/EV-0108). The anomalous canceled/deleted-but-still-charged payment case now produces no distinguishing operational signal (no BillingEvent/AuditLogEntry/alert) -- disclosed as an accepted, non-blocking gap, not fixed.",
+    "PHASE 3 RECONCILIATION: audit log, AI cost, business analytics, and platform-admin modules (src/lib/observability/*, src/lib/analytics/*, src/lib/admin/*) are real and tested but have zero founder-reachable UI -- the founder has no in-product operational visibility today and must query the database directly.",
+    "PHASE 3 RECONCILIATION: a low-severity, intermittent test flake was found in src/lib/observability/audit-log.integration.test.ts (\"lists entries for an org, newest first\") -- listAuditLogEntries orders by createdAt DESC with no secondary tiebreaker, and Postgres's millisecond timestamp resolution leaves the relative order of two near-simultaneous audit entries technically undefined. Display-ordering ambiguity only, not data loss; not yet fixed; not reproduced in this report's own full-suite verification run."
   ],
-  "requiredCustomerActions": [],
-  "requiredExternalActions": [],
-  "nextAction": "P3-02 through P3-07 are complete (D-0048 through D-0054, EV-0093 through EV-0099). Next unblocked unit: P3-08 (Development/Preview/Staging/Production environments + supported deployment + deployment evidence/rollback + production exports), per the P3-01..P3-14 + P3-EXIT decomposition. This unit is architecturally different from P3-04 through P3-07 -- it is not a swappable external-provider abstraction, but real environment-configuration and deployment-evidence infrastructure for Pocket Studio's own hosting/deployment story. Real hosting-provider credentials (if a specific one is eventually required) would only be requested once implemented and ready, never before."
+  "requiredCustomerActions": [
+    "Provide a real ANTHROPIC_API_KEY and set AI_PROVIDER=anthropic to use real AI-backed intent resolution instead of the deterministic mock (Master Spec \u00a761). Not yet exercised live in this build's own verification.",
+    "Provide real STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET (a Stripe account, test or live mode) and set BILLING_PROVIDER=stripe for real billing/checkout/webhooks instead of the mock provider.",
+    "Provide real SMTP credentials (SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, EMAIL_FROM_ADDRESS) and set EMAIL_PROVIDER=smtp for real transactional email instead of the mock provider.",
+    "Decide and register at least one concrete OAuth provider in src/lib/integrations/oauth-provider-registry.ts before any customer-owned integration or generated-app payment connection can be reached at all -- currently a genuinely empty registry, a product decision this build has no authority to make unilaterally.",
+    "Decide and implement (or explicitly relabel) real customer data deletion before telling any real customer their data is deleted upon subscription cancellation -- see the PHASE 3 RECONCILIATION entries above.",
+    "Provide a real, verified per-token AI cost rate (AI_COST_PER_1K_INPUT_TOKENS_CENTS / AI_COST_PER_1K_OUTPUT_TOKENS_CENTS) if dollar-denominated AI cost reporting is wanted -- real token counts are always recorded regardless; no rate is invented by default.",
+    "Provide real Apple Developer and Google Play Console accounts before any mobile store submission work can begin -- no such integration exists to configure today; this requires new engineering (a real StoreReviewProvider), not just credentials.",
+    "Choose and implement a real hosting/deployment provider before any generated product can be put in front of a real end customer -- no DeploymentProvider implementation exists today, mock only, no vendor is named anywhere in the Master Spec."
+  ],
+  "requiredExternalActions": [
+    "Independent Level 3 review or an equivalent professional security review before any claim of security hardening/certification is made externally -- this build's own review process found and fixed one CRITICAL billing defect this phase alone.",
+    "Professional legal review of the 3 real legal-document generators (Terms of Service, Privacy Policy, AI Disclosure) before any generated draft is published or relied upon -- every draft already carries a not-legal-advice notice, but that notice is not a substitute for review.",
+    "A real Anthropic API cost/quality/latency evaluation at representative volume before committing to AI-backed generation for paying customers -- unverified live in this report.",
+    "Real Stripe test-mode end-to-end exercise (checkout, webhook delivery via the Stripe CLI, a real failed-payment/grace-period/restriction cycle) before any paid pilot -- only the mock provider and a direct-POST synthetic test harness were exercised in this report.",
+    "Apple/Google developer account approval and real store review before any mobile distribution claim is made to a customer -- structurally unreachable in this build today (store readiness can never report READY by design)."
+  ],
+  "nextAction": "Phase 3 is complete. Per explicit founder instruction, no Phase 4 has begun. execution/final-audit/POCKET_STUDIO_DEFINITIVE_FOUNDER_REPORT.md, FOUNDER_TESTING_PLAYBOOK.md, and README.md were produced 2026-07-15 against commit db5c4d0, consolidating and reconciling all prior audits with current repository evidence. Final verdict: FOUNDER ALPHA / FOUNDER ALPHA READY -- ready for the founder to personally test end to end; not ready for controlled beta, paid pilot, or commercial launch until the P0 items listed in the definitive report's \u00a716/\u00a717/\u00a718 are closed. Next action belongs to the founder: execute the 7-day plan in the definitive report's \u00a719, starting with FOUNDER_TESTING_PLAYBOOK.md Test 1."
 }
