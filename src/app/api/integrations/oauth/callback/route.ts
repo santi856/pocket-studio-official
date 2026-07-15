@@ -49,7 +49,16 @@ export async function GET(request: Request) {
     if (pending) {
       await db.oAuthConnectionState.delete({ where: { id: pending.id } });
     }
-    const destination = pending ? await redirectDestination(pending.projectId) : "/dashboard";
+    // Same actor check as the success path below (Level 3 review round 2,
+    // finding 3): resolving the real org/project slug for whoever holds
+    // `state` — even on a provider-declined-consent redirect — would leak
+    // it to a request that has not proven it belongs to the same user who
+    // began this flow. A mismatched or absent `pending` falls back to a
+    // generic destination.
+    const destination =
+      pending && pending.createdByUserId === user.id
+        ? await redirectDestination(pending.projectId)
+        : "/dashboard";
     return NextResponse.redirect(
       new URL(`${destination}?integrationError=${encodeURIComponent(providerError)}`, request.url),
     );

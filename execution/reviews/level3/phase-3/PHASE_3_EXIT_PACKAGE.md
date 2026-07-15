@@ -57,6 +57,43 @@ Full validation suite after fixes: typecheck/lint/format clean, **676/676** unit
 Re-reviewer: please verify these fixes independently rather than trusting this summary, per the same
 standard applied in round 1.
 
+## Round 2 review outcome and fixes
+
+A second independent, fresh-context reviewer re-reviewed this phase against commit `5d578fb` (after round
+1's repair). Verdict: **conditionally accept** — round 1's CRITICAL DEFECT was independently
+re-live-reproduced and confirmed genuinely fixed; no new CRITICAL DEFECT was found. Full record:
+`execution/reviews/level3/phase-3/ROUND_2_REVIEW.md`.
+
+Round 2's own audit sample surfaced a pattern: each of round 1's 5 fixes correctly closed the _specific
+instance_ the round 1 reviewer demonstrated, but left a closely adjacent, previously-untested _sibling_
+of the same underlying defect class unaddressed. Three new non-blocking findings, all fixed in **D-0063
+(EV-0108)** rather than deferred, proactively satisfying round 2's own stated conditions before they could
+compound:
+
+- The billing `PAYMENT_RECOVERED` no-op (D-0062) silently applies to _any_ invalid-transition state, not
+  only the common `ACTIVE`/`TRIALING` renewal case — already honestly disclosed in EV-0107's own
+  `limitations` field, but never propagated to this document or the Capability Registry. Now propagated
+  to both verbatim.
+- `verify-tenant-isolation.ts`'s `AUTHZ_ROOTS` check was a pure string-name match against the call
+  expression's text, never identity-resolved — a local function merely _named_ `requireProjectAccess`
+  that does nothing defeated the entire detector, with no cross-file collision needed at all. Fixed by
+  only trusting an unshadowed bare-name match; a same-file local declaration with that exact name now
+  falls through to the existing same-file-first `resolveCall` instead, forcing the impersonator to earn
+  its own path to the real authz root. Verified: temporarily reverted the check, confirmed a new
+  regression test reproduces round 2's exact fixture (a local no-op `requireProjectAccess` defeating the
+  old check), restored the fix, reconfirmed green (14/14 tenant-isolation tests, 0 violations against the
+  real codebase).
+- The OAuth callback's `providerError` branch (consent-declined path) never called the actor-mismatch
+  check at all before resolving and exposing the real org/project slug — the identical defect class round
+  1 found in the success path, in the one sibling branch the round 1 repair did not touch. Fixed with the
+  same pattern already used three lines below it. No automated regression test could be added: no route
+  handler in this codebase has a non-e2e test (Next.js's `headers()`/`cookies()` require real request
+  scope), and the scenario is genuinely unreachable via e2e today since `PROVIDER_REGISTRY` is empty (no
+  real OAuth provider is registered) — disclosed honestly rather than papered over with a fabricated test.
+
+Full validation suite after fixes: typecheck/lint/format clean, **678/678** unit+integration tests pass
+(676 prior + 2 new), **24/24** e2e tests pass, production build succeeds (EV-0108).
+
 ## Scope claim
 
 Phase 3 — "Commercial Production, Billing, Deployment, Mobile Distribution, Governance Monitoring, and
@@ -166,12 +203,12 @@ dependency-ordered, `execution/state.json`-tracked pattern established for Phase
 
 ## Full evidence and decision ledgers
 
-- `execution/evidence/ledger.jsonl` — 107 records total; Phase 3's portion is EV-0092 through EV-0107
-  (16 records — 14 units + the mid-phase regression repair + the round 1 review repair), each with
-  evidence type, verification method, result, and limitations.
-- `execution/decisions/ledger.jsonl` — 62 records total; Phase 3's portion is D-0046 through D-0062
-  (17 records — the decomposition plus 14 units plus the regression repair plus the round 1 review
-  repair), each with reason, alternatives considered, and impact.
+- `execution/evidence/ledger.jsonl` — 108 records total; Phase 3's portion is EV-0092 through EV-0108
+  (17 records — 14 units + the mid-phase regression repair + the round 1 and round 2 review repairs),
+  each with evidence type, verification method, result, and limitations.
+- `execution/decisions/ledger.jsonl` — 63 records total; Phase 3's portion is D-0046 through D-0063
+  (18 records — the decomposition plus 14 units plus the regression repair plus the round 1 and round 2
+  review repairs), each with reason, alternatives considered, and impact.
 - `execution/state.json` — machine-readable current state; `phase.unitDecomposition` lists all 14 units,
   each `complete` with its evidence pointer.
 
@@ -212,6 +249,12 @@ dependency-ordered, `execution/state.json`-tracked pattern established for Phase
 
 ## Known limitations (truthful, current)
 
+- **A payment succeeding for an organization already `CANCELED`/`EXPIRED`/`RETENTION_PERIOD`/
+  `DELETION_SCHEDULED`/`DELETED` is silently treated as a no-op**, identically to the common, benign
+  `ACTIVE`/`TRIALING` renewal case (`src/lib/billing/webhook-processing.ts`) — a real anomaly (a
+  billing-provider/application desync, or a customer charged after cancellation) currently leaves no
+  trace beyond the raw `ProcessedWebhookEvent` idempotency row: no `BillingEvent`, no `AuditLogEntry`, no
+  alert (Level 3 review round 2, finding 1).
 - **The P3-02 login rate limiter's per-IP component depends on a reverse proxy that overwrites
   client-supplied `X-Forwarded-For`** (`src/lib/web/client-ip.ts`) — without one (a plausible
   self-hosted deployment for this platform's target "local and service businesses" customers, Master
@@ -277,12 +320,12 @@ dependency-ordered, `execution/state.json`-tracked pattern established for Phase
 - `npx tsc --noEmit`: clean.
 - `npx eslint . --max-warnings=0`: clean.
 - `npx prettier --check .`: clean.
-- `npx vitest run`: **676/676** unit+integration tests, stable across repeated runs throughout the
-  phase (each unit's own evidence entry records the count at that point: 434 → 671 → 676 after the
-  round 1 review repair's 5 new regression tests).
+- `npx vitest run`: **678/678** unit+integration tests, stable across repeated runs throughout the
+  phase (each unit's own evidence entry records the count at that point: 434 → 671 → 676 → 678 after the
+  round 1 and round 2 review repairs' regression tests).
 - `npx vitest run` on `verify-tenant-isolation.test.ts` and `verify-migration-safety.test.ts` directly:
   0 violations at every unit boundary this phase, including after every schema/authorization change and
-  after the round 1 review repair's fix to the detector's own name-collision blind spot (D-0062).
+  after both review repairs' fixes to the detector's own blind spots (D-0062, D-0063).
 - `rm -rf .next && npx next build`: succeeds.
 - `npx playwright test`: **24/24** e2e tests pass (stable; one isolated `golden-path.spec.ts` timing
   flake was observed and confirmed non-reproducing via both a standalone re-run and a full-suite

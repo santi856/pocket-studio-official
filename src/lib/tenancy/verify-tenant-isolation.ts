@@ -175,6 +175,20 @@ function functionKey(file: string, name: string): string {
  * security-relevant analyzer is a false positive (a compliant function
  * gets flagged for human review) over a false negative (a real violation
  * goes unreported).
+ *
+ * A bare-name call to `requireProjectAccess`/`requireOrganizationMembership`
+ * is trusted as reaching the real authz root only when the calling
+ * function's own file does not itself declare a same-named local function
+ * (Level 3 review round 2, finding 2 — a local function merely *named*
+ * `requireProjectAccess` that does nothing previously defeated this check
+ * entirely, since the prior version matched the call's bare text with no
+ * identity check at all). Residual, disclosed scope boundary: a same-named
+ * impersonator declared in a *different* file than the caller (not the
+ * caller's own file) is not specifically defended against beyond the
+ * general collision-safety guarantee above — closing that fully would
+ * require real import-graph resolution, not proportionate for this
+ * codebase's actual size and its consistent one-function-one-name
+ * convention (documented above).
  */
 export function findTenantIsolationViolations(
   rootDir = path.resolve(process.cwd(), "src/lib"),
@@ -245,7 +259,23 @@ export function findTenantIsolationViolations(
       seen.add(key);
 
       for (const called of current.calls) {
-        if (AUTHZ_ROOTS.has(called)) return true;
+        // AUTHZ_ROOTS names are trusted by bare name ONLY when nothing in
+        // the calling file itself declares a same-named local function —
+        // requireProjectAccess/requireOrganizationMembership are always
+        // imported from src/lib/tenancy/authz.ts, never locally declared
+        // by a real caller, so an unshadowed bare-name match is a real
+        // call to the genuine authz root (this AST-only tool never
+        // resolves imports). But if the calling file *does* declare its
+        // own local function with that exact name, that local
+        // declaration shadows the import — resolveCall's same-file-first
+        // rule below correctly routes the call to the impersonator
+        // instead, which then has to earn its own path to a real authz
+        // root like any other function (Level 3 review round 2, finding
+        // 2 — a local function merely named `requireProjectAccess` that
+        // does nothing previously defeated this check entirely).
+        if (AUTHZ_ROOTS.has(called) && !functionsByKey.has(functionKey(current.file, called))) {
+          return true;
+        }
         const resolved = resolveCall(current.file, called);
         if (resolved && !seen.has(functionKey(resolved.file, resolved.name))) {
           stack.push(resolved);

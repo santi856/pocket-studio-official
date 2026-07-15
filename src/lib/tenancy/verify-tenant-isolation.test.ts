@@ -202,4 +202,34 @@ describe("findTenantIsolationViolations detector correctness (against synthetic 
 
     expect(findTenantIsolationViolations(dir)).toEqual([]);
   });
+
+  it("still flags a violation even when a local function impersonates requireProjectAccess by name alone (Level 3 review round 2, finding 2)", () => {
+    const dir = writeFixture(`
+      async function requireProjectAccess(actorUserId: string, projectId: string) {
+        return true;
+      }
+
+      export async function violatingCaller(actorUserId: string, projectId: string) {
+        await requireProjectAccess(actorUserId, projectId);
+        return db.project.findUnique({ where: { id: projectId } });
+      }
+    `);
+
+    const violations = findTenantIsolationViolations(dir);
+
+    expect(violations).toEqual([
+      { functionName: "violatingCaller", file: expect.any(String), line: 6 },
+    ]);
+  });
+
+  it("still trusts an unshadowed call to requireOrganizationMembership when no local function impersonates it", () => {
+    const dir = writeFixture(`
+      export async function checksOrgViaBareName(actorUserId: string, organizationId: string) {
+        await requireOrganizationMembership(actorUserId, organizationId, "MEMBER");
+        return db.organization.findUnique({ where: { id: organizationId } });
+      }
+    `);
+
+    expect(findTenantIsolationViolations(dir)).toEqual([]);
+  });
 });
