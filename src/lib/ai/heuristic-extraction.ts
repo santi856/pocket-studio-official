@@ -23,10 +23,11 @@ import type {
  *
  * Deliberately structural, not lexical: actor/entity detection is driven
  * by sentence position and a small set of common English organizational
- * verbs (manage, track, assign, create, ...), never by any domain
- * vocabulary (no "chore", "grocery", "booking", etc. anywhere in this
- * file) — the founder's repair request explicitly prohibits solving the
- * HomeBase defect by expanding a keyword list.
+ * verbs (manage, track, assign, create, ...), never by any product-
+ * specific vocabulary — this file contains no per-domain word list of any
+ * kind, by design (see semantic-multi-domain-regression.integration.test.ts's
+ * anti-hardcoding guard, which enforces this permanently by scanning this
+ * file's own source for any fixture's distinctive nouns).
  */
 
 const SENTENCE_SPLIT = /(?<=[.!?])\s+/;
@@ -66,10 +67,10 @@ const ORGANIZATIONAL_VERBS = [
 
 // Only true capability/possession modals ("can", "have", "may", "will")
 // indicate a genuine actor — "is"/"are"/"include[s]" usually introduce a
-// definitional sentence about the product itself ("HomeBase is a...",
-// "The app includes..."), not an actor performing an action, so those are
-// deliberately excluded to avoid mistaking the product's own name for an
-// actor.
+// definitional sentence about the product itself (e.g. a product-name
+// sentence like "<Product> is a ..." or "The app includes ..."), not an
+// actor performing an action, so those are deliberately excluded to avoid
+// mistaking the product's own name for an actor.
 const ACTOR_LEAD_PATTERN = new RegExp(
   `^\\s*([A-Z][a-zA-Z]*(?:\\s+[a-z]+)?)\\s+(?:can|have|has|may|will)\\b`,
 );

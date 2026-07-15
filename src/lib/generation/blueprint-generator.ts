@@ -110,8 +110,8 @@ export async function generateInitialBlueprint(
   // Union, not replace: a description can legitimately need both a
   // category-implied workflow (e.g. "monetization" always implies a
   // Checkout workflow) and a semantically-extracted, domain-specific one
-  // (e.g. "Parents: Assign chore") — neither should silently displace the
-  // other.
+  // (e.g. an actor-specific task-assignment workflow) — neither should
+  // silently displace the other.
   const workflows = uniqByName([...categoryWorkflows, ...semanticWorkflowDefs]);
   const categoryDataModels = categories
     .map((category) => BLUEPRINT_CATEGORY_TEMPLATES[category]?.dataModel)
@@ -123,12 +123,12 @@ export async function generateInitialBlueprint(
         ? uniq(["id", ...e.attributes, "createdAt"])
         : ["id", "status", "createdAt"],
   }));
-  // Same union principle: a monetization-category "Payment" model and a
-  // semantically-extracted "Chore"/"Reward"/"GroceryItem" model are not in
-  // conflict — this is the specific fix for the founder-discovered defect
-  // (D-0065), where every domain entity previously collapsed into a single
-  // generic "Record" regardless of how many distinct concepts the customer
-  // actually described.
+  // Same union principle: a monetization-category "Payment" model and any
+  // number of semantically-extracted, product-specific entity models are
+  // not in conflict — this is the specific fix for the founder-discovered
+  // defect (D-0065), where every domain entity previously collapsed into a
+  // single generic "Record" regardless of how many distinct concepts the
+  // customer actually described.
   categoryDataModels.push(...semanticDataModels);
   // Home (BASE_SCREENS) is unconditionally a list-view screen
   // (LIST_LIKE_SCREEN_NAMES, interaction-contracts.ts) for every product,
@@ -169,9 +169,9 @@ export async function generateInitialBlueprint(
   // match — either is sufficient, and unlike the keyword match, this one
   // does not depend on the customer having used the literal word "role."
   // This is the specific fix for the founder-discovered defect (D-0065):
-  // HomeBase's explicit Parent/Child actors previously produced
-  // roles:["customer"] only, because "role"/"permission"/"access control"
-  // never appear verbatim in that description.
+  // a description naming multiple distinct actors by name previously
+  // still produced roles:["customer"] only whenever "role"/"permission"/
+  // "access control" never appeared verbatim in the text.
   const semanticRoleNames = uniq(semanticActors.map((a) => a.name));
   const hasPermissionsCategory = categories.includes("permissions");
   const hasMultipleRoles = hasPermissionsCategory || semanticRoleNames.length >= 2;
