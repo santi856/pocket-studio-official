@@ -1,0 +1,196 @@
+{
+  "capturedAt": "2026-07-15T10:58:02.038Z",
+  "rawIdea": "HomeBase is a shared household management app that helps busy families organize their daily lives in one place. Family members can manage chores, shared grocery lists, household expenses, appointments, schedules, and rewards. Parents can assign one-time or recurring chores, set deadlines, track completion, and create rewards. Children have a simple view where they can see responsibilities, complete tasks, track progress, and view earned rewards. The app includes a family dashboard showing what needs attention today, upcoming appointments, overdue tasks, grocery needs, and recent household activity.",
+  "stage1_impactAnalysis": {
+    "categories": ["screens", "costs"],
+    "consequential": false,
+    "rationale": ["Matched \"view\" → screens", "Matched \"expense\" → costs"]
+  },
+  "stage2_derivedRequirements": [
+    {
+      "statement": "Provide dedicated screens for the flows the customer described.",
+      "basis": "inferred",
+      "category": "screens"
+    },
+    {
+      "statement": "Track the cost or budget concern the customer described.",
+      "basis": "inferred",
+      "category": "costs"
+    },
+    {
+      "statement": "Generate a responsive web application from the described product.",
+      "basis": "recommended",
+      "category": "screens"
+    }
+  ],
+  "stage2_openQuestions": [
+    "Who is the primary target customer for this product?",
+    "How should this product generate revenue, if at all?",
+    "Does this product need more than one user role (e.g. customer vs. owner)?"
+  ],
+  "stage2_extractedTargetCustomer": null,
+  "stage3_productState": {
+    "productIntelligence": {
+      "purpose": "HomeBase is a shared household management app that helps busy families organize their daily lives in one place. Family members can manage chores, shared grocery lists, household expenses, appointments, schedules, and rewards. Parents can assign one-time or recurring chores, set deadlines, track completion, and create rewards. Children have a simple view where they can see responsibilities, complete tasks, track progress, and view earned rewards. The app includes a family dashboard showing what needs attention today, upcoming appointments, overdue tasks, grocery needs, and recent household activity.",
+      "requirements": [
+        {
+          "basis": "inferred",
+          "category": "screens",
+          "statement": "Provide dedicated screens for the flows the customer described."
+        },
+        {
+          "basis": "inferred",
+          "category": "costs",
+          "statement": "Track the cost or budget concern the customer described."
+        },
+        {
+          "basis": "recommended",
+          "category": "screens",
+          "statement": "Generate a responsive web application from the described product."
+        }
+      ],
+      "openQuestions": [
+        "Who is the primary target customer for this product?",
+        "How should this product generate revenue, if at all?",
+        "Does this product need more than one user role (e.g. customer vs. owner)?"
+      ],
+      "targetCustomer": "not specified — open question"
+    },
+    "businessModelBrief": {
+      "offer": "HomeBase is a shared household management app that helps busy families organize their daily lives in one place. Family members can manage chores, shared grocery lists, household expenses, appointments, schedules, and rewards. Parents can assign one-time or recurring chores, set deadlines, track completion, and create rewards. Children have a simple view where they can see responsibilities, complete tasks, track progress, and view earned rewards. The app includes a family dashboard showing what needs attention today, upcoming appointments, overdue tasks, grocery needs, and recent household activity.",
+      "problem": "The described customer needs: HomeBase is a shared household management app that helps busy families organize their daily lives in one place. Family members can manage chores, shared grocery lists, household expenses, appointments, schedules, and rewards. Parents can assign one-time or recurring chores, set deadlines, track completion, and create rewards. Children have a simple view where they can see responsibilities, complete tasks, track progress, and view earned rewards. The app includes a family dashboard showing what needs attention today, upcoming appointments, overdue tasks, grocery needs, and recent household activity.",
+      "keyMetrics": ["activation rate", "retention"],
+      "revenueModel": "No revenue model was described — see open questions.",
+      "businessRisks": ["No market or competitor research has been performed for this idea."],
+      "supportBurden": "medium",
+      "targetCustomer": "not specified — open question",
+      "activationEvent": "First successful use of the product's primary action.",
+      "valueProposition": "Estimated value proposition — customer confirmation required.",
+      "refundDisputeRisk": "low",
+      "pricingAssumptions": "Unknown — customer must provide pricing; no default price is assumed.",
+      "retentionMechanisms": "Not yet determined.",
+      "operationalComplexity": "medium",
+      "customerAcquisitionAssumptions": "Unknown — not yet researched."
+    },
+    "monetizationRecommendations": [
+      {
+        "option": "one-time payment",
+        "tradeoff": "Simple, but no recurring revenue."
+      }
+    ],
+    "governanceRequirements": []
+  },
+  "stage3_productDNA": {
+    "targetUsers": [],
+    "purpose": "HomeBase is a shared household management app that helps busy families organize their daily lives in one place. Family members can manage chores, shared grocery lists, household expenses, appointments, schedules, and rewards. Parents can assign one-time or recurring chores, set deadlines, track completion, and create rewards. Children have a simple view where they can see responsibilities, complete tasks, track progress, and view earned rewards. The app includes a family dashboard showing what needs attention today, upcoming appointments, overdue tasks, grocery needs, and recent household activity.",
+    "openQuestions": [
+      "Who is the primary target customer for this product?",
+      "How should this product generate revenue, if at all?",
+      "Does this product need more than one user role (e.g. customer vs. owner)?"
+    ]
+  },
+  "stage4_blueprint": {
+    "version": 1,
+    "validationStatus": "VALID",
+    "validationErrors": [],
+    "roles": ["customer"],
+    "screens": ["Home", "Browse"],
+    "dataModels": [
+      {
+        "name": "Record",
+        "fields": ["id", "status", "createdAt"]
+      }
+    ],
+    "workflows": [],
+    "actions": [],
+    "permissions": [],
+    "businessRules": [],
+    "openDecisions": [
+      "Confirm the primary target user/customer for this product.",
+      "No data category was detected from the idea text, so a generic \"Record\" data entity was assumed as the primary thing this product persists — confirm or rename it."
+    ],
+    "assumptions": [
+      "Blueprint generated deterministically from Impact Analysis categories, not real design intelligence.",
+      "Screen, workflow, and data-model names are generic placeholders pending customer confirmation."
+    ],
+    "ownerOperations": [],
+    "navigation": {
+      "primary": "Home",
+      "screens": ["Home", "Browse"]
+    },
+    "generationMetadata": {
+      "method": "Derived from Impact Analysis categories over the original idea and Requirements Engine output; not AI-generated design.",
+      "generatedAt": "2026-07-15T10:58:01.968Z",
+      "generatedBy": "deterministic-template-generator-v1"
+    }
+  },
+  "stage5_buildPlan": {
+    "version": 1,
+    "planStatus": "READY",
+    "blockers": []
+  },
+  "stage6_qualityGate": {
+    "passed": true,
+    "checks": [
+      {
+        "name": "Blueprint is structurally valid",
+        "passed": true,
+        "details": "No validation errors."
+      },
+      {
+        "name": "Build Plan has no unresolved blockers",
+        "passed": true,
+        "details": "No blockers."
+      },
+      {
+        "name": "Every screen and workflow has a well-formed Interaction Contract",
+        "passed": true,
+        "details": "All screens and workflows covered."
+      },
+      {
+        "name": "Every required interaction state is implementable by this build's renderer",
+        "passed": true,
+        "details": "No unsupported required states."
+      },
+      {
+        "name": "Consequential and unresolved interaction states are disclosed, never silently decided",
+        "passed": true,
+        "details": "All consequential/unresolved states are disclosed."
+      },
+      {
+        "name": "Every Button is wired to a real action (inside a Form, or a real onAction handler)",
+        "passed": true,
+        "details": "No unwired buttons found."
+      },
+      {
+        "name": "List-view screens are wired to a real data dependency",
+        "passed": true,
+        "details": "All list-view screens are data-bound."
+      },
+      {
+        "name": "Form-submission screens' Inputs match their bound data model's fields",
+        "passed": true,
+        "details": "All form Inputs match their data model."
+      },
+      {
+        "name": "Every screen is reachable from the navigation graph",
+        "passed": true,
+        "details": "All screens reachable."
+      },
+      {
+        "name": "Every Image has alt text",
+        "passed": true,
+        "details": "All images have alt text."
+      },
+      {
+        "name": "Every screen's data binding resolves without error",
+        "passed": true,
+        "details": "All screens resolved cleanly."
+      }
+    ]
+  },
+  "stage7_truthStatus": {
+    "status": "IMPLEMENTED",
+    "rationale": "Blueprint v1 and Build Plan v1 are ready; screens are live at /preview/<screen>."
+  }
+}
