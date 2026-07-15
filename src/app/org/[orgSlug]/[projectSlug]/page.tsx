@@ -293,19 +293,33 @@ export default async function StudioSimpleModePage({
               )}
 
               {monetizationRecommendations && monetizationRecommendations.length > 0 && (
-                <ul className="mt-4 flex flex-col gap-2">
-                  {monetizationRecommendations.map((option) => (
-                    <li
-                      key={option.option}
-                      className="rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
-                    >
-                      <span className="font-medium text-black dark:text-white">
-                        {option.option}
-                      </span>
-                      <span className="text-zinc-600 dark:text-zinc-400"> — {option.tradeoff}</span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="mt-4">
+                  {/* D-0065: this list is always shown, even when
+                      revenueModel above says no revenue model was
+                      described — it is a suggestion awaiting customer
+                      confirmation, not a fact about the product, and must
+                      never read as one (Part 10, "recommendations must
+                      never silently become accepted Product State"). */}
+                  <p className="text-xs font-medium tracking-wide text-zinc-500 uppercase dark:text-zinc-500">
+                    Suggested options — not yet confirmed
+                  </p>
+                  <ul className="mt-2 flex flex-col gap-2">
+                    {monetizationRecommendations.map((option) => (
+                      <li
+                        key={option.option}
+                        className="rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
+                      >
+                        <span className="font-medium text-black dark:text-white">
+                          {option.option}
+                        </span>
+                        <span className="text-zinc-600 dark:text-zinc-400">
+                          {" "}
+                          — {option.tradeoff}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </section>
 

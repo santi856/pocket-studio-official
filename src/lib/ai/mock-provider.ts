@@ -1,5 +1,12 @@
 import "server-only";
-import type { AIProvider, ResolveIntentInput, ResolvedIntent } from "@/lib/ai/provider";
+import type {
+  AIProvider,
+  ResolveIntentInput,
+  ResolvedIntent,
+  SemanticExtractionInput,
+  SemanticExtractionResult,
+} from "@/lib/ai/provider";
+import { extractSemanticsHeuristically } from "@/lib/ai/heuristic-extraction";
 
 const MIN_MEANINGFUL_TEXT_LENGTH = 10;
 
@@ -33,5 +40,15 @@ export class MockAIProvider implements AIProvider {
       confidence: "high",
       usage: null,
     };
+  }
+
+  /**
+   * Honest, disclosed reduced-intelligence mode — see
+   * heuristic-extraction.ts's module comment. Never claims high
+   * confidence, never invents domain content beyond generic English
+   * sentence-structure heuristics.
+   */
+  async extractProductSemantics(input: SemanticExtractionInput): Promise<SemanticExtractionResult> {
+    return extractSemanticsHeuristically(input.rawText);
   }
 }

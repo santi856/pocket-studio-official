@@ -273,6 +273,7 @@ model Project {
   credentialReferences        CredentialReference[]
   governanceProfile           GovernanceProfile?
   policyDocuments             PolicyDocument[]
+  productSemanticModels       ProductSemanticModel[]
   blueprints                  Blueprint[]
   buildPlans                  BuildPlan[]
   generatedAppUsers           GeneratedAppUser[]
@@ -1129,6 +1130,64 @@ model BillingEvent {
 
   @@index([organizationSubscriptionId])
   @@map("billing_events")
+}
+
+// ---------------------------------------------------------------------------
+// Semantic Product Compiler (founder-directed repair, post-Phase-3,
+// D-0065/EV-0110 — see execution/architecture/SEMANTIC_PRODUCT_COMPILER_REPORT.md).
+// Sits between Product State and Blueprint: a domain-agnostic, versioned,
+// structured representation of what a customer's description actually
+// means (actors, entities, relationships, workflows, permissions, business
+// rules, monetization, constraints), with inline provenance on every
+// material item, so Blueprint generation has something richer than a bare
+// Impact Analysis category list to draw from. Does not replace Product
+// State (still the raw-idea/business-intelligence container), Product
+// Knowledge (still the graph-relationship layer this feeds), or the
+// Decision Ledger (consequential items still route through it). Full-
+// replace versioned, like Blueprint and ProductState.
+// ---------------------------------------------------------------------------
+
+model ProductSemanticModel {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version   Int
+
+  schemaVersion String
+
+  purpose       String?
+  targetUsers   Json?
+  actors        Json?
+  entities      Json?
+  workflows     Json?
+  capabilities  Json?
+  permissions   Json?
+  businessRules Json?
+  monetization  Json?
+  integrations  Json?
+  constraints   Json?
+
+  unresolvedQuestions     Json?
+  consequentialDecisions  Json?
+  unsupportedRequirements Json?
+
+  // { generatedBy: "mock"|"anthropic", model: string|null, promptVersion:
+  // string, generatedAt: ISO string, mode: "ai"|"deterministic_fallback" }
+  generationMetadata Json
+
+  // Written by the Semantic Coverage Engine (semantic-coverage.ts) after
+  // extraction — per-dimension covered/partially_covered/unresolved/
+  // unsupported/deferred/missing, never a single aggregate percentage.
+  coverageResult Json?
+
+  basedOnProductStateVersion Int
+
+  createdAt       DateTime @default(now())
+  createdByUserId String
+
+  @@unique([projectId, version])
+  @@index([projectId])
+  @@map("product_semantic_models")
 }
 
 // ---------------------------------------------------------------------------

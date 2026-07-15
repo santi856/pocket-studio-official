@@ -6,6 +6,8 @@ import { listProductMemoryEntries } from "@/lib/product/product-memory";
 import { createKnowledgeNode } from "@/lib/product/product-knowledge";
 import { recordEvent } from "@/lib/product/events";
 import { deriveRequirements } from "@/lib/orchestration/requirements-engine";
+import { getLatestSemanticModel } from "@/lib/product/semantic-model";
+import { computeBlueprintSemanticCoverage } from "./semantic-coverage";
 import {
   BLUEPRINT_CATEGORY_TEMPLATES,
   BASE_SCREENS,
@@ -20,10 +22,28 @@ import {
   workflowContractKey,
 } from "./interaction-contracts";
 import type { InteractionContractMap } from "./interaction-contracts";
+import type {
+  SemanticActor,
+  SemanticCapability,
+  SemanticEntity,
+  SemanticWorkflow,
+} from "@/lib/ai/provider";
 import type { Blueprint, Prisma } from "@/generated/prisma/client";
 
 function uniq<T>(items: T[]): T[] {
   return Array.from(new Set(items));
+}
+
+function uniqByName<T extends { name: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const item of items) {
+    const key = item.name.trim().toLowerCase();
+    if (key.length === 0 || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
 }
 
 /**
@@ -49,6 +69,22 @@ export async function generateInitialBlueprint(
   const productDNA = await getLatestProductDNA(actorUserId, projectId);
   const memoryEntries = await listProductMemoryEntries(actorUserId, projectId);
 
+  // Semantic Product Compiler (D-0065, execution/architecture/
+  // SEMANTIC_PRODUCT_COMPILER_REPORT.md) — the domain-agnostic
+  // actors/entities/workflows/capabilities the Semantic Coverage Engine
+  // will later check actually reached this Blueprint. Optional at read
+  // time (older projects predating this repair have no semantic model
+  // row), in which case Blueprint generation falls back to exactly its
+  // prior, category-only behavior — never a breaking change for existing
+  // projects.
+  const semanticModel = await getLatestSemanticModel(actorUserId, projectId);
+  const semanticActors = (semanticModel?.actors as unknown as SemanticActor[] | null) ?? [];
+  const semanticEntities = (semanticModel?.entities as unknown as SemanticEntity[] | null) ?? [];
+  const semanticWorkflows =
+    (semanticModel?.workflows as unknown as SemanticWorkflow[] | null) ?? [];
+  const semanticCapabilities =
+    (semanticModel?.capabilities as unknown as SemanticCapability[] | null) ?? [];
+
   const requirements = deriveRequirements(productState.originalIdea);
   const categories = uniq(requirements.map((requirement) => requirement.category));
 
@@ -56,15 +92,44 @@ export async function generateInitialBlueprint(
     ...BASE_SCREENS,
     ...categories.flatMap((category) => BLUEPRINT_CATEGORY_TEMPLATES[category]?.screens ?? []),
   ]);
-  const actions = uniq(
-    categories.flatMap((category) => BLUEPRINT_CATEGORY_TEMPLATES[category]?.actions ?? []),
+  const semanticActionNames = uniq(
+    semanticCapabilities.filter((c) => c.kind === "action").map((c) => c.name),
   );
-  const workflows = categories
+  const actions = uniq([
+    ...categories.flatMap((category) => BLUEPRINT_CATEGORY_TEMPLATES[category]?.actions ?? []),
+    ...semanticActionNames,
+  ]);
+  const categoryWorkflows = categories
     .map((category) => BLUEPRINT_CATEGORY_TEMPLATES[category]?.workflow)
     .filter((workflow): workflow is { name: string; steps: string[] } => Boolean(workflow));
+  const semanticWorkflowDefs = semanticWorkflows.map((w) => ({
+    name: w.name,
+    steps:
+      w.steps.length > 0 ? w.steps : ["Start", "Provide details", "Review", "Confirm", "Complete"],
+  }));
+  // Union, not replace: a description can legitimately need both a
+  // category-implied workflow (e.g. "monetization" always implies a
+  // Checkout workflow) and a semantically-extracted, domain-specific one
+  // (e.g. "Parents: Assign chore") — neither should silently displace the
+  // other.
+  const workflows = uniqByName([...categoryWorkflows, ...semanticWorkflowDefs]);
   const categoryDataModels = categories
     .map((category) => BLUEPRINT_CATEGORY_TEMPLATES[category]?.dataModel)
     .filter((model): model is { name: string; fields: string[] } => Boolean(model));
+  const semanticDataModels = semanticEntities.map((e) => ({
+    name: e.name,
+    fields:
+      e.attributes.length > 0
+        ? uniq(["id", ...e.attributes, "createdAt"])
+        : ["id", "status", "createdAt"],
+  }));
+  // Same union principle: a monetization-category "Payment" model and a
+  // semantically-extracted "Chore"/"Reward"/"GroceryItem" model are not in
+  // conflict — this is the specific fix for the founder-discovered defect
+  // (D-0065), where every domain entity previously collapsed into a single
+  // generic "Record" regardless of how many distinct concepts the customer
+  // actually described.
+  categoryDataModels.push(...semanticDataModels);
   // Home (BASE_SCREENS) is unconditionally a list-view screen
   // (LIST_LIKE_SCREEN_NAMES, interaction-contracts.ts) for every product,
   // since almost every real product's home screen browses some primary
@@ -84,10 +149,11 @@ export async function generateInitialBlueprint(
   // "Record" model the "data" category template already uses closes that
   // gap without inventing new architecture — GeneratedRecord storage is
   // already keyed generically by model name.
-  const hasPrimaryDataModel = categoryDataModels.some((model) => model.name !== "Payment");
+  const dedupedDataModels = uniqByName(categoryDataModels);
+  const hasPrimaryDataModel = dedupedDataModels.some((model) => model.name !== "Payment");
   const dataModels = hasPrimaryDataModel
-    ? categoryDataModels
-    : [...categoryDataModels, { name: "Record", fields: ["id", "status", "createdAt"] }];
+    ? dedupedDataModels
+    : [...dedupedDataModels, { name: "Record", fields: ["id", "status", "createdAt"] }];
   const businessRules = categories
     .map((category) => BLUEPRINT_CATEGORY_TEMPLATES[category]?.businessRule)
     .filter((rule): rule is string => Boolean(rule));
@@ -98,8 +164,23 @@ export async function generateInitialBlueprint(
     .map((category) => BLUEPRINT_CATEGORY_TEMPLATES[category]?.monetization)
     .filter((note): note is string => Boolean(note));
 
+  // A description with 2+ distinct actors carries the same "this product
+  // needs role separation" signal as the permissions category's keyword
+  // match — either is sufficient, and unlike the keyword match, this one
+  // does not depend on the customer having used the literal word "role."
+  // This is the specific fix for the founder-discovered defect (D-0065):
+  // HomeBase's explicit Parent/Child actors previously produced
+  // roles:["customer"] only, because "role"/"permission"/"access control"
+  // never appear verbatim in that description.
+  const semanticRoleNames = uniq(semanticActors.map((a) => a.name));
   const hasPermissionsCategory = categories.includes("permissions");
-  const roles = hasPermissionsCategory ? [CUSTOMER_ROLE, OWNER_ROLE] : [CUSTOMER_ROLE];
+  const hasMultipleRoles = hasPermissionsCategory || semanticRoleNames.length >= 2;
+  const roles =
+    semanticRoleNames.length > 0
+      ? uniq([...semanticRoleNames, ...(hasPermissionsCategory ? [OWNER_ROLE] : [])])
+      : hasPermissionsCategory
+        ? [CUSTOMER_ROLE, OWNER_ROLE]
+        : [CUSTOMER_ROLE];
 
   // Product Pattern and Interaction Contract System: attach the implied
   // supporting behavior (loading/empty/error/confirmation states) every
@@ -144,6 +225,52 @@ export async function generateInitialBlueprint(
       'No data category was detected from the idea text, so a generic "Record" data entity was assumed as the primary thing this product persists — confirm or rename it.',
     );
   }
+
+  // Semantic Coverage Engine (D-0065): did every actor/entity/workflow the
+  // Semantic Product Compiler found actually reach this Blueprint's
+  // roles/dataModels/workflows arrays, or was something identified but
+  // then silently dropped? Never silently decided either way — every gap
+  // becomes a disclosed open decision, the same pattern already used for
+  // consequential/unresolved interaction states below.
+  const semanticCoverage = computeBlueprintSemanticCoverage(
+    { actors: semanticActors, entities: semanticEntities, workflows: semanticWorkflows },
+    {
+      roles,
+      dataModelNames: dataModels.map((m) => m.name),
+      workflowNames: workflows.map((w) => w.name),
+      screens,
+    },
+  );
+  for (const missing of semanticCoverage.missingExplicitActors) {
+    openDecisions.push(
+      `The described actor "${missing}" was identified but is not yet represented as a Blueprint role — confirm or rename it.`,
+    );
+  }
+  for (const missing of semanticCoverage.missingExplicitEntities) {
+    openDecisions.push(
+      `The described entity "${missing}" was identified but is not yet represented as a Blueprint data model — confirm or rename it.`,
+    );
+  }
+  for (const missing of semanticCoverage.missingExplicitWorkflows) {
+    openDecisions.push(
+      `The described workflow "${missing}" was identified but is not yet represented in the Blueprint — confirm or rename it.`,
+    );
+  }
+
+  const lowConfidenceSemanticItemCount = [
+    ...semanticActors,
+    ...semanticEntities,
+    ...semanticWorkflows,
+  ].filter((item) => item.provenance.confidence === "low").length;
+  if (semanticActors.length > 0 || semanticEntities.length > 0 || semanticWorkflows.length > 0) {
+    assumptions.push(
+      `Semantic extraction identified ${semanticActors.length} actor(s), ${semanticEntities.length} entit${semanticEntities.length === 1 ? "y" : "ies"}, and ${semanticWorkflows.length} workflow(s) from the description` +
+        (lowConfidenceSemanticItemCount > 0
+          ? ` — ${lowConfidenceSemanticItemCount} item(s) are low-confidence (deterministic-fallback mode) and should be confirmed, not treated as certain.`
+          : "."),
+    );
+  }
+
   // Inference Boundaries (D-0022): a consequential_decision-classified
   // interaction state (e.g. payment confirmation) is never silently
   // treated as approved. Recorded here in the same place every other
@@ -196,7 +323,11 @@ export async function generateInitialBlueprint(
     generatedBy: "deterministic-template-generator-v1",
     generatedAt: new Date().toISOString(),
     method:
-      "Derived from Impact Analysis categories over the original idea and Requirements Engine output; not AI-generated design.",
+      "Derived from Impact Analysis categories over the original idea and Requirements Engine output, unioned with the Semantic Product Compiler's structured extraction when available; not AI-generated design at the Blueprint-assembly layer itself (the semantic extraction upstream of it may be AI-backed — see basedOnSemanticModelVersion/semanticExtractionMode).",
+    basedOnSemanticModelVersion: semanticModel?.version ?? null,
+    semanticExtractionMode:
+      (semanticModel?.generationMetadata as { mode?: string } | null)?.mode ?? null,
+    semanticCoverage,
   };
 
   const blueprint = await createBlueprintVersion(actorUserId, projectId, {
@@ -215,7 +346,7 @@ export async function generateInitialBlueprint(
     businessRules,
     monetization: monetizationNotes,
     subscriptions: [],
-    ownerOperations: hasPermissionsCategory ? ["Manage records", "View activity"] : [],
+    ownerOperations: hasMultipleRoles ? ["Manage records", "View activity"] : [],
     outputTargets,
     themeAndStyle: { style: "default", notes: "No brand direction specified yet." },
     interactionContracts: interactionContracts as unknown as Prisma.InputJsonValue,

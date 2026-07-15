@@ -1,11 +1,16 @@
 import "server-only";
 import { z } from "zod";
 import { getServerEnv } from "@/lib/env";
+import { deriveRequirementId } from "@/lib/orchestration/requirement-id";
+import { extractSemanticsHeuristically } from "@/lib/ai/heuristic-extraction";
 import type {
   AIProvider,
   ResolveIntentInput,
   ResolvedIntent,
   ResolvedIntentType,
+  SemanticExtractionInput,
+  SemanticExtractionResult,
+  SemanticSourceType,
 } from "@/lib/ai/provider";
 
 // Per current model guidance: default to the latest, most capable Claude
@@ -68,6 +73,273 @@ const RESOLVE_INTENT_TOOL = {
   },
 };
 
+const EXTRACT_SEMANTICS_TOOL_NAME = "extract_product_semantics";
+
+const SOURCE_TYPE_ENUM = [
+  "customer_explicit",
+  "customer_confirmed",
+  "low_risk_inference",
+  "recommendation",
+  "unresolved",
+  "consequential_decision",
+  "system_constraint",
+] satisfies SemanticSourceType[];
+
+const provenanceRawSchema = z.object({
+  sourceExcerpt: z.string().min(1).max(300),
+  sourceType: z.enum(SOURCE_TYPE_ENUM),
+  confidence: z.enum(["high", "medium", "low"]),
+});
+
+const semanticExtractionRawSchema = z.object({
+  purpose: z.string().min(1),
+  targetUsers: z.array(z.string()),
+  actors: z.array(
+    z
+      .object({
+        name: z.string().min(1),
+        description: z.string(),
+        goals: z.array(z.string()),
+      })
+      .and(provenanceRawSchema),
+  ),
+  entities: z.array(
+    z
+      .object({
+        name: z.string().min(1),
+        attributes: z.array(z.string()),
+        relationships: z.array(z.string()),
+        lifecycleStates: z.array(z.string()),
+        ownerActor: z.string().nullable(),
+      })
+      .and(provenanceRawSchema),
+  ),
+  workflows: z.array(
+    z
+      .object({
+        name: z.string().min(1),
+        actor: z.string().nullable(),
+        steps: z.array(z.string()),
+        trigger: z.string().nullable(),
+        recurrence: z.string().nullable(),
+        hasDeadline: z.boolean(),
+      })
+      .and(provenanceRawSchema),
+  ),
+  capabilities: z.array(
+    z
+      .object({
+        kind: z.enum([
+          "action",
+          "notification",
+          "dashboard",
+          "report",
+          "search",
+          "filter",
+          "sort",
+          "collaboration",
+          "administration",
+        ]),
+        name: z.string().min(1),
+        actor: z.string().nullable(),
+        description: z.string(),
+      })
+      .and(provenanceRawSchema),
+  ),
+  permissions: z.array(
+    z
+      .object({
+        actor: z.string().min(1),
+        subject: z.string().min(1),
+        access: z.enum(["full", "read_only", "none", "conditional"]),
+        notes: z.string().nullable(),
+      })
+      .and(provenanceRawSchema),
+  ),
+  businessRules: z.array(z.object({ statement: z.string().min(1) }).and(provenanceRawSchema)),
+  monetization: z.array(z.object({ statement: z.string().min(1) }).and(provenanceRawSchema)),
+  integrations: z.array(z.object({ statement: z.string().min(1) }).and(provenanceRawSchema)),
+  constraints: z.array(z.object({ statement: z.string().min(1) }).and(provenanceRawSchema)),
+  unresolvedQuestions: z.array(z.string()),
+  consequentialDecisions: z.array(z.string()),
+  unsupportedRequirements: z.array(z.string()),
+});
+
+const provenanceProperties = {
+  sourceExcerpt: { type: "string" as const },
+  sourceType: { type: "string" as const, enum: SOURCE_TYPE_ENUM },
+  confidence: { type: "string" as const, enum: ["high", "medium", "low"] },
+};
+const provenanceRequired = ["sourceExcerpt", "sourceType", "confidence"];
+
+function buildSemanticSystemPrompt(hasPriorText: boolean): string {
+  return [
+    "You perform deep, domain-agnostic product understanding for a no-code product-building platform.",
+    "Extract the customer's actual product meaning: purpose, target users, actors/roles, domain entities (with attributes, relationships, ownership, lifecycle states), workflows (steps, triggers, recurrence, deadlines), capabilities (actions, notifications, dashboards, reports, search/filter/sort, collaboration, administration), permissions, business rules, monetization facts, integrations, and constraints.",
+    "Every material item MUST include sourceExcerpt (a short quote from the customer's actual text that grounds it), sourceType, and confidence. Use customer_explicit only when the customer's own words state it; customer_confirmed for something the customer previously confirmed; low_risk_inference for a conventional, low-risk inference (e.g. a booking flow implies a confirmation step); recommendation for something you are suggesting, not something stated; unresolved for something you cannot determine; consequential_decision for anything involving money, legal obligations, privacy, security, destructive actions, or irreversible external effects; system_constraint for a platform limitation, not a customer fact.",
+    "Do not invent domain concepts the customer did not describe or reasonably imply. Do not silently decide a consequential question — record it in consequentialDecisions or unresolvedQuestions instead. If a requirement is clearly outside what this platform can support, record it in unsupportedRequirements rather than fabricating support.",
+    hasPriorText
+      ? "This is a follow-up edit to an existing product — extract the full resulting product meaning after applying the customer's requested change, not only the delta."
+      : "This is a first-time product description.",
+    `Call the ${EXTRACT_SEMANTICS_TOOL_NAME} tool exactly once with your complete structured extraction.`,
+  ].join(" ");
+}
+
+const EXTRACT_SEMANTICS_TOOL = {
+  name: EXTRACT_SEMANTICS_TOOL_NAME,
+  description:
+    "Record a complete, structured, provenance-tagged extraction of the product's meaning.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      purpose: { type: "string" as const },
+      targetUsers: { type: "array" as const, items: { type: "string" as const } },
+      actors: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            name: { type: "string" as const },
+            description: { type: "string" as const },
+            goals: { type: "array" as const, items: { type: "string" as const } },
+            ...provenanceProperties,
+          },
+          required: ["name", "description", "goals", ...provenanceRequired],
+        },
+      },
+      entities: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            name: { type: "string" as const },
+            attributes: { type: "array" as const, items: { type: "string" as const } },
+            relationships: { type: "array" as const, items: { type: "string" as const } },
+            lifecycleStates: { type: "array" as const, items: { type: "string" as const } },
+            ownerActor: { type: ["string", "null"] as unknown as "string" },
+            ...provenanceProperties,
+          },
+          required: [
+            "name",
+            "attributes",
+            "relationships",
+            "lifecycleStates",
+            ...provenanceRequired,
+          ],
+        },
+      },
+      workflows: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            name: { type: "string" as const },
+            actor: { type: ["string", "null"] as unknown as "string" },
+            steps: { type: "array" as const, items: { type: "string" as const } },
+            trigger: { type: ["string", "null"] as unknown as "string" },
+            recurrence: { type: ["string", "null"] as unknown as "string" },
+            hasDeadline: { type: "boolean" as const },
+            ...provenanceProperties,
+          },
+          required: ["name", "steps", "hasDeadline", ...provenanceRequired],
+        },
+      },
+      capabilities: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            kind: {
+              type: "string" as const,
+              enum: [
+                "action",
+                "notification",
+                "dashboard",
+                "report",
+                "search",
+                "filter",
+                "sort",
+                "collaboration",
+                "administration",
+              ],
+            },
+            name: { type: "string" as const },
+            actor: { type: ["string", "null"] as unknown as "string" },
+            description: { type: "string" as const },
+            ...provenanceProperties,
+          },
+          required: ["kind", "name", "description", ...provenanceRequired],
+        },
+      },
+      permissions: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            actor: { type: "string" as const },
+            subject: { type: "string" as const },
+            access: { type: "string" as const, enum: ["full", "read_only", "none", "conditional"] },
+            notes: { type: ["string", "null"] as unknown as "string" },
+            ...provenanceProperties,
+          },
+          required: ["actor", "subject", "access", ...provenanceRequired],
+        },
+      },
+      businessRules: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: { statement: { type: "string" as const }, ...provenanceProperties },
+          required: ["statement", ...provenanceRequired],
+        },
+      },
+      monetization: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: { statement: { type: "string" as const }, ...provenanceProperties },
+          required: ["statement", ...provenanceRequired],
+        },
+      },
+      integrations: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: { statement: { type: "string" as const }, ...provenanceProperties },
+          required: ["statement", ...provenanceRequired],
+        },
+      },
+      constraints: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: { statement: { type: "string" as const }, ...provenanceProperties },
+          required: ["statement", ...provenanceRequired],
+        },
+      },
+      unresolvedQuestions: { type: "array" as const, items: { type: "string" as const } },
+      consequentialDecisions: { type: "array" as const, items: { type: "string" as const } },
+      unsupportedRequirements: { type: "array" as const, items: { type: "string" as const } },
+    },
+    required: [
+      "purpose",
+      "targetUsers",
+      "actors",
+      "entities",
+      "workflows",
+      "capabilities",
+      "permissions",
+      "businessRules",
+      "monetization",
+      "integrations",
+      "constraints",
+      "unresolvedQuestions",
+      "consequentialDecisions",
+      "unsupportedRequirements",
+    ],
+  },
+};
+
 type AnthropicToolUseBlock = {
   type: "tool_use";
   name: string;
@@ -91,10 +363,27 @@ type AnthropicMessagesResponse = {
  * class, so no real network call happens without an explicit, credentialed
  * opt-in.
  */
+type AnthropicToolCallResult<T> = {
+  data: T;
+  usage: { inputTokens: number; outputTokens: number } | null;
+};
+
 export class AnthropicAIProvider implements AIProvider {
   readonly name = "anthropic" as const;
 
-  async resolveIntent(input: ResolveIntentInput): Promise<ResolvedIntent> {
+  /**
+   * Shared forced-tool-use call, extracted once a second real call site
+   * (extractProductSemantics) needed the identical fetch/timeout/parse/
+   * validate sequence resolveIntent already established — not a
+   * speculative abstraction, both call sites are real.
+   */
+  private async callTool<T>(
+    systemPrompt: string,
+    userText: string,
+    tool: { name: string; description: string; input_schema: unknown },
+    schema: z.ZodType<T>,
+    maxTokens: number,
+  ): Promise<AnthropicToolCallResult<T>> {
     const env = getServerEnv();
     // getServerEnv() already guarantees ANTHROPIC_API_KEY is present
     // whenever AI_PROVIDER=anthropic (fails fast at startup otherwise) —
@@ -121,11 +410,11 @@ export class AnthropicAIProvider implements AIProvider {
         },
         body: JSON.stringify({
           model: MODEL_ID,
-          max_tokens: 1024,
-          system: buildSystemPrompt(input.hasExistingProductState),
-          messages: [{ role: "user", content: input.rawText }],
-          tools: [RESOLVE_INTENT_TOOL],
-          tool_choice: { type: "tool", name: RESOLVE_INTENT_TOOL_NAME },
+          max_tokens: maxTokens,
+          system: systemPrompt,
+          messages: [{ role: "user", content: userText }],
+          tools: [tool],
+          tool_choice: { type: "tool", name: tool.name },
         }),
         signal: controller.signal,
       });
@@ -154,16 +443,16 @@ export class AnthropicAIProvider implements AIProvider {
     const toolUse = data.content.find(
       (block): block is AnthropicToolUseBlock => block.type === "tool_use",
     );
-    if (!toolUse || toolUse.name !== RESOLVE_INTENT_TOOL_NAME) {
+    if (!toolUse || toolUse.name !== tool.name) {
       throw new AnthropicResponseFormatError(
-        `Anthropic response did not include the expected "${RESOLVE_INTENT_TOOL_NAME}" tool call.`,
+        `Anthropic response did not include the expected "${tool.name}" tool call.`,
       );
     }
 
-    const parsed = resolvedIntentSchema.safeParse(toolUse.input);
+    const parsed = schema.safeParse(toolUse.input);
     if (!parsed.success) {
       throw new AnthropicResponseFormatError(
-        `Anthropic's tool call input did not match the expected ResolvedIntent shape: ${parsed.error.message}`,
+        `Anthropic's tool call input for "${tool.name}" did not match the expected shape: ${parsed.error.message}`,
       );
     }
 
@@ -172,6 +461,104 @@ export class AnthropicAIProvider implements AIProvider {
         ? { inputTokens: data.usage.input_tokens, outputTokens: data.usage.output_tokens }
         : null;
 
-    return { ...parsed.data, usage };
+    return { data: parsed.data, usage };
+  }
+
+  async resolveIntent(input: ResolveIntentInput): Promise<ResolvedIntent> {
+    const { data, usage } = await this.callTool(
+      buildSystemPrompt(input.hasExistingProductState),
+      input.rawText,
+      RESOLVE_INTENT_TOOL,
+      resolvedIntentSchema,
+      1024,
+    );
+    return { ...data, usage };
+  }
+
+  /**
+   * Real, forced-tool-use semantic extraction (D-0065, execution/
+   * architecture/SEMANTIC_PRODUCT_COMPILER_REPORT.md §19 step 3). On a
+   * validation/request failure after this call's own retry budget, falls
+   * back to the honest deterministic heuristic extractor rather than
+   * throwing the customer's whole request away — callers can distinguish
+   * the two by generationMetadata.mode, which the caller (semantic-model.ts)
+   * sets based on which path actually produced the result.
+   */
+  async extractProductSemantics(input: SemanticExtractionInput): Promise<SemanticExtractionResult> {
+    const MAX_ATTEMPTS = 2;
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const { data, usage } = await this.callTool(
+          buildSemanticSystemPrompt(input.priorRawText !== null),
+          input.rawText,
+          EXTRACT_SEMANTICS_TOOL,
+          semanticExtractionRawSchema,
+          8192,
+        );
+
+        const attach = (kind: string, name: string, raw: z.infer<typeof provenanceRawSchema>) => ({
+          requirementId: deriveRequirementId(kind, name),
+          sourceExcerpt: raw.sourceExcerpt,
+          sourceType: raw.sourceType,
+          confidence: raw.confidence,
+        });
+
+        return {
+          purpose: data.purpose,
+          targetUsers: data.targetUsers,
+          actors: data.actors.map((a) => ({ ...a, provenance: attach("actor", a.name, a) })),
+          entities: data.entities.map((e) => ({ ...e, provenance: attach("entity", e.name, e) })),
+          workflows: data.workflows.map((w) => ({
+            ...w,
+            provenance: attach("workflow", w.name, w),
+          })),
+          capabilities: data.capabilities.map((c) => ({
+            ...c,
+            provenance: attach("capability", `${c.kind}-${c.name}`, c),
+          })),
+          permissions: data.permissions.map((p) => ({
+            ...p,
+            provenance: attach("permission", `${p.actor}-${p.subject}`, p),
+          })),
+          businessRules: data.businessRules.map((b) => ({
+            statement: b.statement,
+            provenance: attach("business_rule", b.statement, b),
+          })),
+          monetization: data.monetization.map((m) => ({
+            statement: m.statement,
+            provenance: attach("monetization", m.statement, m),
+          })),
+          integrations: data.integrations.map((i) => ({
+            statement: i.statement,
+            provenance: attach("integration", i.statement, i),
+          })),
+          constraints: data.constraints.map((c) => ({
+            statement: c.statement,
+            provenance: attach("constraint", c.statement, c),
+          })),
+          unresolvedQuestions: data.unresolvedQuestions,
+          consequentialDecisions: data.consequentialDecisions,
+          unsupportedRequirements: data.unsupportedRequirements,
+          usage,
+        };
+      } catch (error) {
+        lastError = error;
+        if (error instanceof AnthropicResponseFormatError) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    // Exhausted the retry budget on malformed structured output — an
+    // honest, disclosed reduced-intelligence fallback rather than
+    // surfacing a raw API error to the customer for what the deterministic
+    // path can still meaningfully attempt (Part 6: "if live AI is
+    // unavailable... identify the reduced intelligence mode; show the
+    // limitation truthfully").
+    void lastError;
+    return extractSemanticsHeuristically(input.rawText);
   }
 }

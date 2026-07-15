@@ -19,7 +19,8 @@ import {
   deriveMonetizationRecommendations,
 } from "@/lib/orchestration/business-intelligence";
 import { defaultUnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
-import type { ProductDNA, ProductState } from "@/generated/prisma/client";
+import { extractProductSemanticsForProject } from "@/lib/orchestration/semantic-extraction";
+import type { ProductDNA, ProductSemanticModel, ProductState } from "@/generated/prisma/client";
 import type { FeasibilityReport } from "@/lib/orchestration/feasibility";
 
 export type ProductIntelligenceResult = {
@@ -28,6 +29,16 @@ export type ProductIntelligenceResult = {
   requirements: DerivedRequirement[];
   openQuestions: string[];
   feasibilityReport: FeasibilityReport;
+  /**
+   * The Semantic Product Compiler's structured extraction (D-0065,
+   * execution/architecture/SEMANTIC_PRODUCT_COMPILER_REPORT.md) — a
+   * domain-agnostic actors/entities/workflows/permissions model Blueprint
+   * generation now draws from in addition to the bare Impact Analysis
+   * category list. Always present: falls back to the honest deterministic
+   * heuristic extractor when no real AI provider is configured, never
+   * skipped.
+   */
+  semanticModel: ProductSemanticModel;
 };
 
 /**
@@ -133,11 +144,26 @@ export async function generateProductIntelligence(
 
   await syncTruthStatusFromFeasibility(actorUserId, projectId, feasibilityReport);
 
+  const { semanticModel } = await extractProductSemanticsForProject(
+    actorUserId,
+    projectId,
+    rawIdea,
+    previousState?.originalIdea ?? null,
+    productState.version,
+  );
+
   await recordEvent(actorUserId, projectId, {
     type: "PRODUCT_STATE_VERSION_CREATED",
     summary: `Generated Product Intelligence and created Product State version ${productState.version}.`,
     data: { version: productState.version, requirementCount: requirements.length },
   });
 
-  return { productState, productDNA, requirements, openQuestions, feasibilityReport };
+  return {
+    productState,
+    productDNA,
+    requirements,
+    openQuestions,
+    feasibilityReport,
+    semanticModel,
+  };
 }

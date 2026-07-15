@@ -228,7 +228,8 @@
     "D-0062",
     "D-0063",
     "D-0064",
-    "D-0065"
+    "D-0065",
+    "D-0066"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -258,18 +259,19 @@
     "20260714240000_governance_workflow",
     "20260714260000_observability",
     "20260714280000_platform_admin",
-    "20260714300000_product_outcomes"
+    "20260714300000_product_outcomes",
+    "20260715110501_product_semantic_model"
   ],
   "testStatus": {
     "typecheck": "pass",
     "lint": "pass",
     "formatCheck": "pass",
-    "unit": "pass (678/678, 96 test files)",
-    "integration": "pass (678/678 combined with unit -- vitest reports unit+integration as one suite; verified live 2026-07-15 against commit db5c4d0)",
-    "e2e": "pass (24/24)",
-    "productionBuild": "pass",
-    "verifiedAt": "2026-07-15T06:00:00Z",
-    "verifiedAgainstCommit": "db5c4d0",
+    "unit": "pass (684/684, 97 test files)",
+    "integration": "pass (684/684 combined with unit -- vitest reports unit+integration as one suite; verified live 2026-07-15 after the semantic-product-compiler repair, steps 1-9 of D-0066)",
+    "e2e": "pass (24/24, re-run after the semantic-product-compiler repair once the stray port-3000 process was cleared)",
+    "productionBuild": "pass (verified after the semantic-product-compiler repair)",
+    "verifiedAt": "2026-07-15T12:05:00Z",
+    "verifiedAgainstCommit": "pending (post-db5c4d0, semantic-product-compiler repair steps 1-9, D-0066/EV-0111)",
     "note": "Supersedes the prior stale figures (130/130 unit, 253/253 integration, 12/12 e2e), which predated Phase 3. Also see: one intermittent, low-severity display-ordering flake in src/lib/observability/audit-log.integration.test.ts under full-suite load, not reproduced in this verification run -- see POCKET_STUDIO_DEFINITIVE_FOUNDER_REPORT.md §13 for the root cause (millisecond timestamp resolution, no secondary sort key)."
   },
   "evidenceRefs": [
@@ -382,7 +384,8 @@
     "EV-0107",
     "EV-0108",
     "EV-0109",
-    "EV-0110"
+    "EV-0110",
+    "EV-0111"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories \u2014 not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (\u00a761).",
@@ -435,5 +438,5 @@
     "Real Stripe test-mode end-to-end exercise (checkout, webhook delivery via the Stripe CLI, a real failed-payment/grace-period/restriction cycle) before any paid pilot -- only the mock provider and a direct-POST synthetic test harness were exercised in this report.",
     "Apple/Google developer account approval and real store review before any mobile distribution claim is made to a customer -- structurally unreachable in this build today (store readiness can never report READY by design)."
   ],
-  "nextAction": "FOUNDER-DISCOVERED DEFECT (2026-07-15, D-0065/EV-0110): a founder test using a detailed HomeBase (household management) product description exposed a general architectural gap -- the deterministic generation pipeline can produce a structurally VALID Blueprint / READY Build Plan / passing Quality Gate while losing nearly all of an arbitrary customer description's explicit product meaning (actors, roles, domain entities, workflows). Root-caused and live-reproduced (execution/final-audit/homebase-defect-evidence.json): analyzeImpact()'s fixed 15-category/~90-keyword classifier matched only 2 categories for the HomeBase text; Blueprint generation collapsed to roles:['customer'], screens:['Home','Browse'], one generic 'Record' data model, workflows:[]; validateBlueprint() and runQualityGate() are both structural-only with no semantic-coverage dimension, so both passed; the Studio page renders an unlabeled monetization recommendation next to a contradicting revenue-model fact. Founder has authorized, and explicitly instructed proceeding automatically into, a domain-agnostic semantic-compilation repair (a canonical semantic product model, AI-provider-backed semantic understanding with honest deterministic fallback, a semantic coverage engine, Quality Gate/Truth Status extensions, and a multi-domain regression corpus including a novel holdout) -- NOT a HomeBase-specific patch or an expanded keyword list. A pre-implementation report is required before application-architecture changes begin (in progress); implementation then continues automatically per explicit founder instruction not to ask whether to continue. This supersedes the prior 'next action belongs to the founder' state -- the founder has already acted and issued the next directive."
+  "nextAction": "SEMANTIC PRODUCT COMPILER REPAIR IN PROGRESS (D-0065/EV-0110 defect, D-0066/EV-0111 implementation steps 1-9 of 12; execution/architecture/SEMANTIC_PRODUCT_COMPILER_REPORT.md is the governing pre-implementation report). DONE: ProductSemanticModel schema+migration; AIProvider.extractProductSemantics on both providers (real Anthropic forced-tool-use + a shared, language-generic, non-domain-specific deterministic fallback, src/lib/ai/heuristic-extraction.ts); semantic-extraction.ts orchestration wired into generateProductIntelligence; the deterministic Semantic Coverage Engine (src/lib/generation/semantic-coverage.ts); blueprint-generator.ts now unions semantic-extracted actors/entities/workflows/actions with the prior category-derived content (never replacing it) and discloses coverage gaps/low-confidence items via openDecisions/assumptions; the Studio UI fact-vs-recommendation label fix. Live-verified: the exact founder-supplied HomeBase description now produces multiple named roles and domain-specific data models under the default mock provider (previously always roles:['customer'] + a single generic Record model) -- codified as a permanent regression test, src/lib/generation/homebase-defect-regression.integration.test.ts (6 tests). 684/684 unit+integration tests pass (678 pre-existing, unmodified + 6 new), clean typecheck/lint/format, production build succeeds. NOT YET DONE, in this priority order: (a) wire the Semantic Coverage Engine's materially_incomplete result into a hard Quality Gate rejection (founder's Part 11 -- currently only produces openDecisions disclosure, deliberately not yet a hard gate, to avoid over-blocking legitimately terse ideas without further evidence that's the right threshold); (b) extend Truth Status with the 10-dimension vocabulary (Part 11); (c) wire semantic extraction into the edit_request path (change-flow.ts/change-set.ts), not just first-time ideas; (d) build the Part 12 multi-domain regression corpus (9 fixtures including a mandatory novel holdout authored only after implementation, with no fixture-patching allowed after seeing its result); (e) Part 13 real founder browser verification and a full e2e run (deferred this session only because a stray local process was holding port 3000 during a transient tool-availability outage -- not a defect, needs a fresh terminal/process check before the next e2e run); (f) Part 15 independent fresh-context Level 3 review before final acceptance. Do not begin Phase 4. Do not ask whether to continue -- proceed through (a)-(f) automatically per the founder's explicit instruction, pausing only for the mandatory Level 3 review gate at the end."
 }
