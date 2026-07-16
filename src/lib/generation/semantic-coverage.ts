@@ -100,12 +100,28 @@ function dimensionFromCount(
   };
 }
 
+// Level 3 review (independent, post-D-0067) Finding 1, CRITICAL DEFECT:
+// this threshold exists because a description of ordinary product-
+// description length (roughly a paragraph, comparable to the corpus
+// fixtures) that nonetheless produces zero actors and zero entities is
+// itself evidence of a possible extraction gap — not proof the product
+// genuinely has none. A one-sentence idea legitimately having no named
+// actor is normal and must not be penalized (matches this codebase's
+// long-standing "no data category detected" tolerance for terse ideas);
+// a multi-sentence, substantial description finding nothing is different
+// and must never pass silently.
+const NON_TRIVIAL_WORD_COUNT_THRESHOLD = 25;
+
 /**
  * Coverage of the extraction itself — no Blueprint exists yet at this
  * point in the pipeline (extraction runs before Blueprint generation).
+ * `rawText` is required (not optional) specifically so this function can
+ * never accidentally skip the empty-extraction escalation below — see
+ * Finding 1.
  */
 export function computeExtractionCoverage(
   extraction: SemanticExtractionResult,
+  rawText: string,
 ): SemanticCoverageReport {
   const dimensions: DimensionCoverage[] = [
     dimensionFromCount(
@@ -178,13 +194,39 @@ export function computeExtractionCoverage(
 
   // Permissions/monetization/integrations/constraints/businessRules
   // legitimately being empty is not a coverage failure for most real
-  // ideas (many products genuinely have none of these) — only
-  // actors/entities/workflows/purpose are ever escalated to
-  // materially_incomplete, and only when a customer_explicit item is
-  // absent, never merely because the count is low.
+  // ideas (many products genuinely have none of these) — those are never
+  // escalated merely because their count is low.
+  //
+  // Actors are escalated here — unconditionally, regardless of
+  // sourceType/confidence — whenever the description is non-trivial in
+  // length but the extractor found zero of them. Deliberately keyed on
+  // actors alone, not "actors AND entities both empty": the founder's
+  // original defect and the reviewer's stress-test cases are specifically
+  // about roles collapsing to the generic default (roles:['customer']),
+  // which can happen even when some entity was independently found
+  // elsewhere in the same text (confirmed live: a passive-voice
+  // description that finds zero actors but one incidental entity would
+  // otherwise still slip through as "adequate" under a both-must-be-zero
+  // rule). This is deliberately broader than a "missing customer_explicit
+  // item" check (which requires something to have been found first): the
+  // failure mode this closes is "found nothing at all," which no per-item
+  // check can ever catch, since there is no item to inspect. Independent
+  // Level 3 review (post-D-0067) found this was previously unconditionally
+  // "adequate," letting a substantial multi-actor description that the
+  // heuristic simply failed to parse (a phrasing the sentence-pattern
+  // didn't match) pass with zero disclosure — reproducing the founder's
+  // original defect silently for any input outside the exact grammatical
+  // construction the extractor happened to recognize.
+  const wordCount = rawText.trim().split(/\s+/).filter(Boolean).length;
+  const isNonTrivialDescription = wordCount >= NON_TRIVIAL_WORD_COUNT_THRESHOLD;
+  const overallStatus: SemanticCoverageReport["overallStatus"] =
+    isNonTrivialDescription && extraction.actors.length === 0
+      ? "materially_incomplete"
+      : "adequate";
+
   return {
     dimensions,
-    overallStatus: "adequate",
+    overallStatus,
     missingExplicitActors: [],
     missingExplicitEntities: [],
     missingExplicitWorkflows: [],

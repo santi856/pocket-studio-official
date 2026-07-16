@@ -89,6 +89,87 @@ const HOLDOUT_FIXTURE: Fixture = {
   idea: "ToolShare helps neighbors lend and borrow household tools within their community. Owners can list tools they are willing to lend, set availability, and approve borrow requests. Borrowers can browse available tools, request to borrow an item, and return items with condition notes. The app includes a neighborhood dashboard showing available tools nearby, pending requests, and recent lending activity.",
 };
 
+// Phrasing-diverse fixtures (independent Level 3 review, post-D-0067,
+// Finding 1: the original corpus varied domain vocabulary across all 9
+// fixtures but never varied grammatical construction — every fixture used
+// "<Capitalized actor> can/have/may/will <verb>," which is exactly the one
+// pattern the original heuristic recognized, so the corpus could not have
+// caught a purely grammatical blind spot no matter how many domains it
+// covered). These are NOT domain-diverse on purpose — the point is to
+// hold the domain (a small internal tool) constant and vary only sentence
+// construction, isolating phrasing as the variable under test.
+const NON_MODAL_ACTIVE_VOICE_FIXTURE: Fixture = {
+  domain: "phrasing: non-modal active voice (reviewer Finding 1 — 'Managers assign tasks')",
+  idea: "TaskFlow is a project tool for small teams. Managers assign tasks to employees and track progress on a shared board. Employees receive tasks, update their status, and leave comments on their work as they complete it.",
+};
+
+const PASSIVE_VOICE_FIXTURE: Fixture = {
+  domain: "phrasing: passive voice (reviewer Finding 1 — 'Shifts are assigned by managers')",
+  idea: "ShiftSwap is built for retail store staff. Shifts are assigned by store managers and picked up by employees who want extra hours. Approval requests are reviewed by managers before a swap is finalized.",
+};
+
+describe("phrasing-diverse regression (independent Level 3 review, post-D-0067, Finding 1)", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    await seedCapabilityRegistry();
+  });
+
+  afterAll(async () => {
+    await resetDatabase();
+    await db.$disconnect();
+  });
+
+  async function runAndInspect(idea: string) {
+    const owner = await registerUser({
+      email: `phrasing-${Math.random().toString(36).slice(2)}@example.com`,
+      password: "password123",
+    });
+    const org = await createOrganization({ name: "Phrasing Org", ownerUserId: owner.id });
+    const project = await createProject({
+      organizationId: org.id,
+      name: "Phrasing Project",
+      createdByUserId: owner.id,
+    });
+
+    const { semanticModel } = await generateProductIntelligence(owner.id, project.id, idea);
+    const { blueprint } = await generateApplication(owner.id, project.id);
+    return { semanticModel, blueprint };
+  }
+
+  it("non-modal active voice: actors are now found directly (the tractable half of the fix)", async () => {
+    const { blueprint } = await runAndInspect(NON_MODAL_ACTIVE_VOICE_FIXTURE.idea);
+
+    const roles = blueprint.roles as string[];
+    expect(
+      roles.length,
+      "a description naming two actors via plain present-tense verbs (no modal) must produce more than one role",
+    ).toBeGreaterThan(1);
+  });
+
+  it("passive voice: actor detection may still miss it, but this is never silent — an explicit open decision is always recorded", async () => {
+    const { semanticModel, blueprint } = await runAndInspect(PASSIVE_VOICE_FIXTURE.idea);
+
+    const actorCount = (semanticModel.actors as unknown[]).length;
+    const openDecisions = blueprint.openDecisions as string[];
+
+    if (actorCount === 0) {
+      // This is the accepted, disclosed residual limitation (independent
+      // Level 3 review Finding 1's own mitigating context: a lightweight
+      // regex heuristic is not expected to fully parse passive voice; a
+      // real AI provider would very plausibly do better). What is NOT
+      // accepted is this happening with no disclosure at all.
+      expect(
+        openDecisions.some((d) => d.includes("found no actors in this description")),
+        "a substantial description that finds zero actors must always be flagged, never pass as silently adequate",
+      ).toBe(true);
+    }
+    // If the heuristic is later improved to also parse this construction,
+    // this test still passes trivially (actorCount > 0 skips the
+    // assertion above) — it is written to hold under either outcome,
+    // since the requirement is "never silent," not "must find zero."
+  });
+});
+
 describe("multi-domain semantic-hollowing regression corpus (D-0065, Part 12)", () => {
   beforeEach(async () => {
     await resetDatabase();

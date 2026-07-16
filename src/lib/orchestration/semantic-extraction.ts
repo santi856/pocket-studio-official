@@ -51,7 +51,7 @@ export async function extractProductSemanticsForProject(
     });
   }
 
-  const coverageResult = computeExtractionCoverage(extraction);
+  const coverageResult = computeExtractionCoverage(extraction, rawText);
 
   const generationMetadata = {
     generatedBy: provider.name,

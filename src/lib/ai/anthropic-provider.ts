@@ -545,19 +545,34 @@ export class AnthropicAIProvider implements AIProvider {
         };
       } catch (error) {
         lastError = error;
-        if (error instanceof AnthropicResponseFormatError) {
+        // Independent Level 3 review (post-D-0067) Finding 2: this
+        // previously only retried/fell back on a malformed-structured-
+        // output failure (AnthropicResponseFormatError). A network
+        // failure, timeout, or non-2xx response (AnthropicRequestError)
+        // was re-thrown immediately, uncaught by any calling code —
+        // directly contradicting this method's own doc comment and the
+        // pre-implementation report's §14/§15 promise that a live-call
+        // failure falls back to the deterministic extractor rather than
+        // failing a customer's entire idea submission. Both known error
+        // types now retry, then fall back, identically — an unexpected
+        // error type outside either (a real programming bug, not a
+        // request/response failure this method knows how to recover from)
+        // still propagates immediately, on purpose.
+        if (
+          error instanceof AnthropicResponseFormatError ||
+          error instanceof AnthropicRequestError
+        ) {
           continue;
         }
         throw error;
       }
     }
 
-    // Exhausted the retry budget on malformed structured output — an
-    // honest, disclosed reduced-intelligence fallback rather than
-    // surfacing a raw API error to the customer for what the deterministic
-    // path can still meaningfully attempt (Part 6: "if live AI is
-    // unavailable... identify the reduced intelligence mode; show the
-    // limitation truthfully").
+    // Exhausted the retry budget — an honest, disclosed reduced-
+    // intelligence fallback rather than surfacing a raw API error to the
+    // customer for what the deterministic path can still meaningfully
+    // attempt (Part 6: "if live AI is unavailable... identify the reduced
+    // intelligence mode; show the limitation truthfully").
     void lastError;
     return extractSemanticsHeuristically(input.rawText);
   }

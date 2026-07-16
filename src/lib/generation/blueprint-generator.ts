@@ -257,6 +257,31 @@ export async function generateInitialBlueprint(
     );
   }
 
+  // Independent Level 3 review (post-D-0067) Finding 1, CRITICAL DEFECT:
+  // a substantial description that the extractor parsed into zero actors
+  // previously produced no disclosure at all — every check above only
+  // fires when something WAS found and then dropped, so "found nothing"
+  // passed through silently, reproducing the founder's original defect
+  // (roles collapsing to the generic default) for any phrasing the
+  // extractor's sentence patterns didn't happen to recognize, even when
+  // an unrelated entity was incidentally found elsewhere in the same
+  // text. computeExtractionCoverage() (run earlier, at extraction time,
+  // over the real original idea text — this function only ever sees the
+  // already-derived semantic arrays, not the raw text itself) now
+  // escalates that exact case to materially_incomplete; surfaced here
+  // unconditionally, regardless of which extraction mode (mock heuristic
+  // or real AI) produced the empty result.
+  const extractionCoverage = semanticModel?.coverageResult as
+    { overallStatus?: string } | null | undefined;
+  if (
+    extractionCoverage?.overallStatus === "materially_incomplete" &&
+    semanticActors.length === 0
+  ) {
+    openDecisions.push(
+      "The Semantic Product Compiler found no actors in this description despite its length — this likely means the description's phrasing was not recognized, not that the product genuinely has only one implicit role. Review the original description manually and confirm whether distinct roles are needed.",
+    );
+  }
+
   const lowConfidenceSemanticItemCount = [
     ...semanticActors,
     ...semanticEntities,

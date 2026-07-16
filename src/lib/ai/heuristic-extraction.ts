@@ -65,18 +65,44 @@ const ORGANIZATIONAL_VERBS = [
   "receive",
 ];
 
-// Only true capability/possession modals ("can", "have", "may", "will")
-// indicate a genuine actor — "is"/"are"/"include[s]" usually introduce a
-// definitional sentence about the product itself (e.g. a product-name
-// sentence like "<Product> is a ..." or "The app includes ..."), not an
-// actor performing an action, so those are deliberately excluded to avoid
-// mistaking the product's own name for an actor.
+// Every organizational verb's common inflections (base, third-person -s,
+// past tense -ed, gerund -ing) — still purely grammatical, not a domain
+// word list. Independent Level 3 review (post-D-0067) Finding 1: the
+// original actor/entity patterns only matched a bare base-form verb, so
+// "Managers assign tasks" (present tense, no modal) matched nothing,
+// while "Managers can assign tasks" did — an arbitrary grammatical gap
+// with no principled reason, not a deliberate scope boundary.
+function withInflections(verb: string): string {
+  const doubledConsonant = /[^aeiou]$/.test(verb) && /[aeiou][^aeiou]$/.test(verb.slice(-2));
+  const stem = doubledConsonant ? verb + verb.slice(-1) : verb;
+  const pastStem = verb.endsWith("e") ? verb.slice(0, -1) : verb;
+  return `${verb}|${verb}s|${pastStem}ed|${stem}ing`;
+}
+const ORGANIZATIONAL_VERB_PATTERN = ORGANIZATIONAL_VERBS.map(withInflections).join("|");
+
+// Two ways a sentence introduces a genuine actor, both purely structural
+// (grammar, never vocabulary): (1) a capitalized subject followed by a
+// true capability/possession modal ("can", "have", "may", "will") — "is"/
+// "are"/"include[s]" are deliberately excluded, since those usually
+// introduce a definitional sentence about the product itself (e.g. a
+// product-name sentence like "<Product> is a ..." or "The app includes
+// ..."), not an actor performing an action; or (2) a capitalized subject
+// immediately followed by one of the same generic organizational verbs
+// (in any inflection) used directly, present or past tense, with no modal
+// — "Managers assign tasks," "Employees received tasks."
+// The optional second word of a two-word actor name (e.g. "Family
+// Members") must not itself be a copula/auxiliary ("is"/"are"/"was"/
+// "were") — without this exclusion, a passive-voice sentence like
+// "Shifts are assigned by managers" greedily swallows "Are" into the
+// subject name itself (since "assigned" still matches the verb
+// alternation right after), producing a nonsensical actor named "Shifts
+// Are" instead of correctly finding no actor in that clause at all.
 const ACTOR_LEAD_PATTERN = new RegExp(
-  `^\\s*([A-Z][a-zA-Z]*(?:\\s+[a-z]+)?)\\s+(?:can|have|has|may|will)\\b`,
+  `^\\s*([A-Z][a-zA-Z]*(?:\\s+(?!(?:is|are|was|were)\\b)[a-z]+)?)\\s+(?:can|have|has|may|will|${ORGANIZATIONAL_VERB_PATTERN})\\b`,
 );
 
 const VERB_OBJECT_PATTERN = new RegExp(
-  `\\b(${ORGANIZATIONAL_VERBS.join("|")})\\b\\s+([a-z][a-zA-Z\\- ]*?)(?=[,;.]|\\band\\b|\\bor\\b|$)`,
+  `\\b(${ORGANIZATIONAL_VERB_PATTERN})\\b\\s+([a-z][a-zA-Z\\- ]*?)(?=[,;.]|\\band\\b|\\bor\\b|$)`,
   "gi",
 );
 
@@ -106,6 +132,21 @@ function titleCase(text: string): string {
     .split(/\s+/)
     .map((word) => (word.length > 0 ? word[0]!.toUpperCase() + word.slice(1) : word))
     .join(" ");
+}
+
+/** Maps a matched inflected verb ("assigns"/"assigned"/"assigning") back to its base form for display, so capability/workflow names read naturally regardless of the sentence's tense. */
+function verbBaseForm(inflected: string): string {
+  const lower = inflected.toLowerCase();
+  return (
+    ORGANIZATIONAL_VERBS.find((base) => lower === base) ??
+    ORGANIZATIONAL_VERBS.find((base) => {
+      const pastStem = base.endsWith("e") ? base.slice(0, -1) : base;
+      const doubledConsonant = /[^aeiou]$/.test(base) && /[aeiou][^aeiou]$/.test(base.slice(-2));
+      const gerundStem = doubledConsonant ? base + base.slice(-1) : base;
+      return lower === `${base}s` || lower === `${pastStem}ed` || lower === `${gerundStem}ing`;
+    }) ??
+    lower
+  );
 }
 
 function excerpt(sentence: string): string {
@@ -155,7 +196,7 @@ export function extractSemanticsHeuristically(rawText: string): SemanticExtracti
     const verbMatches = Array.from(sentence.matchAll(VERB_OBJECT_PATTERN));
     const stepVerbs: string[] = [];
     for (const match of verbMatches) {
-      const verb = match[1]!.toLowerCase();
+      const verb = verbBaseForm(match[1]!);
       const rawObject = match[2]?.trim();
       stepVerbs.push(verb);
       if (!rawObject) continue;
