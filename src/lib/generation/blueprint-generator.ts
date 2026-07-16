@@ -273,14 +273,27 @@ export async function generateInitialBlueprint(
   // or real AI) produced the empty result.
   const extractionCoverage = semanticModel?.coverageResult as
     { overallStatus?: string } | null | undefined;
-  if (
-    extractionCoverage?.overallStatus === "materially_incomplete" &&
-    semanticActors.length === 0
-  ) {
+  const extractionFoundZeroActorsForSubstantialText =
+    extractionCoverage?.overallStatus === "materially_incomplete" && semanticActors.length === 0;
+  if (extractionFoundZeroActorsForSubstantialText) {
     openDecisions.push(
       "The Semantic Product Compiler found no actors in this description despite its length — this likely means the description's phrasing was not recognized, not that the product genuinely has only one implicit role. Review the original description manually and confirm whether distinct roles are needed.",
     );
   }
+
+  // Hard Quality Gate rejection (founder-directed follow-up to D-0065):
+  // the Blueprint-level coverage check above (missingExplicit*) only ever
+  // fires when something WAS extracted and then dropped before reaching
+  // this Blueprint. The extraction-level "found nothing at all" signal is
+  // a separate, equally real failure mode with no corresponding entry in
+  // semanticCoverage.overallStatus until now — without merging it in here,
+  // runQualityGate() (quality-gate.ts) would have no way to see it, since
+  // it only reads generationMetadata.semanticCoverage, not the semantic
+  // model's own coverageResult directly. This is the single, authoritative
+  // signal Quality Gate's new semantic-coverage check consumes.
+  const finalSemanticCoverage = extractionFoundZeroActorsForSubstantialText
+    ? { ...semanticCoverage, overallStatus: "materially_incomplete" as const }
+    : semanticCoverage;
 
   const lowConfidenceSemanticItemCount = [
     ...semanticActors,
@@ -352,7 +365,7 @@ export async function generateInitialBlueprint(
     basedOnSemanticModelVersion: semanticModel?.version ?? null,
     semanticExtractionMode:
       (semanticModel?.generationMetadata as { mode?: string } | null)?.mode ?? null,
-    semanticCoverage,
+    semanticCoverage: finalSemanticCoverage,
   };
 
   const blueprint = await createBlueprintVersion(actorUserId, projectId, {

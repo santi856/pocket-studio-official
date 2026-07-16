@@ -10,6 +10,7 @@ import { setTruthStatus } from "@/lib/product/truth-status";
 import { recordEvent } from "@/lib/product/events";
 import type { ComponentNode } from "./component-registry";
 import type { InteractionContractMap } from "./interaction-contracts";
+import type { SemanticCoverageReport } from "./semantic-coverage";
 import type { Blueprint, BuildPlan } from "@/generated/prisma/client";
 
 export class NoGenerationToCheckError extends Error {
@@ -417,6 +418,58 @@ async function checkScreensRenderWithoutError(
 }
 
 /**
+ * Hard Quality Gate rejection for semantic hollowness (founder-directed
+ * follow-up to D-0065's semantic-hollowing repair — see execution/
+ * architecture/SEMANTIC_PRODUCT_COMPILER_REPORT.md and D-0066 through
+ * D-0071). Every prior check in this file can only detect a Blueprint
+ * that is internally inconsistent or structurally incomplete; none of
+ * them can detect a Blueprint that is perfectly self-consistent and
+ * still not what the customer actually described — which is exactly the
+ * failure mode the founder's original HomeBase test exposed (Blueprint
+ * VALID, Build Plan READY, Quality Gate passed, roles collapsed to the
+ * generic "customer" default). blueprint-generator.ts now computes and
+ * stores generationMetadata.semanticCoverage (the Semantic Coverage
+ * Engine's own result, merging both "something was found and then
+ * dropped" and "nothing was found for a substantial description" into
+ * one `overallStatus`) — this check is the first consumer that turns
+ * that signal into an actual gate failure, not just a disclosed open
+ * decision. A Blueprint predating the semantic-hollowing repair (no
+ * semantic model, no semanticCoverage recorded) has nothing to check
+ * against and passes — never a breaking change for existing projects.
+ */
+function checkSemanticCoverageAdequate(blueprint: Blueprint): QualityGateCheck {
+  const semanticCoverage = (
+    blueprint.generationMetadata as { semanticCoverage?: SemanticCoverageReport } | null
+  )?.semanticCoverage;
+
+  if (!semanticCoverage) {
+    return {
+      name: "Semantic coverage is adequate — no identified actor, entity, or workflow was silently dropped",
+      passed: true,
+      details:
+        "No semantic coverage data recorded for this Blueprint (predates the Semantic Product Compiler, or extraction did not run) — nothing to check.",
+    };
+  }
+
+  const passed = semanticCoverage.overallStatus === "adequate";
+  const missing = [
+    ...semanticCoverage.missingExplicitActors.map((name) => `actor "${name}"`),
+    ...semanticCoverage.missingExplicitEntities.map((name) => `entity "${name}"`),
+    ...semanticCoverage.missingExplicitWorkflows.map((name) => `workflow "${name}"`),
+  ];
+
+  return {
+    name: "Semantic coverage is adequate — no identified actor, entity, or workflow was silently dropped",
+    passed,
+    details: passed
+      ? "Every actor, entity, and workflow the Semantic Product Compiler identified is represented in this Blueprint."
+      : missing.length > 0
+        ? `Identified but not represented in the Blueprint: ${missing.join(", ")}.`
+        : "The description appears substantial enough to name at least one actor, but none was recognized — the generated product may not represent the customer's actual request. Review the original description manually.",
+  };
+}
+
+/**
  * P2-EXIT: "quality.gate" alone is one flat status collapsing structural,
  * behavioral, accessibility, governance, and operational completeness
  * into a single pass/fail — a Build Plan with a missing alt tag and one
@@ -434,6 +487,7 @@ export const QUALITY_DIMENSIONS = [
   "accessibility",
   "governance",
   "operational",
+  "semanticFidelity",
 ] as const;
 export type QualityDimension = (typeof QUALITY_DIMENSIONS)[number];
 
@@ -451,6 +505,8 @@ const CHECK_DIMENSIONS: Readonly<Record<string, QualityDimension>> = {
   "Every screen is reachable from the navigation graph": "operational",
   "Every Image has alt text": "accessibility",
   "Every screen's data binding resolves without error": "operational",
+  "Semantic coverage is adequate — no identified actor, entity, or workflow was silently dropped":
+    "semanticFidelity",
 };
 
 const QUALITY_DIMENSION_LABELS: Readonly<Record<QualityDimension, string>> = {
@@ -459,6 +515,8 @@ const QUALITY_DIMENSION_LABELS: Readonly<Record<QualityDimension, string>> = {
   accessibility: "Accessibility completeness",
   governance: "Governance disclosure (consequential / unresolved decisions)",
   operational: "Operational completeness (reachability, runtime data binding)",
+  semanticFidelity:
+    "Semantic fidelity (generated content actually represents what the customer described)",
 };
 
 /**
@@ -493,6 +551,7 @@ export async function runQualityGate(
     checkAllScreensReachable(buildPlan),
     checkImagesHaveAltText(buildPlan),
     await checkScreensRenderWithoutError(actorUserId, projectId, blueprint, buildPlan),
+    checkSemanticCoverageAdequate(blueprint),
   ];
 
   const passed = checks.every((check) => check.passed);

@@ -96,6 +96,71 @@ describe("runQualityGate", () => {
     expect(status?.status).toBe("BLOCKED");
   });
 
+  // Founder-directed hard-rejection follow-up to D-0065 (semantic
+  // hollowing). Every check above only detects a Blueprint that is
+  // internally inconsistent — this is the first one that can fail a
+  // Blueprint that is perfectly self-consistent (VALID, READY, every
+  // other check green) and still not what the customer described. Uses
+  // a substantial, purely passive-voice description — an honestly
+  // disclosed, accepted residual limitation of the deterministic
+  // heuristic extractor (see heuristic-extraction.ts's module comment
+  // and D-0071) — as the real, reproducible way to trigger it without
+  // any synthetic corruption of the pipeline's own output.
+  it("fails, and syncs Truth Status to BLOCKED, when a substantial description's semantic coverage is materially incomplete", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "ShiftSwap is built for retail store staff. Shifts are assigned by store managers and picked up by employees who want extra hours. Approval requests are reviewed by managers before a swap is finalized. Reports are generated weekly for payroll purposes.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+    await generateBuildPlan(owner.id, project.id);
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    expect(result.passed).toBe(false);
+    const semanticCheck = result.checks.find((c) => c.name.includes("Semantic coverage"));
+    expect(semanticCheck?.passed).toBe(false);
+
+    const status = await getLatestTruthStatus(owner.id, project.id, "quality.gate");
+    expect(status?.status).toBe("BLOCKED");
+    const dimensionStatus = await getLatestTruthStatus(
+      owner.id,
+      project.id,
+      "quality.semanticFidelity",
+    );
+    expect(dimensionStatus?.status).toBe("BLOCKED");
+  });
+
+  it("still passes for a normal multi-actor description, and for a legitimately terse one below the non-trivial threshold", async () => {
+    const { owner, project: normalProject } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      normalProject.id,
+      "GlowBook helps independent estheticians and their clients manage appointments. Clients can browse services and book appointments. Estheticians can manage their calendar.",
+    );
+    await generateInitialBlueprint(owner.id, normalProject.id);
+    await generateBuildPlan(owner.id, normalProject.id);
+    const normalResult = await runQualityGate(owner.id, normalProject.id);
+    expect(normalResult.passed).toBe(true);
+
+    const org2 = await createOrganization({ name: "Terse Co", ownerUserId: owner.id });
+    const terseProject = await createProject({
+      organizationId: org2.id,
+      name: "Terse Project",
+      createdByUserId: owner.id,
+    });
+    await generateProductIntelligence(
+      owner.id,
+      terseProject.id,
+      "Build a premium booking app for mobile detailers.",
+    );
+    await generateInitialBlueprint(owner.id, terseProject.id);
+    await generateBuildPlan(owner.id, terseProject.id);
+    const terseResult = await runQualityGate(owner.id, terseProject.id);
+    expect(terseResult.passed).toBe(true);
+  });
+
   it("catches a Form Input whose name does not match its bound data model's real fields", async () => {
     const { owner, project } = await seedProject();
     await generateProductIntelligence(

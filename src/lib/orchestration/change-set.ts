@@ -3,10 +3,13 @@ import { db } from "@/lib/db";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import { recordEvent } from "@/lib/product/events";
 import { getLatestProductState } from "@/lib/product/product-state";
+import { getLatestSemanticModel } from "@/lib/product/semantic-model";
 import { generateProductIntelligence } from "./product-intelligence";
 import { generateApplication } from "@/lib/generation/generation-orchestrator";
 import { deriveRequirements } from "./requirements-engine";
 import { analyzeImpact } from "./impact-analysis";
+import { extractSemanticsHeuristically } from "@/lib/ai/heuristic-extraction";
+import type { SemanticActor, SemanticEntity } from "@/lib/ai/provider";
 import type { ChangeSet } from "@/generated/prisma/client";
 
 export class ChangeSetNotPendingError extends Error {
@@ -28,6 +31,25 @@ export class ChangeSetNotPendingError extends Error {
  * Product DNA and decisions" (§57) is achieved without a separate
  * incremental-diffing engine: nothing already said is ever dropped from
  * what the deterministic generators see.
+ *
+ * Founder-directed follow-up to D-0065: `addedCategories` alone is the
+ * *old* (pre-semantic-compiler) signal for "does this edit need
+ * regeneration" — it is driven by the same fixed 15-category keyword
+ * classifier the semantic-hollowing defect was about in the first place.
+ * An edit that introduces a genuinely new actor or entity in ordinary
+ * language ("Also, nurses can review patient records") would previously
+ * regenerate only by accident, if it happened to also trip an unrelated
+ * category keyword — otherwise the semantic model (and therefore the
+ * Blueprint) would never learn about it, even though `generateProductIntelligence`
+ * (called below, only when regeneration happens) has run the real
+ * Semantic Product Compiler on every first-time idea since D-0066. This
+ * runs the same, free, deterministic heuristic extractor
+ * (heuristic-extraction.ts) — never the paid AI provider, which only
+ * runs once, for real, inside `applyChangeSet`'s actual regeneration
+ * call below, avoiding a duplicate/wasted extraction — purely to detect
+ * "did this edit's own text name an actor or entity the current semantic
+ * model doesn't already have," and ORs that into `requiresRegeneration`
+ * alongside the existing category check, never replacing it.
  */
 export async function createChangeSet(
   actorUserId: string,
@@ -45,6 +67,22 @@ export async function createChangeSet(
   const newCategories = new Set(deriveRequirements(combinedIdea).map((r) => r.category));
   const addedCategories = Array.from(newCategories).filter((c) => !priorCategories.has(c));
 
+  const latestSemanticModel = await getLatestSemanticModel(actorUserId, projectId);
+  const priorActorNames = new Set(
+    ((latestSemanticModel?.actors as SemanticActor[] | null) ?? []).map((a) =>
+      a.name.toLowerCase(),
+    ),
+  );
+  const priorEntityNames = new Set(
+    ((latestSemanticModel?.entities as SemanticEntity[] | null) ?? []).map((e) =>
+      e.name.toLowerCase(),
+    ),
+  );
+  const editExtraction = extractSemanticsHeuristically(input.rawText);
+  const introducesNewSemanticContent =
+    editExtraction.actors.some((a) => !priorActorNames.has(a.name.toLowerCase())) ||
+    editExtraction.entities.some((e) => !priorEntityNames.has(e.name.toLowerCase()));
+
   return db.changeSet.create({
     data: {
       projectId,
@@ -54,7 +92,7 @@ export async function createChangeSet(
       combinedIdea,
       impactCategories: impact.categories,
       addedCategories,
-      requiresRegeneration: addedCategories.length > 0,
+      requiresRegeneration: addedCategories.length > 0 || introducesNewSemanticContent,
       status: "PENDING",
     },
   });

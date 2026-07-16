@@ -66,7 +66,7 @@ describe("Change Set service", () => {
     expect(changeSet.status).toBe("PENDING");
   });
 
-  it("flags requiresRegeneration only when the edit introduces a genuinely new category", async () => {
+  it("flags requiresRegeneration when the edit introduces a genuinely new category", async () => {
     const { owner, project, decision } = await seedProjectWithIdea();
 
     const withNewCategory = await createChangeSet(owner.id, project.id, {
@@ -75,6 +75,36 @@ describe("Change Set service", () => {
     });
     expect(withNewCategory.requiresRegeneration).toBe(true);
     expect(withNewCategory.addedCategories).toContain("data");
+  });
+
+  it("does not flag requiresRegeneration for an edit that adds neither a new category nor new semantic content", async () => {
+    const { owner, project, decision } = await seedProjectWithIdea();
+
+    const noOp = await createChangeSet(owner.id, project.id, {
+      decisionId: decision.id,
+      rawText: "That sounds good.",
+    });
+    expect(noOp.requiresRegeneration).toBe(false);
+    expect(noOp.addedCategories).toEqual([]);
+  });
+
+  // Founder-directed follow-up to D-0065: conversational editing must use
+  // the same semantic reasoning pipeline as first-time ideas, not the old
+  // category-keyword system alone. This edit names a brand-new actor
+  // ("Nurses") in ordinary language that trips no impact-analysis
+  // category keyword at all (no "role"/"permission"/"database"/etc.) —
+  // before this fix, requiresRegeneration would have stayed false and the
+  // semantic model would never learn this actor exists.
+  it("flags requiresRegeneration when the edit introduces a new actor/entity in ordinary language, even with no new category keyword", async () => {
+    const { owner, project, decision } = await seedProjectWithIdea();
+
+    const semanticOnly = await createChangeSet(owner.id, project.id, {
+      decisionId: decision.id,
+      rawText: "Nurses can review patient wellness notes before each visit.",
+    });
+
+    expect(semanticOnly.addedCategories).toEqual([]); // confirms the old category system alone would have missed this
+    expect(semanticOnly.requiresRegeneration).toBe(true);
   });
 
   it("throws applying or rejecting a Change Set that is not PENDING", async () => {

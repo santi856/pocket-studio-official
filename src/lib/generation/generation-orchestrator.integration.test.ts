@@ -100,6 +100,52 @@ describe("generateApplication", () => {
     expect(status?.rationale).toContain("blocked");
   });
 
+  // Founder-directed follow-up to D-0065: Truth Status must not describe
+  // the generated application more strongly than the customer-perceived
+  // result justifies (the founder's original complaint). Uses the same
+  // honestly-disclosed, purely-passive-voice residual limitation as
+  // quality-gate.integration.test.ts's hard-rejection test — a real,
+  // reproducible way to trigger materially_incomplete coverage.
+  it("records semantic.fidelity as BLOCKED, and folds the gap into generation.full_stack_web_app's rationale, for a substantial description with materially incomplete semantic coverage", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "ShiftSwap is built for retail store staff. Shifts are assigned by store managers and picked up by employees who want extra hours. Approval requests are reviewed by managers before a swap is finalized. Reports are generated weekly for payroll purposes.",
+    );
+
+    const result = await generateApplication(owner.id, project.id);
+    expect(result.status).toBe("GENERATED"); // structurally still generates fine — this is not a structural defect.
+
+    const fidelityStatus = await getLatestTruthStatus(owner.id, project.id, "semantic.fidelity");
+    expect(fidelityStatus?.status).toBe("BLOCKED");
+
+    const generationStatus = await getLatestTruthStatus(
+      owner.id,
+      project.id,
+      "generation.full_stack_web_app",
+    );
+    // Still IMPLEMENTED (generation genuinely did produce live screens —
+    // that claim is still true) but the rationale must now disclose the
+    // semantic gap, not just report success.
+    expect(generationStatus?.status).toBe("IMPLEMENTED");
+    expect(generationStatus?.rationale).toContain("semantic coverage is incomplete");
+  });
+
+  it("records semantic.fidelity as IMPLEMENTED for a normal multi-actor description with adequate coverage", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "GlowBook helps independent estheticians and their clients manage appointments. Clients can browse services and book appointments. Estheticians can manage their calendar.",
+    );
+
+    await generateApplication(owner.id, project.id);
+
+    const fidelityStatus = await getLatestTruthStatus(owner.id, project.id, "semantic.fidelity");
+    expect(fidelityStatus?.status).toBe("IMPLEMENTED");
+  });
+
   it("records a GENERATION_COMPLETED event", async () => {
     const { owner, project } = await seedProject();
     await generateProductIntelligence(owner.id, project.id, "Build a booking app.");

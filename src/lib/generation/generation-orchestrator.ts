@@ -5,6 +5,7 @@ import { generateBuildPlan } from "./build-planner";
 import { syncOutputTargetStatus } from "./pwa";
 import { setTruthStatus } from "@/lib/product/truth-status";
 import { recordEvent } from "@/lib/product/events";
+import type { SemanticCoverageReport } from "./semantic-coverage";
 import type { Blueprint, BuildPlan } from "@/generated/prisma/client";
 
 export type GenerationResult = {
@@ -38,14 +39,53 @@ export async function generateApplication(
   const status: GenerationResult["status"] =
     buildPlan.planStatus === "READY" ? "GENERATED" : "BLOCKED";
 
+  // Founder-directed follow-up to D-0065 (semantic hollowing): the
+  // founder's original complaint (item 6) was specifically that Truth
+  // Status described the generated application more strongly than the
+  // customer-perceived result justified — "IMPLEMENTED" read as "your
+  // product was built," not "some structurally valid screens exist,
+  // which may or may not represent what you described." This reads the
+  // same generationMetadata.semanticCoverage the Quality Gate's hard
+  // rejection check now consumes (quality-gate.ts) and folds it directly
+  // into the rationale a founder sees the moment generation completes —
+  // not only when they separately choose to run the Quality Gate.
+  const semanticCoverage = (
+    blueprint.generationMetadata as { semanticCoverage?: SemanticCoverageReport } | null
+  )?.semanticCoverage;
+  const semanticCoverageAdequate = semanticCoverage?.overallStatus !== "materially_incomplete";
+
   await setTruthStatus(actorUserId, projectId, {
     subjectKey: "generation.full_stack_web_app",
     subjectLabel: "Generated, working full-stack web application from Product State",
     status: status === "GENERATED" ? "IMPLEMENTED" : "BLOCKED",
     rationale:
       status === "GENERATED"
-        ? `Blueprint v${blueprint.version} and Build Plan v${buildPlan.version} are ready; screens are live at /preview/<screen>.`
+        ? semanticCoverageAdequate
+          ? `Blueprint v${blueprint.version} and Build Plan v${buildPlan.version} are ready; screens are live at /preview/<screen>.`
+          : `Blueprint v${blueprint.version} and Build Plan v${buildPlan.version} are ready and screens are live at /preview/<screen>, but semantic coverage is incomplete — the generated product may not fully represent the description's actors, entities, or workflows. See the Blueprint's own open decisions and quality.semanticFidelity for specifics.`
         : `Build Plan v${buildPlan.version} is blocked: ${(buildPlan.blockers as string[]).join("; ")}`,
+  });
+
+  // A dedicated, always-recorded axis (same "one subjectKey per real
+  // axis" pattern already used for output.web/output.pwa/quality.*) so a
+  // founder can see semantic fidelity as its own signal in Simple Mode's
+  // Trust panel without first choosing to run the separate Quality Gate
+  // action. Recorded even when there is no semantic model at all (older
+  // projects predating this repair) — NOT_EVALUATED, never a false
+  // IMPLEMENTED claim about a dimension that was never actually checked.
+  await setTruthStatus(actorUserId, projectId, {
+    subjectKey: "semantic.fidelity",
+    subjectLabel: "Semantic fidelity (generated content represents what the customer described)",
+    status: !semanticCoverage
+      ? "NOT_EVALUATED"
+      : semanticCoverageAdequate
+        ? "IMPLEMENTED"
+        : "BLOCKED",
+    rationale: !semanticCoverage
+      ? "No semantic coverage data recorded for this Blueprint (predates the Semantic Product Compiler, or extraction did not run)."
+      : semanticCoverageAdequate
+        ? "Every actor, entity, and workflow the Semantic Product Compiler identified is represented in this Blueprint."
+        : "The description appears substantial enough to name at least one actor, but the generated product does not represent it — review the original description manually.",
   });
 
   await recordEvent(actorUserId, projectId, {
