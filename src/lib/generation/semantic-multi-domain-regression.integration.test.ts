@@ -136,6 +136,37 @@ describe("phrasing-diverse regression (independent Level 3 review, post-D-0067, 
     return { semanticModel, blueprint };
   }
 
+  // Round 2 independent review (post-D-0068) Finding R2-1, CRITICAL DEFECT:
+  // the fix for the non-modal case above regressed the classic, previously
+  // reliable "<actor> can/have/may/will <verb>" construction itself — a
+  // single-word actor followed by a modal and then an organizational verb
+  // ("Clients can browse services") had the modal greedily swallowed into
+  // the actor name, producing "Clients Can" instead of "Clients". Neither
+  // of the two phrasing tests above exercised this exact classic
+  // construction, which is why the regression shipped undetected through
+  // a fully green suite — this test exists specifically to close that gap.
+  const CLASSIC_MODAL_VERB_FIXTURE: Fixture = {
+    domain:
+      "phrasing: classic modal+verb, name-correctness regression guard (round 2 Finding R2-1)",
+    idea: "GlowBook helps independent estheticians and their clients manage appointments in one place. Clients can browse available services, book appointments, and view upcoming visits. Estheticians can manage their calendar, set availability, and view client notes before each visit.",
+  };
+
+  it("classic modal+verb construction: actor names are not corrupted by a swallowed modal (round 2 Finding R2-1 regression guard)", async () => {
+    const { blueprint } = await runAndInspect(CLASSIC_MODAL_VERB_FIXTURE.idea);
+
+    const roles = blueprint.roles as string[];
+    expect(roles).toContain("Clients");
+    expect(roles).toContain("Estheticians");
+    // The exact corruption round 2 found live: a modal word swallowed
+    // into the actor name itself.
+    for (const role of roles) {
+      expect(
+        /\b(can|have|has|may|will)$/i.test(role),
+        `role "${role}" ends with a modal word — the modal was swallowed into the actor name instead of being correctly excluded`,
+      ).toBe(false);
+    }
+  });
+
   it("non-modal active voice: actors are now found directly (the tractable half of the fix)", async () => {
     const { blueprint } = await runAndInspect(NON_MODAL_ACTIVE_VOICE_FIXTURE.idea);
 
@@ -284,6 +315,22 @@ describe("multi-domain semantic-hollowing regression corpus (D-0065, Part 12)", 
         entityCount,
         `${fixture.domain}: expected at least 1 domain entity, found ${entityCount}`,
       ).toBeGreaterThan(0);
+
+      // Round 2 independent review (post-D-0068) Finding R2-1: the prior
+      // version of this test only ever counted actors, never inspected
+      // their names — which is exactly how a name-corrupting regex
+      // regression (a modal word swallowed into the actor name, e.g.
+      // "Clients Can" instead of "Clients") shipped undetected through a
+      // fully green suite. Every fixture's actor names are now checked
+      // for this exact corruption pattern, corpus-wide, not just in one
+      // dedicated case.
+      const actorNames = (semanticModel.actors as { name: string }[]).map((a) => a.name);
+      for (const name of actorNames) {
+        expect(
+          /\b(can|have|has|may|will)$/i.test(name),
+          `${fixture.domain}: actor name "${name}" ends with a modal word — likely swallowed into the name by a regex regression`,
+        ).toBe(false);
+      }
     }
   });
 });

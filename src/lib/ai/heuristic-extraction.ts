@@ -90,15 +90,25 @@ const ORGANIZATIONAL_VERB_PATTERN = ORGANIZATIONAL_VERBS.map(withInflections).jo
 // immediately followed by one of the same generic organizational verbs
 // (in any inflection) used directly, present or past tense, with no modal
 // — "Managers assign tasks," "Employees received tasks."
-// The optional second word of a two-word actor name (e.g. "Family
+// Round 2 independent review (post-D-0068) Finding R2-1, CRITICAL DEFECT:
+// the optional second word of a two-word actor name (e.g. "Family
 // Members") must not itself be a copula/auxiliary ("is"/"are"/"was"/
-// "were") — without this exclusion, a passive-voice sentence like
+// "were") — without excluding those, a passive-voice sentence like
 // "Shifts are assigned by managers" greedily swallows "Are" into the
 // subject name itself (since "assigned" still matches the verb
 // alternation right after), producing a nonsensical actor named "Shifts
-// Are" instead of correctly finding no actor in that clause at all.
+// Are". The first attempt at this exclusion (round 1's repair) excluded
+// only the copulas — but adding the organizational verbs directly to the
+// trailing alternation (to catch non-modal phrasing) reopened the exact
+// same greediness bug for the classic, previously-solid
+// "<actor> can/have/may/will <verb>" construction itself: "Clients can
+// browse services" would swallow "can" into the subject too, since
+// "browse" then matches the verb alternation right after — producing
+// "Clients Can" as the actor name for the single most common phrasing in
+// the entire corpus. The second word must therefore also exclude the
+// modals and the organizational verbs themselves, not just the copulas.
 const ACTOR_LEAD_PATTERN = new RegExp(
-  `^\\s*([A-Z][a-zA-Z]*(?:\\s+(?!(?:is|are|was|were)\\b)[a-z]+)?)\\s+(?:can|have|has|may|will|${ORGANIZATIONAL_VERB_PATTERN})\\b`,
+  `^\\s*([A-Z][a-zA-Z]*(?:\\s+(?!(?:is|are|was|were|can|have|has|may|will|${ORGANIZATIONAL_VERB_PATTERN})\\b)[a-z]+)?)\\s+(?:can|have|has|may|will|${ORGANIZATIONAL_VERB_PATTERN})\\b`,
 );
 
 const VERB_OBJECT_PATTERN = new RegExp(

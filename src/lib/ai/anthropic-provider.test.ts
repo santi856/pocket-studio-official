@@ -170,4 +170,88 @@ describe("AnthropicAIProvider", () => {
     ).rejects.toBeInstanceOf(AnthropicRequestError);
     expect(mockFetch).not.toHaveBeenCalled();
   });
+
+  // Round 2 independent review (post-D-0068) Finding R2-3: the fix for
+  // round 1's Finding 2 (extractProductSemantics only fell back to the
+  // deterministic extractor on a malformed-output failure, never on a
+  // request/network failure) shipped with zero automated regression
+  // coverage. These three tests close that gap.
+  describe("extractProductSemantics", () => {
+    const MINIMAL_VALID_EXTRACTION = {
+      purpose: "A booking app.",
+      targetUsers: [],
+      actors: [],
+      entities: [],
+      workflows: [],
+      capabilities: [],
+      permissions: [],
+      businessRules: [],
+      monetization: [],
+      integrations: [],
+      constraints: [],
+      unresolvedQuestions: [],
+      consequentialDecisions: [],
+      unsupportedRequirements: [],
+    };
+
+    it("returns the real extraction on a successful call, without falling back", async () => {
+      const { AnthropicAIProvider } = await import("./anthropic-provider");
+      const provider = new AnthropicAIProvider();
+      const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+      mockFetch.mockResolvedValueOnce(
+        toolUseResponse(MINIMAL_VALID_EXTRACTION, "extract_product_semantics"),
+      );
+
+      const result = await provider.extractProductSemantics({
+        rawText: "Build a booking app.",
+        priorRawText: null,
+      });
+
+      expect(result.purpose).toBe("A booking app.");
+      // Real usage is the mode signal every caller relies on
+      // (provider.ts's SemanticExtractionResult.usage doc comment) — a
+      // successful real call must never return null usage.
+      expect(result.usage).not.toBeNull();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to the deterministic extractor after exhausting retries on a request/network failure (round 2 Finding R2-3)", async () => {
+      const { AnthropicAIProvider } = await import("./anthropic-provider");
+      const provider = new AnthropicAIProvider();
+      const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+      mockFetch.mockRejectedValue(new Error("ECONNRESET"));
+
+      const result = await provider.extractProductSemantics({
+        rawText: "Managers can assign tasks to employees.",
+        priorRawText: null,
+      });
+
+      // The deterministic fallback's own honest signal: never claims a
+      // real provider call succeeded (provider.ts's usage doc comment).
+      expect(result.usage).toBeNull();
+      // Bounded retries, not infinite — the same MAX_ATTEMPTS budget
+      // documented in the class itself.
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("falls back to the deterministic extractor after exhausting retries on a malformed-output failure", async () => {
+      const { AnthropicAIProvider } = await import("./anthropic-provider");
+      const provider = new AnthropicAIProvider();
+      const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ content: [{ type: "text" }] }),
+        text: async () => "",
+      } as Response);
+
+      const result = await provider.extractProductSemantics({
+        rawText: "Managers can assign tasks to employees.",
+        priorRawText: null,
+      });
+
+      expect(result.usage).toBeNull();
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+  });
 });
