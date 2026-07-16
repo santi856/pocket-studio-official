@@ -80,6 +80,106 @@ function withInflections(verb: string): string {
 }
 const ORGANIZATIONAL_VERB_PATTERN = ORGANIZATIONAL_VERBS.map(withInflections).join("|");
 
+// Round 3 independent review (post-D-0069) Finding R3-1, CRITICAL DEFECT,
+// and its explicit architectural recommendation: rounds 1 and 2 each
+// closed the optional second-word slot's greediness bug by excluding
+// exactly the one word class that round's reviewer happened to test
+// (copulas, then modals/organizational verbs) — a negative-lookahead
+// blocklist grown one word class at a time never converges, because it is
+// trying to exclude "any English word that isn't part of a role name,"
+// which is not a small set if approached reactively. Round 3 found the
+// next breakage (common adverbs — "Drivers also can track...", "Employees
+// typically have...") and explicitly recommended closing the *class* in
+// one bounded pass instead of patching one more instance. This list is a
+// deliberately broad, one-time enumeration of common English function
+// words (adverbs and conjunctions) that can grammatically sit between a
+// subject and a modal/verb — a closed, stable, purely grammatical set,
+// not product vocabulary, so it does not violate this file's "no domain
+// word list" design principle (the anti-hardcoding meta-test scans for
+// domain nouns, never grammar function words). Honest residual limitation
+// (disclosed, not hidden, the same way passive voice already is): this is
+// still an enumerated list, not true grammatical parsing — a function
+// word absent from it (e.g. an unusual adverb, a parenthetical/participial
+// insertion like "Managers, once approved, can view...") could still slip
+// through uncorrected. The Semantic Coverage Engine's zero-actor
+// escalation (semantic-coverage.ts) remains the backstop of last resort
+// for wholesale failures; this list only reduces, not eliminates, the risk
+// of a corrupted-but-non-empty actor name for the specific, common
+// function-word class it enumerates.
+const FUNCTION_WORD_EXCLUSIONS = [
+  "also",
+  "typically",
+  "usually",
+  "generally",
+  "often",
+  "sometimes",
+  "currently",
+  "recently",
+  "now",
+  "then",
+  "still",
+  "already",
+  "always",
+  "never",
+  "rarely",
+  "occasionally",
+  "frequently",
+  "regularly",
+  "immediately",
+  "automatically",
+  "manually",
+  "directly",
+  "indirectly",
+  "primarily",
+  "mainly",
+  "mostly",
+  "largely",
+  "simply",
+  "merely",
+  "just",
+  "only",
+  "even",
+  "further",
+  "additionally",
+  "similarly",
+  "likewise",
+  "consequently",
+  "therefore",
+  "thus",
+  "hence",
+  "however",
+  "nevertheless",
+  "nonetheless",
+  "meanwhile",
+  "subsequently",
+  "previously",
+  "initially",
+  "finally",
+  "eventually",
+  "ultimately",
+  "quickly",
+  "easily",
+  "readily",
+  "potentially",
+  "possibly",
+  "presumably",
+  "apparently",
+  "evidently",
+  "clearly",
+  "obviously",
+  "certainly",
+  "definitely",
+  "probably",
+  "likely",
+  "perhaps",
+  "maybe",
+  "and",
+  "or",
+  "but",
+  "nor",
+];
+const FUNCTION_WORD_PATTERN = FUNCTION_WORD_EXCLUSIONS.join("|");
+
 // Two ways a sentence introduces a genuine actor, both purely structural
 // (grammar, never vocabulary): (1) a capitalized subject followed by a
 // true capability/possession modal ("can", "have", "may", "will") — "is"/
@@ -89,26 +189,20 @@ const ORGANIZATIONAL_VERB_PATTERN = ORGANIZATIONAL_VERBS.map(withInflections).jo
 // ..."), not an actor performing an action; or (2) a capitalized subject
 // immediately followed by one of the same generic organizational verbs
 // (in any inflection) used directly, present or past tense, with no modal
-// — "Managers assign tasks," "Employees received tasks."
-// Round 2 independent review (post-D-0068) Finding R2-1, CRITICAL DEFECT:
-// the optional second word of a two-word actor name (e.g. "Family
-// Members") must not itself be a copula/auxiliary ("is"/"are"/"was"/
-// "were") — without excluding those, a passive-voice sentence like
-// "Shifts are assigned by managers" greedily swallows "Are" into the
-// subject name itself (since "assigned" still matches the verb
-// alternation right after), producing a nonsensical actor named "Shifts
-// Are". The first attempt at this exclusion (round 1's repair) excluded
-// only the copulas — but adding the organizational verbs directly to the
-// trailing alternation (to catch non-modal phrasing) reopened the exact
-// same greediness bug for the classic, previously-solid
-// "<actor> can/have/may/will <verb>" construction itself: "Clients can
-// browse services" would swallow "can" into the subject too, since
-// "browse" then matches the verb alternation right after — producing
-// "Clients Can" as the actor name for the single most common phrasing in
-// the entire corpus. The second word must therefore also exclude the
-// modals and the organizational verbs themselves, not just the copulas.
+// — "Managers assign tasks," "Employees received tasks." The optional
+// second word of a two-word actor name (e.g. "Family Members") must not
+// itself be a copula, a modal, an organizational verb, or a common
+// function word (see FUNCTION_WORD_EXCLUSIONS above) — without excluding
+// all of these, the regex greedily swallows whichever one appears into
+// the subject name itself, since the real verb still matches right after.
+// An explicit, non-capturing "skip one filler word" group (never included
+// in the subject capture) separately handles a function word sitting
+// *between* the subject and the real modal/verb — e.g. "Drivers also can
+// track deliveries" — distinct from the subject-capture exclusion above,
+// which only prevents that same word from being swallowed INTO the
+// subject name if the trailing alternation happens to still match after it.
 const ACTOR_LEAD_PATTERN = new RegExp(
-  `^\\s*([A-Z][a-zA-Z]*(?:\\s+(?!(?:is|are|was|were|can|have|has|may|will|${ORGANIZATIONAL_VERB_PATTERN})\\b)[a-z]+)?)\\s+(?:can|have|has|may|will|${ORGANIZATIONAL_VERB_PATTERN})\\b`,
+  `^\\s*([A-Z][a-zA-Z]*(?:\\s+(?!(?:is|are|was|were|can|have|has|may|will|${ORGANIZATIONAL_VERB_PATTERN}|${FUNCTION_WORD_PATTERN})\\b)[a-z]+)?)\\s+(?:(?:${FUNCTION_WORD_PATTERN})\\s+)?(?:can|have|has|may|will|${ORGANIZATIONAL_VERB_PATTERN})\\b`,
 );
 
 const VERB_OBJECT_PATTERN = new RegExp(

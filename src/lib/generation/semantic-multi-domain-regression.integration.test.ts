@@ -167,6 +167,40 @@ describe("phrasing-diverse regression (independent Level 3 review, post-D-0067, 
     }
   });
 
+  // Round 3 independent review (post-D-0069) Finding R3-1, CRITICAL DEFECT:
+  // round 2's fix excluded copulas/modals/organizational verbs from the
+  // optional second-word slot, but not common adverbs or conjunctions sitting
+  // between the subject and the modal — "Drivers also can track deliveries"
+  // produced actor "Drivers Also" instead of "Drivers". The round-2 name-
+  // correctness checks above only ever tested for a trailing MODAL word, so
+  // this different corruption shipped through a fully green suite
+  // undetected. This is a distinct fixture from CLASSIC_MODAL_VERB_FIXTURE
+  // specifically to exercise the function-word-insertion construction, not
+  // just re-test the modal-swallowing one.
+  const FUNCTION_WORD_INSERTION_FIXTURE: Fixture = {
+    domain:
+      "phrasing: function-word insertion, name-correctness regression guard (round 3 Finding R3-1)",
+    idea: "RouteDesk helps local delivery services coordinate drivers. Drivers also can track deliveries in real time and update their status. Dispatchers typically have access to every route and can reassign drivers as needed.",
+  };
+
+  it("function-word insertion (adverb between subject and modal): actor names are not corrupted (round 3 Finding R3-1 regression guard)", async () => {
+    const { blueprint } = await runAndInspect(FUNCTION_WORD_INSERTION_FIXTURE.idea);
+
+    const roles = blueprint.roles as string[];
+    expect(roles).toContain("Drivers");
+    expect(roles).toContain("Dispatchers");
+    // The exact corruption round 3 found live: a common adverb swallowed
+    // into the actor name itself, not a modal this time.
+    const knownFunctionWordSuffixes =
+      /\b(also|typically|usually|generally|often|currently|recently|and|or|but)$/i;
+    for (const role of roles) {
+      expect(
+        knownFunctionWordSuffixes.test(role),
+        `role "${role}" ends with a common function word — it was swallowed into the actor name instead of being correctly excluded`,
+      ).toBe(false);
+    }
+  });
+
   it("non-modal active voice: actors are now found directly (the tractable half of the fix)", async () => {
     const { blueprint } = await runAndInspect(NON_MODAL_ACTIVE_VOICE_FIXTURE.idea);
 
@@ -322,13 +356,28 @@ describe("multi-domain semantic-hollowing regression corpus (D-0065, Part 12)", 
       // regression (a modal word swallowed into the actor name, e.g.
       // "Clients Can" instead of "Clients") shipped undetected through a
       // fully green suite. Every fixture's actor names are now checked
-      // for this exact corruption pattern, corpus-wide, not just in one
-      // dedicated case.
+      // for corruption, corpus-wide, not just in one dedicated case.
+      //
+      // Round 3 independent review (post-D-0069) Finding R3-1: the check
+      // above only ever tested for a trailing MODAL word — a genuinely
+      // different corruption (a common adverb/conjunction swallowed into
+      // the name, e.g. "Drivers Also") shipped through this exact test
+      // undetected, because it wasn't in scope. Broadened to a
+      // representative set of the same function-word class the
+      // production fix now excludes (heuristic-extraction.ts's
+      // FUNCTION_WORD_EXCLUSIONS) — not the full list duplicated here
+      // (that would make this test a tautological mirror of the
+      // production list, not an independent check), but enough common
+      // members of the class that a regression reopening this construction
+      // generally would be caught corpus-wide, not just in one dedicated
+      // fixture.
       const actorNames = (semanticModel.actors as { name: string }[]).map((a) => a.name);
+      const knownCorruptionSuffixes =
+        /\b(can|have|has|may|will|also|typically|usually|generally|often|currently|recently|and|or|but)$/i;
       for (const name of actorNames) {
         expect(
-          /\b(can|have|has|may|will)$/i.test(name),
-          `${fixture.domain}: actor name "${name}" ends with a modal word — likely swallowed into the name by a regex regression`,
+          knownCorruptionSuffixes.test(name),
+          `${fixture.domain}: actor name "${name}" ends with a modal or common function word — likely swallowed into the name by a regex regression`,
         ).toBe(false);
       }
     }
