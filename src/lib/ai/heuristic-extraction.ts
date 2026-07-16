@@ -180,6 +180,76 @@ const FUNCTION_WORD_EXCLUSIONS = [
 ];
 const FUNCTION_WORD_PATTERN = FUNCTION_WORD_EXCLUSIONS.join("|");
 
+// Common English role-suffix nouns — a small, generic, closed set of
+// words that legitimately complete a two-word role/actor name (e.g.
+// "Plant Managers," "Restaurant Staff," "Family Members"). Deliberately
+// generic organizational-role vocabulary, not any one product domain's
+// terms — the same "small, stable, purely grammatical/structural set"
+// standard already applied to FUNCTION_WORD_EXCLUSIONS and
+// ORGANIZATIONAL_VERBS, verified to contain zero fixture-specific nouns
+// by the same anti-hardcoding meta-test that scans this file.
+const ROLE_SUFFIX_WORDS = [
+  "member",
+  "members",
+  "manager",
+  "managers",
+  "staff",
+  "lead",
+  "leads",
+  "rep",
+  "reps",
+  "admin",
+  "admins",
+  "agent",
+  "agents",
+  "officer",
+  "officers",
+  "coordinator",
+  "coordinators",
+  "associate",
+  "associates",
+  "representative",
+  "representatives",
+  "supervisor",
+  "supervisors",
+  "technician",
+  "technicians",
+  "specialist",
+  "specialists",
+  "assistant",
+  "assistants",
+  "professional",
+  "professionals",
+  "owner",
+  "owners",
+  "operator",
+  "operators",
+  "provider",
+  "providers",
+];
+const ROLE_SUFFIX_PATTERN = ROLE_SUFFIX_WORDS.join("|");
+
+// Round 4 independent review (post-D-0070) Finding R4-1, and its explicit
+// architectural conclusion: rounds 1-3 each closed the optional-second-
+// word capture's greediness bug for exactly one more word class (copulas,
+// then modals/organizational verbs, then ~70 enumerated adverbs/
+// conjunctions) — round 4 found a fourth instance in under a minute
+// ("Managers really can...", "Owners genuinely can...") and concluded
+// that a NEGATIVE-lookahead blocklist against English's open-ended
+// adverb class can never converge; each additional round of word-by-word
+// blocklist patching had demonstrably negative return. Per round 4's own
+// two suggested structural alternatives, this combines both: the second
+// word of a two-word actor name is now matched by a POSITIVE allowlist
+// (ROLE_SUFFIX_WORDS above) instead of a negative blocklist — an adverb
+// can never be positively mistaken for a role-suffix noun, because the
+// two lists share no words, so this closes the entire corruption bug
+// class structurally (no blocklist to keep growing) while still
+// recovering real coverage for common compound names ("Plant Managers,"
+// "Restaurant Staff") that a single-word-only capture would have lost
+// entirely. FUNCTION_WORD_EXCLUSIONS/FUNCTION_WORD_PATTERN remains, used
+// only for the separate "skip one filler word between subject and verb"
+// case below (a different mechanism, unaffected by this change).
+//
 // Two ways a sentence introduces a genuine actor, both purely structural
 // (grammar, never vocabulary): (1) a capitalized subject followed by a
 // true capability/possession modal ("can", "have", "may", "will") — "is"/
@@ -189,20 +259,12 @@ const FUNCTION_WORD_PATTERN = FUNCTION_WORD_EXCLUSIONS.join("|");
 // ..."), not an actor performing an action; or (2) a capitalized subject
 // immediately followed by one of the same generic organizational verbs
 // (in any inflection) used directly, present or past tense, with no modal
-// — "Managers assign tasks," "Employees received tasks." The optional
-// second word of a two-word actor name (e.g. "Family Members") must not
-// itself be a copula, a modal, an organizational verb, or a common
-// function word (see FUNCTION_WORD_EXCLUSIONS above) — without excluding
-// all of these, the regex greedily swallows whichever one appears into
-// the subject name itself, since the real verb still matches right after.
-// An explicit, non-capturing "skip one filler word" group (never included
-// in the subject capture) separately handles a function word sitting
+// — "Managers assign tasks," "Employees received tasks." A non-capturing
+// "skip one filler word" group separately handles a function word sitting
 // *between* the subject and the real modal/verb — e.g. "Drivers also can
-// track deliveries" — distinct from the subject-capture exclusion above,
-// which only prevents that same word from being swallowed INTO the
-// subject name if the trailing alternation happens to still match after it.
+// track deliveries."
 const ACTOR_LEAD_PATTERN = new RegExp(
-  `^\\s*([A-Z][a-zA-Z]*(?:\\s+(?!(?:is|are|was|were|can|have|has|may|will|${ORGANIZATIONAL_VERB_PATTERN}|${FUNCTION_WORD_PATTERN})\\b)[a-z]+)?)\\s+(?:(?:${FUNCTION_WORD_PATTERN})\\s+)?(?:can|have|has|may|will|${ORGANIZATIONAL_VERB_PATTERN})\\b`,
+  `^\\s*([A-Z][a-zA-Z]*(?:\\s+(?:${ROLE_SUFFIX_PATTERN}))?)\\s+(?:(?:${FUNCTION_WORD_PATTERN})\\s+)?(?:can|have|has|may|will|${ORGANIZATIONAL_VERB_PATTERN})\\b`,
 );
 
 const VERB_OBJECT_PATTERN = new RegExp(

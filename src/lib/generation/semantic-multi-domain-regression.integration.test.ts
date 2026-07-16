@@ -201,6 +201,45 @@ describe("phrasing-diverse regression (independent Level 3 review, post-D-0067, 
     }
   });
 
+  // Round 4 independent review (post-D-0070) Finding R4-1, CRITICAL DEFECT:
+  // round 3's enumerated function-word list didn't include every common
+  // conversational adverb ("Managers really can...", "Owners genuinely
+  // can..." -> "Managers Really", "Owners Genuinely"), reproducing the same
+  // corruption shape a fourth time. Repaired structurally, not by adding
+  // more words: the second word of a two-word actor name is now matched by
+  // a POSITIVE allowlist of common role-suffix nouns (ROLE_SUFFIX_WORDS)
+  // instead of a negative blocklist of everything it must not be — an
+  // adverb can never accidentally match a role-suffix noun, so this closes
+  // the entire corruption class structurally rather than shrinking it one
+  // more word at a time. This test exercises both halves of that fix in
+  // one fixture: an out-of-list adverb must produce a SAFE MISS (no actor
+  // for that sentence, never a corrupted one), and a genuine compound role
+  // name must still be RECOVERED correctly.
+  const UNLISTED_ADVERB_AND_COMPOUND_NAME_FIXTURE: Fixture = {
+    domain:
+      "phrasing: unlisted adverb (safe miss) + compound role name (recovered) — round 4 Finding R4-1",
+    idea: "ShopFloor helps small manufacturing teams track daily production. Owners genuinely can list items for sale and manage inventory. Plant managers can review production history and approve requests.",
+  };
+
+  it("unlisted adverb produces a safe miss, never a corrupted name, while a genuine compound role name is still recovered (round 4 Finding R4-1 regression guard)", async () => {
+    const { semanticModel, blueprint } = await runAndInspect(
+      UNLISTED_ADVERB_AND_COMPOUND_NAME_FIXTURE.idea,
+    );
+
+    const actorNames = (semanticModel.actors as { name: string }[]).map((a) => a.name);
+    // "Owners genuinely can..." — "genuinely" is not on the enumerated
+    // function-word list, so this sentence must produce no actor at all
+    // for "Owners" here, never a corrupted "Owners Genuinely".
+    expect(actorNames).not.toContain("Owners Genuinely");
+    // "Plant managers can..." — "managers" IS a role-suffix noun, so this
+    // compound name must be correctly recovered, not lost.
+    expect(actorNames).toContain("Plant Managers");
+
+    const roles = blueprint.roles as string[];
+    expect(roles).toContain("Plant Managers");
+    expect(roles.some((r) => r.toLowerCase().includes("genuinely"))).toBe(false);
+  });
+
   it("non-modal active voice: actors are now found directly (the tractable half of the fix)", async () => {
     const { blueprint } = await runAndInspect(NON_MODAL_ACTIVE_VOICE_FIXTURE.idea);
 
