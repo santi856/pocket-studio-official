@@ -227,7 +227,24 @@ const ROLE_SUFFIX_WORDS = [
   "provider",
   "providers",
 ];
-const ROLE_SUFFIX_PATTERN = ROLE_SUFFIX_WORDS.join("|");
+// Round 6 independent review (post-D-0073) Finding, CRITICAL DEFECT: this
+// pattern was built directly from ROLE_SUFFIX_WORDS (all-lowercase) and
+// matched case-sensitively, so a compound role name written in the
+// common "Title Case Both Words" convention ("Insurance Agents,"
+// "Escalation Leads," "Product Owners") was invisible — only the
+// lowercase-second-word convention ("Insurance agents") matched. Every
+// existing corpus fixture happened to use the lowercase-second-word form,
+// so this shipped undetected through 5 prior review rounds. This is the
+// same "capitalized subject, second word not recognized" failure shape as
+// rounds 1-4, just against a case difference instead of a vocabulary gap
+// — fixed the same way: widen the match to accept either the word's given
+// lowercase form or its capitalized form (first letter only, matching how
+// English title-cases a common noun), never full-uppercase or a second
+// growing list, so a real proper noun elsewhere in the sentence is not
+// accidentally swept in.
+const ROLE_SUFFIX_PATTERN = ROLE_SUFFIX_WORDS.map(
+  (word) => `[${word[0]!.toUpperCase()}${word[0]}]${word.slice(1)}`,
+).join("|");
 
 // Round 4 independent review (post-D-0070) Finding R4-1, and its explicit
 // architectural conclusion: rounds 1-3 each closed the optional-second-

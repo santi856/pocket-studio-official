@@ -270,6 +270,35 @@ describe("phrasing-diverse regression (independent Level 3 review, post-D-0067, 
     expect(roles).toContain("Managers");
   });
 
+  // Round 6 independent review (post-D-0073) Finding, CRITICAL DEFECT:
+  // ROLE_SUFFIX_PATTERN was built directly from the all-lowercase
+  // ROLE_SUFFIX_WORDS list and matched case-sensitively, so a compound
+  // role name written in the common "Title Case Both Words" convention
+  // ("Insurance Agents," "Escalation Leads") was invisible to
+  // ACTOR_LEAD_PATTERN — only the lowercase-second-word convention
+  // ("Insurance agents") matched. Every existing corpus fixture happened
+  // to use the lowercase-second-word form, so this shipped undetected
+  // through 5 prior review rounds. Reproduces the reviewer's exact live
+  // finding: an ordinary, non-hollow, two-actor description using this
+  // natural capitalization convention produced zero actors, which — via
+  // D-0072's hard gate — falsely hard-blocked production deployment.
+  const TITLE_CASE_COMPOUND_NAME_FIXTURE: Fixture = {
+    domain: "phrasing: title-case-both-words compound role name (round 6 finding)",
+    idea: "InsureFlow helps insurance companies streamline claims processing for their teams. Insurance Agents can submit new claims and track their status through the review pipeline. Escalation Leads can review complex claims and reassign them to specialists before they close the file.",
+  };
+
+  it("title-case-both-words compound role name: actors are still found, not silently dropped by a case-sensitivity gap (round 6 regression guard)", async () => {
+    const { semanticModel, blueprint } = await runAndInspect(TITLE_CASE_COMPOUND_NAME_FIXTURE.idea);
+
+    const actorNames = (semanticModel.actors as { name: string }[]).map((a) => a.name);
+    expect(actorNames).toContain("Insurance Agents");
+    expect(actorNames).toContain("Escalation Leads");
+
+    const roles = blueprint.roles as string[];
+    expect(roles).toContain("Insurance Agents");
+    expect(roles).toContain("Escalation Leads");
+  });
+
   it("non-modal active voice: actors are now found directly (the tractable half of the fix)", async () => {
     const { blueprint } = await runAndInspect(NON_MODAL_ACTIVE_VOICE_FIXTURE.idea);
 

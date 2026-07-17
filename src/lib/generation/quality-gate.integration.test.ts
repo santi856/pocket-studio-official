@@ -162,6 +162,36 @@ describe("runQualityGate", () => {
     ).toBe(true);
   });
 
+  // Round 6 independent review (post-D-0073) Finding, CRITICAL DEFECT: the
+  // hard-rejection check above was also reachable through an ordinary
+  // description whose compound actor names use the common "Title Case
+  // Both Words" capitalization convention ("Insurance Agents," "Escalation
+  // Leads") — ROLE_SUFFIX_PATTERN matched the role-suffix word only in its
+  // exact lowercase form, so this natural phrasing produced a false
+  // zero-actor materially_incomplete result and a false hard block on
+  // production deployment, the same failure mode as the leading-clause
+  // finding above, just via a different root cause (case-sensitivity, not
+  // sentence position). Reproduces the reviewer's exact repro, which must
+  // now pass, not hard-fail.
+  it("still passes when a compound actor name uses the common Title-Case-Both-Words convention, not only a lowercase second word (round 6 regression guard)", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "InsureFlow helps insurance companies streamline claims processing for their teams. Insurance Agents can submit new claims and track their status through the review pipeline. Escalation Leads can review complex claims and reassign them to specialists before they close the file.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+    await generateBuildPlan(owner.id, project.id);
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    const semanticCheck = result.checks.find((c) => c.name.includes("Semantic coverage"));
+    expect(
+      semanticCheck?.passed,
+      `Semantic coverage check should pass for a title-case compound actor name: ${semanticCheck?.details}`,
+    ).toBe(true);
+  });
+
   it("still passes for a normal multi-actor description, and for a legitimately terse one below the non-trivial threshold", async () => {
     const { owner, project: normalProject } = await seedProject();
     await generateProductIntelligence(

@@ -236,7 +236,8 @@
     "D-0070",
     "D-0071",
     "D-0072",
-    "D-0073"
+    "D-0073",
+    "D-0074"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -273,12 +274,12 @@
     "typecheck": "pass",
     "lint": "pass",
     "formatCheck": "pass",
-    "unit": "pass (716/716, 98 test files)",
-    "integration": "pass (716/716 combined with unit -- vitest reports unit+integration as one suite; verified live 2026-07-17 after round 5 review repair, D-0073)",
-    "e2e": "pass (24/24, re-run after D-0073)",
-    "productionBuild": "pass (verified after the round 5 review repair)",
-    "verifiedAt": "2026-07-17T19:19:00Z",
-    "verifiedAgainstCommit": "pending (round 5 independent review repair: leading-clause actor-detection fix + semantic.fidelity NOT_EVALUATED reachability fix, D-0073/EV-0118)",
+    "unit": "pass (718/718, 98 test files)",
+    "integration": "pass (718/718 combined with unit -- vitest reports unit+integration as one suite; verified live 2026-07-17 after round 6 review repair, D-0074)",
+    "e2e": "pass (24/24, re-run after D-0074)",
+    "productionBuild": "pass (verified after the round 6 review repair)",
+    "verifiedAt": "2026-07-17T19:40:00Z",
+    "verifiedAgainstCommit": "pending (round 6 independent review repair: ROLE_SUFFIX_PATTERN case-sensitivity fix, D-0074/EV-0119)",
     "note": "Supersedes the prior stale figures (130/130 unit, 253/253 integration, 12/12 e2e), which predated Phase 3. Also see: one intermittent, low-severity display-ordering flake in src/lib/observability/audit-log.integration.test.ts under full-suite load, not reproduced in this verification run -- see POCKET_STUDIO_DEFINITIVE_FOUNDER_REPORT.md §13 for the root cause (millisecond timestamp resolution, no secondary sort key)."
   },
   "evidenceRefs": [
@@ -399,7 +400,8 @@
     "EV-0115",
     "EV-0116",
     "EV-0117",
-    "EV-0118"
+    "EV-0118",
+    "EV-0119"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories \u2014 not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (\u00a761).",
@@ -452,5 +454,5 @@
     "Real Stripe test-mode end-to-end exercise (checkout, webhook delivery via the Stripe CLI, a real failed-payment/grace-period/restriction cycle) before any paid pilot -- only the mock provider and a direct-POST synthetic test harness were exercised in this report.",
     "Apple/Google developer account approval and real store review before any mobile distribution claim is made to a customer -- structurally unreachable in this build today (store readiness can never report READY by design)."
   ],
-  "nextAction": "SEMANTIC PRODUCT COMPILER REPAIR -- ROUND 5 INDEPENDENT REVIEW COMPLETE AND REPAIRED, AWAITING ROUND 6 RE-VERIFICATION BEFORE FINAL CHECKPOINT (D-0065/EV-0110 through D-0073/EV-0118; execution/architecture/SEMANTIC_PRODUCT_COMPILER_REPORT.md is the governing report). Round 5 (fresh-context, isolated worktree, agentId a2b93e4a22c2364f6) independently re-verified D-0072's full validation suite (713/713 unit+integration, 24/24 e2e -- exact match) and found the engineering pattern of that batch sound and scope-compliant, but returned verdict REVISE with one CRITICAL DEFECT and one DEFECT, both reproduced live with fresh, independently-written test descriptions. CRITICAL DEFECT: ACTOR_LEAD_PATTERN in heuristic-extraction.ts was anchored to a sentence's own start, so any ordinary leading dependent clause ('When a request comes in, Employees can review it...') made the actor invisible -- via D-0072's new hard gate, this produced a false zero-actor result that hard-blocked production deployment for ordinary, non-hollow, multi-actor descriptions. DEFECT: semantic.fidelity's claimed NOT_EVALUATED safety net (for projects with no semantic model at all) was unreachable, since blueprint-generator.ts always computes a trivially-adequate coverage object even with zero extracted items -- silently resolved to a false IMPLEMENTED instead. Both repaired in D-0073/EV-0118: (1) sentences are now split at clause boundaries (comma, and, but -- an existing closed conjunction class, not a new enumeration) before the actor regex is applied, so an actor+modal construction is found wherever it occurs in a sentence, not only at its start; (2) semantic.fidelity's NOT_EVALUATED branch now checks the already-existing basedOnSemanticModelVersion field instead of the always-populated coverage object. Both fixes live-verified against the reviewer's own exact reproduction cases and codified as 3 new permanent regression tests (Quality-Gate-level, extraction-level, orchestrator-level). Full suite re-run: 716/716 unit+integration, 24/24 e2e, clean typecheck/lint/format, production build succeeds -- no regression to any prior round's fix (rounds 1-4's actor-detection guards, all 9 corpus fixtures, all D-0072 hard-gate/Truth-Status/edit-path tests). NEXT: launch a round 6 independent, fresh-context Level 3 review scoped specifically to this repair (not a full re-review of the whole initiative) -- if it returns an acceptance-tier verdict (or finds only non-blocking issues), produce the founder's requested definitive engineering report (7-section format) as the final, stable checkpoint; if it finds a further blocking issue, repair and re-verify following the same discipline, exercising judgment (as round 4 did) about when continued rounds have reached diminishing returns for narrow, disclosed, safety-netted residual issues. Do not begin Phase 4. Do not ask whether to continue."
+  "nextAction": "SEMANTIC PRODUCT COMPILER REPAIR -- ROUND 6 INDEPENDENT REVIEW COMPLETE AND REPAIRED, AWAITING ROUND 7 RE-VERIFICATION BEFORE FINAL CHECKPOINT (D-0065/EV-0110 through D-0074/EV-0119; execution/architecture/SEMANTIC_PRODUCT_COMPILER_REPORT.md is the governing report). Round 6 (fresh-context, isolated worktree, agentId a00fd9423738509d5), scoped narrowly to D-0073's repair, personally re-ran the full suite (716/716, 24/24 -- exact match) and confirmed both round-5 findings genuinely fixed with zero test-integrity violations. Its own adversarial testing (16 fresh descriptions never reused from any existing test) then found a second, independent CRITICAL DEFECT producing the identical false-hard-block symptom via a different root cause: ROLE_SUFFIX_PATTERN (introduced by round 4's D-0071 positive-allowlist repair, unchanged by D-0073's own diff) was built from an all-lowercase word list and matched case-sensitively, so a compound role name in the common 'Title Case Both Words' convention ('Insurance Agents,' 'Escalation Leads') was invisible -- every existing corpus fixture happened to use the lowercase-second-word form, so this shipped undetected through 5 prior rounds. Live-reproduced end-to-end: an ordinary, non-hollow, two-actor, 44-word description hard-failed the Quality Gate with zero actors extracted. Repaired in D-0074/EV-0119: ROLE_SUFFIX_PATTERN now allows each role-suffix word's first letter to be either case via a per-word character class (e.g. '[Mm]anager') -- deliberately not a blanket case-insensitive regex flag, which would have also relaxed the actor name's own required-capitalized-first-letter design invariant. Live-verified against the reviewer's exact reproduction, the pre-existing lowercase-second-word fixtures (unaffected), round 4's unlisted-adverb safe-miss guard (still safe), and a fresh over-matching probe (no accidental proper-noun sweep-in). Codified as 2 new permanent regression tests. Full suite re-run: 718/718 unit+integration, 24/24 e2e, clean typecheck/lint/format, production build succeeds -- no regression to any prior round's fix. HONEST PATTERN NOTED for the definitive report: this is the third distinct root cause independent review has found in the same actor-detection regex across 6 rounds (greedy capture x2, positional anchoring, case-sensitivity) -- each fix narrowly scoped and live-verified, none yet reverted or reopened a prior finding, but the adversarial surface of this lightweight heuristic keeps yielding new edge cases. NEXT: launch a round 7 independent, fresh-context Level 3 review scoped specifically to this repair -- if it returns an acceptance-tier verdict (or only non-blocking findings), produce the founder's requested definitive engineering report (7-section format, explicitly naming this repeated-finding pattern in Capability Boundaries / Remaining Technical Debt) as the final, stable checkpoint; if it finds a further live, reproducible blocking issue in this same mechanism, repair it, but also seriously weigh in the report itself whether continued narrow patching remains the right call versus flagging this heuristic's fundamental adversarial surface as a named, prioritized technical-debt item rather than an implicitly-converging series. Do not begin Phase 4. Do not ask whether to continue."
 }
