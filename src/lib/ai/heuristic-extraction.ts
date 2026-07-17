@@ -272,10 +272,35 @@ const VERB_OBJECT_PATTERN = new RegExp(
   "gi",
 );
 
+// Round 5 independent review (post-D-0072) Finding, CRITICAL DEFECT:
+// ACTOR_LEAD_PATTERN is anchored with `^` and was applied to a whole
+// sentence, so it only ever recognized an actor as literally the first
+// word(s) of that sentence. Any ordinary leading clause ("When a request
+// comes in, Employees can review it...") or a second clause joined onto
+// the first ("...and Managers can approve it...") put the actor past
+// position zero and made it invisible, even though the exact same
+// "Capitalized-Actor can/verb" construction that already works at
+// sentence-start was present later in the same sentence. This is a
+// structural fix, not a lexical one: split each sentence at its clause
+// boundaries — commas and the small, closed set of coordinating
+// conjunctions already treated as function words elsewhere in this file
+// (and/but) — and apply ACTOR_LEAD_PATTERN at the start of every
+// resulting clause, not just the sentence's own start. A clause with no
+// actor+modal/verb construction (e.g. "When a request comes in") simply
+// produces no match, same as before.
+const CLAUSE_SPLIT_PATTERN = /,\s*|\s+and\s+|\s+but\s+/;
+
 function splitSentences(text: string): string[] {
   return text
     .split(SENTENCE_SPLIT)
     .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function splitClauses(sentence: string): string[] {
+  return sentence
+    .split(CLAUSE_SPLIT_PATTERN)
+    .map((c) => c.trim())
     .filter(Boolean);
 }
 
@@ -344,17 +369,19 @@ export function extractSemanticsHeuristically(rawText: string): SemanticExtracti
   const capabilities: SemanticCapability[] = [];
 
   for (const sentence of sentences) {
-    const actorMatch = sentence.match(ACTOR_LEAD_PATTERN);
     let actorName: string | null = null;
-    if (actorMatch) {
-      actorName = titleCase(actorMatch[1]!.trim());
-      if (!actorNames.has(actorName.toLowerCase())) {
-        actorNames.add(actorName.toLowerCase());
+    for (const clause of splitClauses(sentence)) {
+      const actorMatch = clause.match(ACTOR_LEAD_PATTERN);
+      if (!actorMatch) continue;
+      const clauseActorName = titleCase(actorMatch[1]!.trim());
+      if (actorName === null) actorName = clauseActorName;
+      if (!actorNames.has(clauseActorName.toLowerCase())) {
+        actorNames.add(clauseActorName.toLowerCase());
         actors.push({
-          name: actorName,
+          name: clauseActorName,
           description: excerpt(sentence),
           goals: [],
-          provenance: lowConfidenceProvenance("actor", actorName, sentence),
+          provenance: lowConfidenceProvenance("actor", clauseActorName, sentence),
         });
       }
     }

@@ -132,6 +132,36 @@ describe("runQualityGate", () => {
     expect(dimensionStatus?.status).toBe("BLOCKED");
   });
 
+  // Round 5 independent review (post-D-0072) Finding, CRITICAL DEFECT: the
+  // hard-rejection check above was reachable through ordinary, non-hollow,
+  // multi-actor descriptions too — any leading dependent clause before the
+  // first actor ("When a request comes in, ...") defeated the sentence-
+  // anchored actor regex entirely, producing a false zero-actor
+  // materially_incomplete result and a false hard block on production
+  // deployment (createDeployment throws ProductionDeploymentBlockedError
+  // for a BLOCKED quality.gate). Reproduces the reviewer's exact third
+  // probe — an ordinary description using the recognized "Capitalized-
+  // Actor can/verb" construction, just with a leading clause before it —
+  // which must now pass, not hard-fail.
+  it("still passes when actors appear after an ordinary leading dependent clause, not only at a sentence's very start (round 5 regression guard)", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "When a request comes in, Employees can review it and Managers can approve it before it moves forward, and Customers are notified by email once it's complete.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+    await generateBuildPlan(owner.id, project.id);
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    const semanticCheck = result.checks.find((c) => c.name.includes("Semantic coverage"));
+    expect(
+      semanticCheck?.passed,
+      `Semantic coverage check should pass for an ordinary description with actors after a leading clause: ${semanticCheck?.details}`,
+    ).toBe(true);
+  });
+
   it("still passes for a normal multi-actor description, and for a legitimately terse one below the non-trivial threshold", async () => {
     const { owner, project: normalProject } = await seedProject();
     await generateProductIntelligence(

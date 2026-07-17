@@ -240,6 +240,36 @@ describe("phrasing-diverse regression (independent Level 3 review, post-D-0067, 
     expect(roles.some((r) => r.toLowerCase().includes("genuinely"))).toBe(false);
   });
 
+  // Round 5 independent review (post-D-0072) Finding, CRITICAL DEFECT:
+  // ACTOR_LEAD_PATTERN was applied to a whole sentence with a `^`-anchored
+  // pattern, so an actor was only ever recognized as the sentence's very
+  // first word(s). Any ordinary leading dependent clause ("When a request
+  // comes in, ...") or a second actor+modal clause joined onto the first
+  // with "and" put that actor past position zero and made it invisible —
+  // reproduced live by the reviewer with three ordinary, non-hollow,
+  // realistic descriptions, including one using the exact recognized
+  // "Capitalized-Actor can/verb" construction. Repaired structurally (see
+  // heuristic-extraction.ts's CLAUSE_SPLIT_PATTERN/splitClauses): each
+  // sentence is now split at clause boundaries before ACTOR_LEAD_PATTERN is
+  // applied, so an actor+modal construction is found wherever it occurs in
+  // the sentence, not only at its start.
+  const LEADING_CLAUSE_FIXTURE: Fixture = {
+    domain: "phrasing: leading dependent clause before the actor (round 5 finding)",
+    idea: "ShiftDesk helps retail teams coordinate daily operations. When a new request comes in, Employees can review it and Managers can approve it before it moves forward. For every completed shift, Employees can log hours and Managers can verify totals at the end of the week.",
+  };
+
+  it("leading dependent clause before the actor: actors are still found, not silently dropped (round 5 regression guard)", async () => {
+    const { semanticModel, blueprint } = await runAndInspect(LEADING_CLAUSE_FIXTURE.idea);
+
+    const actorNames = (semanticModel.actors as { name: string }[]).map((a) => a.name);
+    expect(actorNames).toContain("Employees");
+    expect(actorNames).toContain("Managers");
+
+    const roles = blueprint.roles as string[];
+    expect(roles).toContain("Employees");
+    expect(roles).toContain("Managers");
+  });
+
   it("non-modal active voice: actors are now found directly (the tractable half of the fix)", async () => {
     const { blueprint } = await runAndInspect(NON_MODAL_ACTIVE_VOICE_FIXTURE.idea);
 

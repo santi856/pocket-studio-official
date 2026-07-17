@@ -235,7 +235,8 @@
     "D-0069",
     "D-0070",
     "D-0071",
-    "D-0072"
+    "D-0072",
+    "D-0073"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -272,12 +273,12 @@
     "typecheck": "pass",
     "lint": "pass",
     "formatCheck": "pass",
-    "unit": "pass (713/713, 98 test files)",
-    "integration": "pass (713/713 combined with unit -- vitest reports unit+integration as one suite; verified live 2026-07-16 after hard Quality Gate rejection, richer Truth Status, and edit-path semantic wiring, D-0072)",
-    "e2e": "pass (24/24, re-run after D-0072)",
-    "productionBuild": "pass (verified after the semantic-product-compiler repair)",
-    "verifiedAt": "2026-07-16T12:25:00Z",
-    "verifiedAgainstCommit": "pending (post-db5c4d0, hard Quality Gate rejection + richer Truth Status + edit-path semantic wiring + holdout + founder verification, D-0072/EV-0117)",
+    "unit": "pass (716/716, 98 test files)",
+    "integration": "pass (716/716 combined with unit -- vitest reports unit+integration as one suite; verified live 2026-07-17 after round 5 review repair, D-0073)",
+    "e2e": "pass (24/24, re-run after D-0073)",
+    "productionBuild": "pass (verified after the round 5 review repair)",
+    "verifiedAt": "2026-07-17T19:19:00Z",
+    "verifiedAgainstCommit": "pending (round 5 independent review repair: leading-clause actor-detection fix + semantic.fidelity NOT_EVALUATED reachability fix, D-0073/EV-0118)",
     "note": "Supersedes the prior stale figures (130/130 unit, 253/253 integration, 12/12 e2e), which predated Phase 3. Also see: one intermittent, low-severity display-ordering flake in src/lib/observability/audit-log.integration.test.ts under full-suite load, not reproduced in this verification run -- see POCKET_STUDIO_DEFINITIVE_FOUNDER_REPORT.md §13 for the root cause (millisecond timestamp resolution, no secondary sort key)."
   },
   "evidenceRefs": [
@@ -397,7 +398,8 @@
     "EV-0114",
     "EV-0115",
     "EV-0116",
-    "EV-0117"
+    "EV-0117",
+    "EV-0118"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories \u2014 not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (\u00a761).",
@@ -450,5 +452,5 @@
     "Real Stripe test-mode end-to-end exercise (checkout, webhook delivery via the Stripe CLI, a real failed-payment/grace-period/restriction cycle) before any paid pilot -- only the mock provider and a direct-POST synthetic test harness were exercised in this report.",
     "Apple/Google developer account approval and real store review before any mobile distribution claim is made to a customer -- structurally unreachable in this build today (store readiness can never report READY by design)."
   ],
-  "nextAction": "SEMANTIC PRODUCT COMPILER REPAIR -- FOUNDER-SCOPED REMAINING WORK COMPLETE (hard Quality Gate rejection, richer Truth Status, edit-path semantic wiring, brand-new holdout, founder verification), AWAITING ROUND 5 INDEPENDENT REVIEW OF THIS BATCH BEFORE FINAL CHECKPOINT (D-0065/EV-0110 through D-0072/EV-0117; execution/architecture/SEMANTIC_PRODUCT_COMPILER_REPORT.md is the governing report; commits 71872dd through 6c7741a plus one pending commit for this batch). The 4-round review cycle for heuristic-extraction.ts's actor detection closed under D-0071. This batch (D-0072) completed the founder's explicitly scoped remaining items: (a) hard Quality Gate rejection -- a 12th check, mapped to a new semanticFidelity dimension, fails when generationMetadata.semanticCoverage.overallStatus is materially_incomplete; live-verified a genuinely hollow (pure passive voice) description now fails the gate, normal/terse descriptions still pass; (b) Truth Status -- generation.full_stack_web_app's rationale now discloses semantic gaps inline, plus a new always-recorded semantic.fidelity subject key; (c) conversational editing -- createChangeSet now also runs the free deterministic heuristic (not a second paid AI call) against edit text and ORs 'introduces a new actor/entity' into requiresRegeneration alongside the old category check; live-verified an edit naming a new actor with zero category-keyword overlap now correctly triggers regeneration; (d) a brand-new holdout (VolunteerHub, nonprofit volunteer-shift scheduling, never used anywhere in this initiative) verified clean end to end; (e) founder verification -- the original HomeBase description re-run through the complete final system, all 12 Quality Gate checks pass, Truth Status/openDecisions/assumptions all honest. Full suite: 713/713 unit+integration (707 prior + 6 new), 24/24 e2e, clean typecheck/lint/format, build succeeds. EXPLICITLY OUT OF SCOPE for this batch, per the founder's own stated rules (reject anything not justified by the active defect): requirement traceability into Blueprint/Build Plan content, the broader partial-actor-loss disclosure gap beyond what the new hard gate catches, any Phase 4 work, UI redesign, agent redesign, or deployment-provider work. NEXT: launch a round 5 independent, fresh-context Level 3 review of this specific batch (hard gate, Truth Status, edit-path wiring) -- not a re-litigation of the already-closed actor-detection regex history -- repair any blocking findings, re-run affected validation, then produce the founder's requested definitive engineering report (7-section format) as the final, stable checkpoint. Do not begin Phase 4. Do not ask whether to continue."
+  "nextAction": "SEMANTIC PRODUCT COMPILER REPAIR -- ROUND 5 INDEPENDENT REVIEW COMPLETE AND REPAIRED, AWAITING ROUND 6 RE-VERIFICATION BEFORE FINAL CHECKPOINT (D-0065/EV-0110 through D-0073/EV-0118; execution/architecture/SEMANTIC_PRODUCT_COMPILER_REPORT.md is the governing report). Round 5 (fresh-context, isolated worktree, agentId a2b93e4a22c2364f6) independently re-verified D-0072's full validation suite (713/713 unit+integration, 24/24 e2e -- exact match) and found the engineering pattern of that batch sound and scope-compliant, but returned verdict REVISE with one CRITICAL DEFECT and one DEFECT, both reproduced live with fresh, independently-written test descriptions. CRITICAL DEFECT: ACTOR_LEAD_PATTERN in heuristic-extraction.ts was anchored to a sentence's own start, so any ordinary leading dependent clause ('When a request comes in, Employees can review it...') made the actor invisible -- via D-0072's new hard gate, this produced a false zero-actor result that hard-blocked production deployment for ordinary, non-hollow, multi-actor descriptions. DEFECT: semantic.fidelity's claimed NOT_EVALUATED safety net (for projects with no semantic model at all) was unreachable, since blueprint-generator.ts always computes a trivially-adequate coverage object even with zero extracted items -- silently resolved to a false IMPLEMENTED instead. Both repaired in D-0073/EV-0118: (1) sentences are now split at clause boundaries (comma, and, but -- an existing closed conjunction class, not a new enumeration) before the actor regex is applied, so an actor+modal construction is found wherever it occurs in a sentence, not only at its start; (2) semantic.fidelity's NOT_EVALUATED branch now checks the already-existing basedOnSemanticModelVersion field instead of the always-populated coverage object. Both fixes live-verified against the reviewer's own exact reproduction cases and codified as 3 new permanent regression tests (Quality-Gate-level, extraction-level, orchestrator-level). Full suite re-run: 716/716 unit+integration, 24/24 e2e, clean typecheck/lint/format, production build succeeds -- no regression to any prior round's fix (rounds 1-4's actor-detection guards, all 9 corpus fixtures, all D-0072 hard-gate/Truth-Status/edit-path tests). NEXT: launch a round 6 independent, fresh-context Level 3 review scoped specifically to this repair (not a full re-review of the whole initiative) -- if it returns an acceptance-tier verdict (or finds only non-blocking issues), produce the founder's requested definitive engineering report (7-section format) as the final, stable checkpoint; if it finds a further blocking issue, repair and re-verify following the same discipline, exercising judgment (as round 4 did) about when continued rounds have reached diminishing returns for narrow, disclosed, safety-netted residual issues. Do not begin Phase 4. Do not ask whether to continue."
 }

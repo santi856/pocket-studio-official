@@ -49,10 +49,24 @@ export async function generateApplication(
   // rejection check now consumes (quality-gate.ts) and folds it directly
   // into the rationale a founder sees the moment generation completes —
   // not only when they separately choose to run the Quality Gate.
-  const semanticCoverage = (
-    blueprint.generationMetadata as { semanticCoverage?: SemanticCoverageReport } | null
-  )?.semanticCoverage;
+  const blueprintGenerationMetadata = blueprint.generationMetadata as {
+    semanticCoverage?: SemanticCoverageReport;
+    basedOnSemanticModelVersion?: number | null;
+  } | null;
+  const semanticCoverage = blueprintGenerationMetadata?.semanticCoverage;
   const semanticCoverageAdequate = semanticCoverage?.overallStatus !== "materially_incomplete";
+  // Round 5 independent review (post-D-0072) Finding, DEFECT: blueprint-
+  // generator.ts always computes and writes generationMetadata.
+  // semanticCoverage, even when no ProductSemanticModel exists at all (an
+  // empty extraction trivially reports "adequate" — nothing to be
+  // missing) — so `!semanticCoverage` below could never actually be true
+  // through this code path, and semantic.fidelity silently claimed
+  // IMPLEMENTED for projects that were never evaluated. The real signal
+  // for "was a semantic model computed at all" is
+  // basedOnSemanticModelVersion (already recorded by blueprint-generator.ts
+  // from `semanticModel?.version ?? null`), not the presence of the
+  // always-populated coverage object.
+  const hasSemanticModel = blueprintGenerationMetadata?.basedOnSemanticModelVersion != null;
 
   await setTruthStatus(actorUserId, projectId, {
     subjectKey: "generation.full_stack_web_app",
@@ -76,13 +90,13 @@ export async function generateApplication(
   await setTruthStatus(actorUserId, projectId, {
     subjectKey: "semantic.fidelity",
     subjectLabel: "Semantic fidelity (generated content represents what the customer described)",
-    status: !semanticCoverage
+    status: !hasSemanticModel
       ? "NOT_EVALUATED"
       : semanticCoverageAdequate
         ? "IMPLEMENTED"
         : "BLOCKED",
-    rationale: !semanticCoverage
-      ? "No semantic coverage data recorded for this Blueprint (predates the Semantic Product Compiler, or extraction did not run)."
+    rationale: !hasSemanticModel
+      ? "No semantic model has been computed for this project (predates the Semantic Product Compiler, or extraction did not run) — semantic fidelity has not been evaluated."
       : semanticCoverageAdequate
         ? "Every actor, entity, and workflow the Semantic Product Compiler identified is represented in this Blueprint."
         : "The description appears substantial enough to name at least one actor, but the generated product does not represent it — review the original description manually.",

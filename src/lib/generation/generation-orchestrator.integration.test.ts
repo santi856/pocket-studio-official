@@ -146,6 +146,30 @@ describe("generateApplication", () => {
     expect(fidelityStatus?.status).toBe("IMPLEMENTED");
   });
 
+  // Round 5 independent review (post-D-0072) Finding, DEFECT: this exact
+  // scenario — no ProductSemanticModel exists for the project at all — was
+  // the one D-0072's own decision record specifically claimed would produce
+  // NOT_EVALUATED, but generateInitialBlueprint always computes and writes
+  // a (trivially "adequate") semanticCoverage object even with zero
+  // extracted items, so the prior `!semanticCoverage` check could never
+  // actually fire and silently claimed IMPLEMENTED instead. Reproduces the
+  // reviewer's exact repro: delete every ProductSemanticModel row for the
+  // project, then generate.
+  it("records semantic.fidelity as NOT_EVALUATED, never a false IMPLEMENTED, when no semantic model exists at all", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "Build a premium booking app for mobile detailers.",
+    );
+    await db.productSemanticModel.deleteMany({ where: { projectId: project.id } });
+
+    await generateApplication(owner.id, project.id);
+
+    const fidelityStatus = await getLatestTruthStatus(owner.id, project.id, "semantic.fidelity");
+    expect(fidelityStatus?.status).toBe("NOT_EVALUATED");
+  });
+
   it("records a GENERATION_COMPLETED event", async () => {
     const { owner, project } = await seedProject();
     await generateProductIntelligence(owner.id, project.id, "Build a booking app.");
