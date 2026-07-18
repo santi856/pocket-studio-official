@@ -7,6 +7,7 @@ import {
 } from "@/lib/orchestration/impact-analysis";
 import { getServerEnv } from "@/lib/env";
 import { recordDecision, respondToDecision } from "@/lib/product/decisions";
+import { addProductMemoryEntry } from "@/lib/product/product-memory";
 import { generateProductIntelligence } from "@/lib/orchestration/product-intelligence";
 import {
   applyChangeSet,
@@ -18,6 +19,33 @@ import type { ProductIntelligenceResult } from "@/lib/orchestration/product-inte
 import type { ResolvedIntent } from "@/lib/ai/provider";
 import type { ImpactAnalysisResult } from "@/lib/orchestration/impact-analysis";
 import type { ChangeSet, Decision, Prisma } from "@/generated/prisma/client";
+
+/**
+ * Stage 3 (D-0081, STAGE_2_ARCHITECTURE_PROPOSAL.md Section 13.2 workflow
+ * step 10): "the Memory-Update stage P3's own docstring already named but
+ * never wired" — wired here for the first time, for every real applied
+ * edit (not only the CONSEQUENTIAL-approval path the proposal's own
+ * example walks through), since an applied change is an applied change
+ * regardless of which approval path reached it. Uses `changeSetId`/
+ * `decisionId` rather than the example's illustrative `knowledgeNodeId` —
+ * a real graph node is only resolvable when IMPACT_ANALYSIS_MODE=graph
+ * *and* the edit's target happens to be unambiguous (see beginChangeFlow's
+ * own graph-impact enrichment above), so it is not a value this function
+ * can honestly claim to have in the general case; the change set and
+ * decision ids are always real and are themselves a direct, traceable
+ * link back to exactly what changed and why.
+ */
+async function recordChangeHistory(
+  actorUserId: string,
+  projectId: string,
+  changeSet: ChangeSet,
+): Promise<void> {
+  await addProductMemoryEntry(actorUserId, projectId, {
+    type: "HISTORY",
+    content: `Change requested: "${changeSet.sourceText}". ${changeSet.resultSummary ?? "Applied."}`,
+    metadata: { changeSetId: changeSet.id, decisionId: changeSet.decisionId },
+  });
+}
 
 export type ChangeFlowResult = {
   intent: ResolvedIntent;
@@ -120,6 +148,7 @@ export async function beginChangeFlow(
     changeSet = await createChangeSet(actorUserId, projectId, { decisionId: decision.id, rawText });
     if (decision.approvalStatus !== "PENDING_APPROVAL") {
       changeSet = await applyChangeSet(actorUserId, projectId, changeSet.id);
+      await recordChangeHistory(actorUserId, projectId, changeSet);
     }
   }
 
@@ -143,7 +172,8 @@ export async function respondToChangeSetDecision(
   const changeSet = await getChangeSetByDecisionId(actorUserId, projectId, decisionId);
   if (changeSet && changeSet.status === "PENDING") {
     if (input.approve) {
-      await applyChangeSet(actorUserId, projectId, changeSet.id);
+      const appliedChangeSet = await applyChangeSet(actorUserId, projectId, changeSet.id);
+      await recordChangeHistory(actorUserId, projectId, appliedChangeSet);
     } else {
       await rejectChangeSet(actorUserId, projectId, changeSet.id);
     }

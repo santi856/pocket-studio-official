@@ -9,6 +9,7 @@ import { listDecisions } from "@/lib/product/decisions";
 import { seedCapabilityRegistry } from "@/lib/registry/seed-data";
 import { getLatestBlueprint } from "@/lib/generation/blueprint";
 import { listEvents } from "@/lib/product/events";
+import { listProductMemoryEntries } from "@/lib/product/product-memory";
 import { beginChangeFlow, respondToChangeSetDecision } from "./change-flow";
 
 describe("beginChangeFlow", () => {
@@ -226,5 +227,74 @@ describe("beginChangeFlow", () => {
     const initialDecision = decisions.find((d) => d.id === initial.decision.id);
     expect(initialDecision?.approvalStatus).toBe("AUTO_APPLIED");
     expect(initialDecision?.summary).toBe(initial.decision.summary);
+  });
+
+  it("records a HISTORY memory entry when a non-consequential edit's Change Set is applied immediately (Stage 3, D-0086)", async () => {
+    const { owner, project } = await seedProject();
+    await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Build a premium booking app for mobile detailers.",
+    );
+
+    const result = await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Add a database of customer records.",
+    );
+
+    const history = await listProductMemoryEntries(owner.id, project.id, { type: "HISTORY" });
+    expect(history).toHaveLength(1);
+    expect(history[0]?.content).toContain("Add a database of customer records.");
+    expect((history[0]?.metadata as { changeSetId?: string })?.changeSetId).toBe(
+      result.changeSet?.id,
+    );
+  });
+
+  it("does not record a HISTORY memory entry while a CONSEQUENTIAL Change Set is still PENDING, only once approved (Stage 3, D-0086)", async () => {
+    const { owner, project } = await seedProject();
+    await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Build a premium booking app for mobile detailers.",
+    );
+    const first = await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Add appointment deposits and monthly memberships.",
+    );
+
+    expect(await listProductMemoryEntries(owner.id, project.id, { type: "HISTORY" })).toHaveLength(
+      0,
+    );
+
+    await respondToChangeSetDecision(owner.id, project.id, first.decision.id, { approve: true });
+
+    const history = await listProductMemoryEntries(owner.id, project.id, { type: "HISTORY" });
+    expect(history).toHaveLength(1);
+    expect(history[0]?.content).toContain("Add appointment deposits and monthly memberships.");
+    expect((history[0]?.metadata as { changeSetId?: string })?.changeSetId).toBe(
+      first.changeSet?.id,
+    );
+  });
+
+  it("never records a HISTORY memory entry for a rejected Change Set (Stage 3, D-0086)", async () => {
+    const { owner, project } = await seedProject();
+    await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Build a premium booking app for mobile detailers.",
+    );
+    const first = await beginChangeFlow(
+      owner.id,
+      project.id,
+      "Add appointment deposits and monthly memberships.",
+    );
+
+    await respondToChangeSetDecision(owner.id, project.id, first.decision.id, { approve: false });
+
+    expect(await listProductMemoryEntries(owner.id, project.id, { type: "HISTORY" })).toHaveLength(
+      0,
+    );
   });
 });

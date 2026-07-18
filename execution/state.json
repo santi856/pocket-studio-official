@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "generatedBy": "execution-protocol-v1.0-session-init",
-  "lastUpdated": "2026-07-18T12:52:00Z",
+  "lastUpdated": "2026-07-18T12:57:00Z",
   "governanceCommit": "25a33f0",
   "phase": {
     "current": "phase-3",
@@ -256,7 +256,8 @@
     "D-0082",
     "D-0083",
     "D-0084",
-    "D-0085"
+    "D-0085",
+    "D-0086"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -433,7 +434,8 @@
     "EV-0127",
     "EV-0128",
     "EV-0129",
-    "EV-0130"
+    "EV-0130",
+    "EV-0131"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories \u2014 not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (\u00a761).",
@@ -487,5 +489,5 @@
     "Real Stripe test-mode end-to-end exercise (checkout, webhook delivery via the Stripe CLI, a real failed-payment/grace-period/restriction cycle) before any paid pilot -- only the mock provider and a direct-POST synthetic test harness were exercised in this report.",
     "Apple/Google developer account approval and real store review before any mobile distribution claim is made to a customer -- structurally unreachable in this build today (store readiness can never report READY by design)."
   ],
-  "nextAction": "STAGE 3 IMPLEMENTATION IN PROGRESS (Candidate A: Knowledge Graph Relationship Population + Impact Analysis Consumer), per the founder's explicit 'begin' instruction authorizing the D-0081-approved execution brief. Steps 1-10 of 15 complete (D-0082/EV-0127, D-0083/EV-0128, D-0084/EV-0129, D-0085/EV-0130). Step 10: added checkGraphRelationshipsComplete as the Quality Gate's 13th check (quality-gate.ts) -- reads the Graph Projector's ProductEvidence(GRAPH_PROJECTION, subjectKey 'graph.relationships') via the existing listEvidence() query and always returns passed: true (an incomplete graph is a disclosed, expected coverage gap per the architecture proposal's explicit non-blocking design, never a defect that should block a deployable product), with `details` surfacing the real projection count and any missing-relationship reasons. Mapped to the existing 'structural' dimension. A Blueprint predating Stage 3 (no graph-projection evidence) passes with a 'nothing to check' disclosure, same pattern as checkSemanticCoverageAdequate. Verified with 2 new integration tests reusing graph-projector.integration.test.ts's own proven fixtures (PayNow: full projection disclosed; ClickTrack: a real unresolvable TRIGGERS reference disclosed via 'Incomplete: ...' while the overall QualityGateResult.passed stays true, concretely proving non-blocking behavior, not just asserting the check's own field). 24/24 in quality-gate's own test files (all 22 pre-existing tests unmodified and still green); 481/481 across the full generation/orchestration/product regression battery. tsc/eslint/prettier clean. Full-suite confirmation still deferred to steps 12-13 (see EV-0128's note on confirmed-environmental slowdowns, not a regression). NEXT: step 11 -- wire Memory-Update (addProductMemoryEntry(type: 'HISTORY', ...)) into beginChangeFlow, per the architecture proposal's Section 13.2 step 10. Then steps 12-14 (full vertical/regression/tenant-isolation tests), step 15 (independent Level 3 review). Do not begin Phase 4."
+  "nextAction": "STAGE 3 IMPLEMENTATION IN PROGRESS (Candidate A: Knowledge Graph Relationship Population + Impact Analysis Consumer), per the founder's explicit 'begin' instruction authorizing the D-0081-approved execution brief. Steps 1-11 of 15 complete (D-0082/EV-0127, D-0083/EV-0128, D-0084/EV-0129, D-0085/EV-0130, D-0086/EV-0131). Step 11: wired addProductMemoryEntry(type: 'HISTORY', ...) into change-flow.ts's beginChangeFlow via a new recordChangeHistory() helper, called after BOTH real applied-edit paths -- immediate application (ROUTINE/IMPORTANT edits) and deferred approval-gated application (CONSEQUENTIAL edits, via respondToChangeSetDecision) -- not only the CONSEQUENTIAL example the architecture proposal's Section 13.2 step 10 walks through, since an applied change is an applied change regardless of approval path. Uses changeSet.sourceText/resultSummary for content and {changeSetId, decisionId} for metadata (not the proposal's illustrative knowledgeNodeId, which isn't honestly available in the general case). Verified with 3 new integration tests: immediate-apply records exactly one HISTORY entry; a PENDING CONSEQUENTIAL edit records zero until approved, then exactly one; a rejected edit records zero, ever. 19/19 in change-flow's own test files plus product-memory's unmodified suite; 484/484 across the full generation/orchestration/product regression battery. tsc/eslint/prettier clean. Full-suite confirmation still deferred to steps 12-13 (see EV-0128's note on confirmed-environmental slowdowns, not a regression). NEXT: step 12 -- full vertical/end-to-end tests of the complete Stage 3 chains (architecture proposal Section 13.1/13.2 workflows) with all new wiring in place. Then step 13 (a genuine full-suite regression run, deferred twice already), step 14 (extend verify-tenant-isolation.ts if new query sites need coverage), step 15 (independent Level 3 review). Do not begin Phase 4."
 }
