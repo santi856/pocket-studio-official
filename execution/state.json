@@ -239,7 +239,10 @@
     "D-0073",
     "D-0074",
     "D-0075",
-    "D-0076"
+    "D-0076",
+    "D-0077",
+    "D-0078",
+    "D-0079"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -275,13 +278,13 @@
   "testStatus": {
     "typecheck": "pass",
     "lint": "pass",
-    "formatCheck": "pass",
+    "formatCheck": "pass (corrected during D-0077's independent re-verification -- execution/architecture/SEMANTIC_PRODUCT_COMPILER_COMPLETION_REPORT.md was NOT actually prettier-clean as committed in c0c1ed7, contrary to that commit's own claim; fixed, cosmetic-only, re-confirmed clean)",
     "unit": "pass (722/722, 98 test files)",
-    "integration": "pass (722/722 combined with unit -- vitest reports unit+integration as one suite; verified live 2026-07-17 after round 7 review repair, D-0075)",
-    "e2e": "pass (24/24, re-run after D-0075)",
-    "productionBuild": "pass (verified after the round 7 review repair)",
-    "verifiedAt": "2026-07-17T20:05:00Z",
-    "verifiedAgainstCommit": "pending (round 7 independent review repair: semicolon/hyphen/bullet fixes + deliberate disclosed non-fix of comma-less subordinate clause, D-0075/EV-0120)",
+    "integration": "pass (722/722 combined with unit -- vitest reports unit+integration as one suite; independently re-verified live 2026-07-18, D-0077/EV-0122)",
+    "e2e": "pass (24/24, independently re-verified live 2026-07-18, D-0077/EV-0122)",
+    "productionBuild": "pass (independently re-verified live 2026-07-18, D-0077/EV-0122)",
+    "verifiedAt": "2026-07-18T06:05:00Z",
+    "verifiedAgainstCommit": "c0c1ed7, independently re-verified by D-0077/EV-0122 (the round-7 reviewer's own live re-run against current HEAD, not carried forward from the implementer's D-0075/D-0076 account)",
     "note": "Supersedes the prior stale figures (130/130 unit, 253/253 integration, 12/12 e2e), which predated Phase 3. Also see: one intermittent, low-severity display-ordering flake in src/lib/observability/audit-log.integration.test.ts under full-suite load, not reproduced in this verification run -- see POCKET_STUDIO_DEFINITIVE_FOUNDER_REPORT.md §13 for the root cause (millisecond timestamp resolution, no secondary sort key)."
   },
   "evidenceRefs": [
@@ -405,7 +408,10 @@
     "EV-0118",
     "EV-0119",
     "EV-0120",
-    "EV-0121"
+    "EV-0121",
+    "EV-0122",
+    "EV-0123",
+    "EV-0124"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories \u2014 not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (\u00a761).",
@@ -459,5 +465,5 @@
     "Real Stripe test-mode end-to-end exercise (checkout, webhook delivery via the Stripe CLI, a real failed-payment/grace-period/restriction cycle) before any paid pilot -- only the mock provider and a direct-POST synthetic test harness were exercised in this report.",
     "Apple/Google developer account approval and real store review before any mobile distribution claim is made to a customer -- structurally unreachable in this build today (store readiness can never report READY by design)."
   ],
-  "nextAction": "SEMANTIC PRODUCT COMPILER REPAIR -- STABLE CHECKPOINT REACHED (D-0065/EV-0110 through D-0076/EV-0121; execution/architecture/SEMANTIC_PRODUCT_COMPILER_COMPLETION_REPORT.md is the definitive completion report, committed at this checkpoint). The founder-scoped repair (hard Quality Gate rejection, honest Truth Status, edit-path semantic wiring, multi-domain regression corpus + novel holdout, founder verification, 7 rounds of independent Level 3 review) is complete. Final state: the original HomeBase defect is fixed and re-verified; 9 domain fixtures + 1 never-before-seen holdout pass end to end; a genuinely hollow description is now hard-rejected, not silently accepted; conversational edits use the same semantic reasoning as first-time generation. Full suite: 722/722 unit+integration, 24/24 e2e, clean typecheck/lint/format, production build succeeds. The review cycle against heuristic-extraction.ts's actor-detection mechanism was deliberately closed at round 7 (D-0075) -- not because it is proven complete (round 7's own explicit assessment is that this class of finding is not converging), but because further narrow syntax-patching was judged unlikely to reach a natural end, and the more honest, durable answer is named directly in the completion report: invest primary future hardening effort in the real AI-backed extraction path (never exercised against the live Anthropic API in this build; AI_PROVIDER=mock remains the default), not the disclosed deterministic fallback. This is the report's single recommended next engineering milestone (SECTION 7) -- explicitly not a continuation of fallback-patching, and explicitly not folded together with the separate architecture-audit work below. NEXT: per the founder's own explicit prior sequencing decision ('Finish semantic-compiler checkpoint first, then start the audit'), begin Stage 1 (Repository Audit ONLY -- do not modify code during Stage 1) of the separate 14-concept long-term architecture brief (Semantic App Graph, Glass Engine, Context-Aware Conversation, Persistent Project Memory, Dependency/Impact Intelligence, Intent->Plan->Execution->Verification, Reversibility, Environment Awareness, Secrets/Ownership, Verification Engine, Failure Intelligence, Human Approval Boundaries, Business Model Graph, Observation Layer). Do not begin Phase 4. Do not ask whether to continue."
+  "nextAction": "SEMANTIC PRODUCT COMPILER REPAIR -- STABLE, INDEPENDENTLY VERIFIED CHECKPOINT, AND AI-FIRST ARCHITECTURE DIRECTION NOW FORMALIZED (D-0065/EV-0110 through D-0079/EV-0124). D-0077/EV-0122: the round-7 reviewer's own live re-run against HEAD confirmed D-0075's three fixes hold (no regression, no new corruption), the disclosed fourth gap is genuinely still a clean miss, and corrected one real discrepancy (the completion report's own 'clean format' claim was false as committed; fixed, cosmetic-only). Full suite re-confirmed: 722/722 unit+integration, 24/24 e2e, clean typecheck/lint/format (now genuinely true), production build succeeds. D-0079/EV-0124: per the user's explicit direction this session, further heuristic-extraction.ts syntax-scope expansion is now formally frozen (corruption fixes remain in scope; new-construction chasing does not) and ADR-0001 (execution/architecture/ADR-0001-ai-first-semantic-extraction.md) records AnthropicAIProvider.extractProductSemantics as the architecturally intended primary semantic-extraction path, with the heuristic retained permanently as a disclosed, scope-frozen fallback. SEQUENCING NOTE (disclosed, not hidden): the user's instruction this turn was to freeze/ADR *before* starting Stage 1 of the 14-concept architecture audit; a separate concurrent agent in this same session had already produced and recorded Stage 1 (D-0078/EV-0123, execution/architecture/STAGE_1_REPOSITORY_AUDIT.md -- 6 first-class primitives identified, 5 of 6 already existing and requiring extension, 1 genuinely new) ahead of that requested order. Stage 1's substance was not redone or second-guessed here to avoid duplicate/conflicting artifacts; it should be treated as available for review, not yet as independently verified by this reviewer. NEXT: reconcile the Stage 1 audit's findings against this ADR (both point toward extension-over-replacement and toward the Product Knowledge Graph / Semantic App Graph unification), decide whether Stage 1 needs re-sequencing or is acceptable as-is given the substance is sound, then proceed per the founder's own governing sequencing decision. Do not begin Phase 4."
 }
