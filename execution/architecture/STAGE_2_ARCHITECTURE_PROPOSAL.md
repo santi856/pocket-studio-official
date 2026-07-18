@@ -1,0 +1,981 @@
+# Stage 2 — Architecture Proposal: The Pocket Studio Operating System
+
+**Status:** Proposal. No production code was modified to produce this document.
+**Governing inputs:** the 14-concept architecture brief (verbatim, recovered from the pre-compaction transcript), `STAGE_1_REPOSITORY_AUDIT.md` (D-0078/EV-0123, accepted baseline), `ADR-0001-ai-first-semantic-extraction.md` (D-0079/EV-0124), `SEMANTIC_PRODUCT_COMPILER_COMPLETION_REPORT.md`.
+**Standard applied throughout:** every component named here either already exists (cited by exact file path) or is proposed as new with an explicit producer, consumer, schema, failure path, and test plan. No vague verbs. Where a mechanism is genuinely missing today, this document says so plainly rather than implying it exists.
+
+---
+
+## 1. Executive Summary
+
+Pocket Studio today is not fourteen disconnected features and it is not one coherent machine either — it is **six real primitives, five of them already built, that were never fully wired to each other.** Stage 1 proved this with file-level evidence: a generic, tenant-isolated knowledge graph (`ProductKnowledgeNode`/`ProductKnowledgeEdge`) already exists and is written to on every generation, but has zero edges and zero consumers; `impact-analysis.ts`'s own three-year-old code comment already names this graph as its intended replacement, a migration nobody finished.
+
+This proposal does not invent a new architecture. It specifies the wiring. Concretely, it:
+
+1. Defines the six canonical primitives (Semantic App Graph, Persistent Reasoning Record, Orchestrated Change-Flow, Environment-Scoped Partitioning, Secrets/Provider Abstraction, Verification & Truth) with full contracts — producer, consumer, schema, failure behavior, tests, evidence — per Part 1's required standard.
+2. Specifies a **governed, minimal** node and edge taxonomy for the graph — not the full brainstormed list from the brief, but the subset with an actual near-term consumer, with every deferred type named and reasoned about explicitly.
+3. Walks eight complete operational workflows end to end, at the specificity the brief's own `TRIGGERS`-edge example demands, naming the exact function at every step.
+4. Redesigns `impact-analysis.ts` as a real graph consumer, replacing its keyword classifier.
+5. Defines the evidence, verification, context-resolution, memory, reversibility, and risk/approval models as extensions of the existing primitives, not new subsystems.
+6. Names, explicitly and by design, two mechanisms that **do not exist in this codebase today and this proposal does not implement**: an automation/trigger execution engine, and existing-application import. Both are designed on paper (the brief requires this) but neither is a Stage 3 candidate — there is no current producer or consumer for either, and building one now would violate this document's own Minimal Complexity Rule.
+7. Ends with three Stage 3 candidates and one recommendation: **Knowledge Graph Relationship Population + Impact Analysis Consumer** — the smallest slice that turns the existing, currently-inert graph into a real, load-bearing part of the system.
+
+---
+
+## 2. Stage 1 Accepted Baseline
+
+Per the founder's instruction, the committed Stage 1 audit (`STAGE_1_REPOSITORY_AUDIT.md`, D-0078/EV-0123) is treated as fact, not re-derived. Restated for this document's own self-containedness:
+
+| #   | Concept                            | Status                                                | Existing mechanism                            |
+| --- | ---------------------------------- | ----------------------------------------------------- | --------------------------------------------- |
+| 1   | Semantic App Graph                 | Partial — schema + writer exist, 0 edges, 0 consumers | `ProductKnowledgeNode`/`Edge`                 |
+| 2   | Glass Engine                       | Evidence backbone exists; presentation layer missing  | Event Ledger + Evidence Ledger + Truth Status |
+| 3   | Context-Aware Conversation         | Genuinely missing                                     | —                                             |
+| 4   | Persistent Project Memory          | Largely exists                                        | `ProductMemoryEntry` + `Decision`             |
+| 5   | Dependency/Impact Intelligence     | Partial, wrong substrate (keyword-based)              | `impact-analysis.ts`                          |
+| 6   | Intent→Plan→Execution→Verification | Largely exists                                        | `beginChangeFlow` (`change-flow.ts`)          |
+| 7   | Reversibility                      | Partial, artifact-level only                          | Blueprint version/restore                     |
+| 8   | Environment Awareness              | Partial (deployment layer only)                       | `DeploymentEnvironment` enum                  |
+| 9   | Secrets and Ownership              | Largely exists, most mature                           | `CredentialReference` vault                   |
+| 10  | Verification Engine                | Largely exists                                        | Quality Gate pattern                          |
+| 11  | Failure Intelligence               | Genuinely missing (not `IncidentReport`)              | —                                             |
+| 12  | Human Approval Boundaries          | Largely exists                                        | Decision Ledger tiers                         |
+| 13  | Business Model Graph               | Partial, disconnected pieces                          | `business-intelligence.ts` et al.             |
+| 14  | Observation Layer                  | Partial, unpopulated                                  | `ProductOutcomeRecord`                        |
+
+Six first-class primitives: **P1 Semantic App Graph, P2 Persistent Reasoning Record, P3 Orchestrated Change-Flow, P4 Environment-Scoped Partitioning, P5 Secrets/Provider Abstraction, P6 Verification & Truth.** This document defines all six fully in Part 3.
+
+---
+
+## 3. Six Canonical Primitives
+
+### P1 — Semantic App Graph
+
+**A. Responsibility.** Own the single structural representation of what a project's product _is_: its screens, workflows, data models, actors/roles, and (extended by this proposal) its decisions, environments, and business concepts, plus the relationships between them.
+
+**B. Source of truth.** `ProductKnowledgeNode` / `ProductKnowledgeEdge` (`prisma/schema.prisma:456-508`) are **authoritative** for node/edge existence and metadata. Node `data: Json` fields that mirror another primitive's own record (e.g. a `DATA_MODEL` node's `data` field duplicating a Blueprint data model definition) are **derived** — the Blueprint remains authoritative for the field's actual shape; the graph node is a navigable pointer to it, not a second source of truth for it. This distinction is enforced by rule (see Failure behavior).
+
+**C. Inputs.**
+
+| Input                 | Producer                                                                                                             | Schema                                                                                         | Trust level                      | Scope                                                 |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------- | ----------------------------------------------------- |
+| Node creation request | `blueprint-generator.ts`, `product-intelligence.ts` (existing); this proposal adds `impact-analysis.ts` (edges only) | `{ type: ProductKnowledgeNodeType, label: string, data?: Json }`                               | System-internal, post-validation | project + tenant                                      |
+| Edge creation request | This proposal's new **Graph Projector** (Part 5)                                                                     | `{ sourceNodeId, targetNodeId, edgeType, provenance, confidence }` (extended schema, Part 5.3) | System-internal, post-validation | project + tenant, both endpoints checked same-project |
+
+**D. Outputs.**
+
+| Output                     | Consumer                                                                                               | Persistence                                                                | Authoritative?                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `ProductKnowledgeNode` row | Impact Analysis (Section 20), Context Resolution (Section 22), Business Model integration (Section 26) | Durable, versioned by `updatedAt` (no version history yet — see Lifecycle) | Authoritative for existence/label; data field may be derived |
+| `ProductKnowledgeEdge` row | Impact Analysis, Reversibility (Section 24)                                                            | Durable, immutable once created (superseded, not mutated — see Lifecycle)  | Authoritative                                                |
+
+**E. Lifecycle.** _Creation_: node created by the generation pipeline at Blueprint-write time; edge created by the Graph Projector immediately after node creation in the same logical operation (Section 10). _Mutation_: nodes are **not mutated in place** today (confirmed: no `updateKnowledgeNode` function exists) — a regeneration creates new nodes. This proposal keeps that behavior for Stage 3 (mutation-in-place is explicitly deferred, see Part 14) and instead defines _supersession_: a new node for the same logical entity (same `projectId` + `type` + normalized `label`) does not delete the old one; the old one becomes **stale** (Section 19's confidence ladder) until a `SUPERSEDES` edge — deferred to a later slice — formally links them. _Invalidation_: an edge is invalidated (not deleted) when a validator (Section 10 step 4) can no longer confirm both endpoints exist and match current Blueprint content. _Archival/Deletion_: cascades with `Project` deletion (`onDelete: Cascade`, confirmed in schema); no independent retention policy exists or is proposed here — out of scope for Stage 2.
+
+**F. Failure behavior.** _What can fail_: node creation (rare — a straightforward insert); edge creation (validation failure — invalid source/target type pair, duplicate, or unresolvable reference, e.g. an `ACTION` referencing a `WORKFLOW` that was never created). _Detection_: the Graph Projector's own validator (Section 10 step 4), run synchronously before persistence. _Blocking_: edge-creation failure **never blocks generation** — a Blueprint that fails to project a `TRIGGERS` edge still produces a working, deployable product; the missing edge is recorded as an **incomplete-relationship finding** (a new Quality Gate check, Migration Plan Phase 3, Section 14) surfaced to the founder, not a silent gap. _Retry_: node/edge creation is not itself retried — if it fails, the finding is recorded and generation proceeds; the founder or a future regeneration naturally retries by regenerating. _Rollback_: none needed — a Blueprint regeneration's node creation is additive (old nodes go stale, not deleted), so a failed partial projection leaves no corrupt state, only an incomplete one, which is disclosed.
+
+**G. Security and isolation.** Every node and edge carries `projectId`; `createKnowledgeNode`/`createKnowledgeEdge` already call `requireProjectAccess` (confirmed, `product-knowledge.ts:23,47`); `createKnowledgeEdge` additionally verifies both endpoints belong to the _same_ `projectId` before creating the edge (confirmed, `product-knowledge.ts:54-59`) — this is the concrete mechanism that prevents one tenant's graph from ever being wired into another's, even by ID-guessing. Environment scoping does not yet exist on graph nodes — see P4 and the Node Taxonomy's `ENVIRONMENT` node type (Section 8) for how this proposal closes that gap without adding a new field to every node type.
+
+**H. Tests.** _Unit_: `InvalidKnowledgeEdgeError` cases (cross-project source/target, self-loop) — already exist (`product-knowledge.ts` tests, confirmed present). _Integration (new, Stage 3)_: edge creation during a real `generateApplication()` call produces the expected `CONTAINS`/`TRIGGERS`/`DEPENDS_ON` edges for a fixture Blueprint. _Contract (new)_: every edge type's allowed source/target type pairs (Section 9 table) enforced by a validator with its own dedicated test per pair. _Tenant-isolation (new)_: attempt to create an edge between two nodes in different projects, assert `InvalidKnowledgeEdgeError` — extends the existing pattern already proven for `createKnowledgeEdge`. _Adversarial (new)_: attempt duplicate edge creation for the same (source, target, type) triple, assert idempotent (no duplicate row) — see Section 10 step 5.
+
+**I. Evidence.** The `ProductKnowledgeEdge` row itself is the primary evidence that a relationship claim was made. A **stronger** evidence tier — `VERIFIED_BY` edge to a `TEST` or `EVIDENCE` node — is required before the Glass Engine (emergent, Stage 1) or Impact Analysis (Section 20) may report a relationship as `verified` rather than merely `implemented` (Section 19's confidence ladder).
+
+**J. Consumers.** _Immediate current consumer_: none (Stage 1's own finding). _First proposed consumer (this document's Stage 3 recommendation)_: the redesigned `impact-analysis.ts` (Section 20). _Future consumers_: Context Resolution (Section 22), Glass Engine (emergent per Stage 1), Business Model integration (Section 26), Reversibility (Section 24). _If unavailable_: every one of those consumers has a defined fallback to today's behavior — Impact Analysis falls back to the existing keyword classifier (Section 20); nothing in this proposal makes the graph a single point of failure for any workflow that already works without it.
+
+---
+
+### P2 — Persistent Reasoning Record
+
+**A. Responsibility.** Own the durable record of _why_ — decisions made, their approval state, and the surrounding facts/assumptions/rejected-options/constraints that gave rise to them. Distinct from P1 (which owns _what currently exists_) and P6 (which owns _whether it's proven to work_).
+
+**B. Source of truth.** `Decision` (`prisma/schema.prisma`, existing) is authoritative for anything requiring `disclosureTier`/`approvalStatus`. `ProductMemoryEntry` is authoritative for the eleven memory-entry types (`FACT, REQUIREMENT, RECOMMENDATION, DECISION, REJECTED_OPTION, CONSTRAINT, PREFERENCE, HISTORY, LIMITATION, OPEN_QUESTION, CONTEXT`). Both are **historical** by design (append-only; a memory entry is deleted only by explicit per-entry request, `product-memory.ts:48-58`, never bulk-purged).
+
+**C. Inputs.** `recordDecision()` (existing, `decisions.ts`) — called today from `change-flow.ts`, `continuous-product-agent.ts`, and (this proposal, Part 7) the redesigned Impact Analysis when a change crosses the `CONSEQUENTIAL` threshold. `addProductMemoryEntry()` (existing, `product-memory.ts:6`) — called today from `product-intelligence.ts:132`. This proposal adds no new input mechanism to P2 itself; it adds new **callers** (Part 7).
+
+**D. Outputs.** `Decision` rows, consumed today by `respondToChangeSetDecision` (approval gating) and (this proposal) by Context Resolution (Section 22, priority 5) for "why did we build this" queries. `ProductMemoryEntry` rows, consumed today by nothing outside their own list view — this is P2's real gap (Stage 1 §2.4): no retrieval interface. This proposal does not build full semantic search over memory in Stage 2/3 (no near-term consumer justifies the cost yet); it defines the **minimum retrieval contract** a future slice would implement: `findMemoryEntriesByGraphNode(nodeId)` (join `ProductMemoryEntry.metadata.knowledgeNodeId` — a new, optional field this proposal adds to `metadata`, not a new column, since `metadata` is already `Json?`) as the first, cheapest form of retrieval, ahead of any embedding-based search.
+
+**E. Lifecycle.** `Decision`: created → `PENDING_APPROVAL` (if `CONSEQUENTIAL`) or immediately actionable (`ROUTINE`/`IMPORTANT`) → `respondToDecision()` transitions to approved/rejected — this state machine already exists and is unchanged by this proposal. `ProductMemoryEntry`: created → exists indefinitely → deleted only by explicit per-entry call. No supersession mechanism exists today for a memory entry that becomes outdated (e.g. a `REJECTED_OPTION` about to be reconsidered) — flagged as an open question (Section 27), not resolved here.
+
+**F. Failure behavior.** `recordDecision`/`addProductMemoryEntry` are simple, synchronous Prisma creates — the only realistic failure is a database error, which propagates as an unhandled exception today (no retry wrapper exists, consistent with every other simple create in this codebase outside the versioned-model race-retry pattern, which does not apply here since neither model has a version-sequence race). This proposal does not add retry logic to P2 — a failed decision/memory write should fail the enclosing operation loudly, not silently proceed without a record of why.
+
+**G. Security and isolation.** Both `recordDecision` and `addProductMemoryEntry` call `requireProjectAccess` (confirmed). No environment scoping exists or is proposed — a decision is a project-level fact regardless of which environment it eventually affects; this is a deliberate design choice (Part 15 invariant), not an oversight.
+
+**H. Tests.** Existing: `decisions.integration.test.ts`, `product-memory.integration.test.ts` (confirmed present, per Stage 1 file listing). New (Stage 3, only if Impact-Analysis-triggers-Decision wiring ships, Section 20): an integration test asserting a `CONSEQUENTIAL`-classified change (per the new risk matrix, Section 25) produces exactly one `Decision` row with `disclosureTier: "CONSEQUENTIAL"`.
+
+**I. Evidence.** The `Decision`/`ProductMemoryEntry` row is itself the evidence — there is no separate verification step for "was a decision recorded," since recording it is the terminal action, not a claim requiring further proof.
+
+**J. Consumers.** Immediate: `change-flow.ts`, `continuous-product-agent.ts` (existing). Proposed (Stage 3+): redesigned Impact Analysis (Section 20, writes), Context Resolution (Section 22, reads, priority 5). If P2 is unavailable: no other primitive depends on it synchronously — an outage here means decisions/memory silently stop accumulating, a degraded-but-not-broken state, disclosed via the same Truth-Status pattern P6 already uses for every other subsystem (this proposal does not currently wire P2 write-failures into Truth Status — named as an open question, Section 27).
+
+---
+
+### P3 — Orchestrated Change-Flow
+
+**A. Responsibility.** Own the control-flow sequencing of every user-initiated change: resolve intent, analyze impact, gate on approval, execute, and (this proposal's extension) verify and record memory — as one function, not scattered call sites.
+
+**B. Source of truth.** `beginChangeFlow()` (`change-flow.ts:50`, existing) is authoritative for _sequencing_ — it does not own any data itself; it orchestrates P1, P2, P5, P6, and the generation pipeline. This makes P3's data classification **ephemeral**: a `ChangeFlowResult` is a return value, not a persisted record — the persisted trail is entirely the union of what P1/P2/P6 each recorded during the call.
+
+**C. Inputs.** `(actorUserId, projectId, rawText)` — a raw user submission, already validated at the Server Action boundary (existing pattern, `require-user.ts`). No schema beyond "non-empty string" is enforced before `resolveIntent()` classifies it.
+
+**D. Outputs.** `ChangeFlowResult` (`{ intent, impact, decision, productIntelligence?, changeSet? }`, existing type). This proposal extends it to `{ ..., qualityGateResult?, memoryEntriesWritten? }` (Part 3, Consequences below) so a caller — including a future Glass Engine — can observe the complete lifecycle in one return value instead of re-querying four different tables.
+
+**E. Lifecycle.** Not applicable in the persisted-record sense — P3 has no rows of its own. Its "lifecycle" is the call itself: begin → resolve → analyze → decide → (execute | wait for approval) → (this proposal adds) verify → record memory → return.
+
+**F. Failure behavior.** Today, any exception inside `beginChangeFlow` propagates uncaught to the Server Action, which (existing pattern) redirects to a graceful error state rather than crashing — this is unchanged. This proposal's addition (Verification, step F below) introduces a new failure mode: **generation succeeds but verification fails.** Defined behavior: `beginChangeFlow` **does not roll back** a successful generation because its own post-hoc Quality Gate check failed — the Blueprint/Build Plan remain as generated (already durable, already versioned); the failure is recorded as a `quality.gate` Truth Status of `BLOCKED` (existing mechanism, unchanged) and surfaced in the extended `ChangeFlowResult`. This is a deliberate choice: reverting a structurally-valid generation because one dimension failed would destroy real, inspectable work product for no benefit — the founder can already see exactly what failed and why via Truth Status.
+
+**G. Security and isolation.** Inherited entirely from `resolveIntent`, `analyzeImpact` (stateless, no isolation concern), `recordDecision`, `generateProductIntelligence`/`createChangeSet` — every one of which already independently calls `requireProjectAccess`. P3 adds no new authorization surface.
+
+**H. Tests.** Existing: `change-flow.integration.test.ts` (confirmed present). New (Stage 3, only if the Verification/Memory-Update extension ships): assert that after a `describe_idea` flow, `runQualityGate` was actually invoked (not just that generation succeeded) and its result is present in the returned `ChangeFlowResult`.
+
+**I. Evidence.** None of its own — P3's evidence is the union of P1/P2/P6's evidence for the operations it orchestrated.
+
+**J. Consumers.** Immediate: every Server Action that currently calls `beginChangeFlow` (the primary entry point for both first-time ideas and conversational edits). If P3 is unavailable: total outage of both generation and conversational editing — this is the single highest-blast-radius primitive in the system, correctly, since it is the one thing every user-visible mutation must pass through.
+
+---
+
+### P4 — Environment-Scoped Partitioning
+
+**A. Responsibility.** Own the guarantee that data belonging to one environment (development/preview/staging/production) of a generated application cannot be mutated, deleted, or read by an operation targeting a different environment of the same project. **This primitive does not exist today** (Stage 1 §2.8) — this section specifies what must be built, not what to extend.
+
+**B. Source of truth.** Proposed: a new, required `environment: DeploymentEnvironment` column on `GeneratedRecord` and `GeneratedAppUser` (currently absent — confirmed by direct schema inspection). This makes environment **authoritative** at the row level, the same way `projectId` already is, rather than inferred from context at query time (which is not enforceable and is exactly the "dangerous ambiguity" the brief's own example — "delete all test customers" — warns against).
+
+**C. Inputs.** Every existing write path to `GeneratedRecord`/`GeneratedAppUser` (`render-runtime.ts`'s write binding, `authenticateGeneratedAppUser`, `createGeneratedAppCharge`, the seed/test helpers) must supply an `environment` value. Producer of that value: the request context — for a live generated-app request, the environment is resolved from the deployed instance's own configuration (which environment it _is_, set at deploy time by `createDeployment`); for the founder's own preview, it defaults to `DEVELOPMENT`.
+
+**D. Outputs.** Every read path (`render-runtime.ts`'s read binding, `getProductAnalyticsSnapshot`) must filter by `environment` in addition to `projectId`. This is the enforcement point — a query that omits the filter is a compile-time-detectable defect once the column is `NOT NULL` (no nullable escape hatch), the same discipline `verify-tenant-isolation.ts` already enforces for `projectId`.
+
+**E. Lifecycle.** A `GeneratedRecord`'s environment is set at creation and **never changes** — there is no "promote this record from staging to production" operation, deliberately: promoting _code_ (a Blueprint/Build Plan, already environment-agnostic since they're not runtime data) across environments is a deployment; promoting _data_ is a data-migration decision this proposal explicitly does not authorize by default (an open question, Section 27, not silently decided).
+
+**F. Failure behavior.** A write with no resolvable environment context (e.g. a malformed or replayed request) must fail closed — reject the write, never default to `PRODUCTION` and never default to `DEVELOPMENT` silently for a request that claims to be production traffic. This is a new `UnresolvableEnvironmentError`, thrown before the write, tested explicitly (below).
+
+**G. Security and isolation.** This _is_ the isolation mechanism P4 exists to add — extending `verify-tenant-isolation.ts`'s static-analysis approach (already proven for `projectId` reachability) to also flag any `GeneratedRecord`/`GeneratedAppUser` query missing an `environment` filter. This reuses the _tool_, not just the _idea_ — the existing TypeScript-compiler-API call-graph analysis is extended with one more required-parameter check, not rewritten.
+
+**H. Tests.** New: unit test for `UnresolvableEnvironmentError` on missing context. Integration: write a `GeneratedRecord` with `environment: STAGING`, assert a `PRODUCTION`-scoped read does not return it (the brief's own "delete all test customers" scenario, inverted to a read-isolation test — the destructive case is the same isolation check applied to a delete). Extension of `verify-tenant-isolation.test.ts`'s existing pattern: assert zero unreachable/unfiltered `GeneratedRecord`/`GeneratedAppUser` query sites, the same zero-unjustified-violations bar already held for tenant isolation.
+
+**I. Evidence.** The static-analysis tool's own passing report (already an evidence pattern — `findMigrationSafetyViolations`/`findTenantIsolationViolations` both already produce this shape of evidence) is what proves environment isolation holds, not a runtime check alone.
+
+**J. Consumers.** Immediate: none (doesn't exist yet). First proposed consumer: the generated-app data read/write layer itself (`render-runtime.ts`, `generated-app-auth.ts`, `generated-app-payments.ts`) — this is infrastructure with an immediate consumer by construction, satisfying the brief's "no abstraction without a consumer" rule. **This primitive is not part of the recommended Stage 3 slice** (Section 28) — it is real, necessary, disclosed work, but it is a data-safety fix orthogonal to the graph-population slice, and bundling unrelated work into one slice would violate this proposal's own sequencing discipline.
+
+---
+
+### P5 — Secrets, Credentials & Provider Abstraction
+
+**A. Responsibility.** Own the boundary between what a customer's own credentials/accounts authorize Pocket Studio to do, and everything else — plus the swappable-implementation pattern (`AIProvider`, `BillingProvider`, `EmailProvider`, `DeploymentProvider`, `GeneratedAppPaymentProvider`) that isolates every external-system dependency behind one real interface.
+
+**B. Source of truth.** `CredentialReference` (encrypted vault, AES-256-GCM, existing) is authoritative for secret material. `IntegrationRequirement` is authoritative for _what_ integration a project declares needing, independent of whether it's connected. Provider interfaces (`src/lib/ai/provider.ts`, `src/lib/billing/provider.ts`, etc.) are authoritative for _contract shape_, not data.
+
+**C. Inputs.** OAuth callback (`/api/integrations/oauth/callback`, existing) is the sole write path for a live customer-owned credential. Direct env-var configuration (`ANTHROPIC_API_KEY`, `STRIPE_SECRET_KEY`, etc.) is the sole write path for Pocket-Studio-owned provider credentials — never stored in `CredentialReference` (that model is exclusively for customer-owned secrets, an existing, load-bearing distinction this proposal does not change).
+
+**D. Outputs.** A decrypted secret, returned only to one of the three explicitly-reviewed "no-actor exception" call sites (`applyBillingLifecycleEventFromWebhook`, `authenticateGeneratedAppUser`, `createGeneratedAppCharge`) — each already individually justified in `verify-tenant-isolation.ts`'s reviewed exception list. This proposal adds no new exception; any future system-actor secret access must go through the same reviewed-exception discipline, stated here as an explicit invariant (Part 15).
+
+**E. Lifecycle.** Unchanged by this proposal — already real, already tested (P3-05).
+
+**F. Failure behavior.** Unchanged — an OAuth failure path already handles every documented error case gracefully (confirmed, `/api/integrations/oauth/callback`'s existing tests).
+
+**G. Security and isolation.** This is the most mature primitive in the codebase per Stage 1's own finding; no gap identified requiring Stage 2 design work.
+
+**H. Tests.** Existing and sufficient — no new tests proposed for P5 itself in this document.
+
+**I. Evidence.** `CredentialReference` row existence (never its decrypted content) is the evidence a connection was established; `OAuthConnectionState`'s single-use consumption is the evidence the connection was CSRF-safe.
+
+**J. Consumers.** Every provider-abstracted subsystem (AI, billing, email, generated-app payments, deployment). No changes proposed.
+
+---
+
+### P6 — Verification & Truth
+
+**A. Responsibility.** Own the answer to "is this claim actually proven," at two grains: aggregate (`quality.gate`, `semantic.fidelity`, `deployment.production`, etc. — one Truth Status subject key per real axis) and itemized (`ProductEvidence` rows, one per check run). Distinct from P1 (what exists) and P2 (why it was decided).
+
+**B. Source of truth.** `TruthStatusEntry` (authoritative for current status per subject key, versioned/append-only) and `ProductEvidence` (authoritative for the itemized proof trail). `runQualityGate()`'s `checks[]` array is the authoritative **definition** of what gets checked; its `dimensions` mapping is the authoritative grouping.
+
+**C. Inputs.** A project's current Blueprint/Build Plan (for generation-time checks); (this proposal, Section 21) live signals for runtime checks — not yet a real input today, since no live-check mechanism exists (Stage 1 §2.10's own finding).
+
+**D. Outputs.** `TruthStatusEntry` rows, consumed today by the Studio UI's Trust panel (existing, `P2-17`), by `createDeployment`'s production gate (existing), and (this proposal, Section 14 Phase 3) by the redesigned Impact Analysis, which needs to know whether a graph edge's claimed relationship has ever actually been verified.
+
+**E. Lifecycle.** Append-only, versioned per `(projectId, subjectKey)` — unchanged.
+
+**F. Failure behavior.** A check that throws is already caught by `runQualityGate`'s own error handling (confirmed pattern — a check failure is recorded as `passed: false` with the exception message, never an uncaught crash). Unchanged by this proposal.
+
+**G. Security and isolation.** `requireProjectAccess`-gated throughout, unchanged.
+
+**H. Tests.** Extensive existing coverage (12 checks, 6 dimensions, all independently tested per Stage 1). This proposal adds exactly one new check (Section 14 Phase 3, "incomplete graph relationship") to the existing array — not a new mechanism.
+
+**I. Evidence.** `ProductEvidence` rows are the evidence primitive itself — P6 does not need a separate evidence type for its own operation.
+
+**J. Consumers.** Studio UI, deployment gate, (this proposal) Impact Analysis. If unavailable: every dependent claim reverts to unverified/self-reported, which is exactly the failure mode this whole codebase's review discipline (7 rounds, this session) has spent the most effort preventing — P6's availability is treated as load-bearing for the entire founder-trust model, not optional infrastructure.
+
+---
+
+## 4. System Context & 5. Container/Component View
+
+Two audiences interact with the system: the **founder** (via Simple/Expert Mode, Server Actions, session-authenticated) and a **generated application's own end user** (via the live preview route today; via a real unauthenticated route only once P2-06's disclosed gap closes — out of this proposal's scope). External systems: Anthropic (AI), Stripe (billing + generated-app payments), SMTP (email), OAuth providers (customer-owned integrations, registry currently empty), a deployment host (mock only, no vendor named).
+
+```
+                         ┌─────────────────────────────┐
+                         │   Founder (Pocket Studio     │
+                         │   session, Simple/Expert)    │
+                         └──────────────┬───────────────┘
+                                         │ Server Actions
+                                         ▼
+        ┌────────────────────────────────────────────────────────┐
+        │                  P3  Orchestrated Change-Flow            │
+        │              (beginChangeFlow — the one entry point)     │
+        └───┬────────────┬─────────────┬─────────────┬────────────┘
+            │             │             │             │
+            ▼             ▼             ▼             ▼
+     ┌──────────┐  ┌────────────┐ ┌──────────┐ ┌──────────────┐
+     │ P1 Graph │  │ P2 Reasoning│ │ P6 Truth │ │ P5 Providers  │
+     │ (Knowledge│  │ Record      │ │ & Evidence│ │ (AI/Billing/  │
+     │  Nodes/   │  │ (Decisions/ │ │(QualityGate│ │  Email/Deploy/│
+     │  Edges)   │  │  Memory)    │ │/Evidence/  │ │  Payments)    │
+     └────┬─────┘  └────────────┘ │ TruthStatus│ └───────┬───────┘
+          │                        └──────────┘          │
+          │  (Stage 3: real edges + real consumer)        │
+          ▼                                               ▼
+  ┌───────────────┐                                ┌─────────────┐
+  │ Impact Analysis│                                │  External    │
+  │  (redesigned)  │                                │  Systems     │
+  └───────────────┘                                │  (Anthropic, │
+                                                     │  Stripe, SMTP,│
+   ┌────────────────────────────┐                   │  OAuth, host) │
+   │ P4 Environment Partitioning │                   └─────────────┘
+   │ (new — generated-app data)  │
+   └──────────────┬───────────────┘
+                   ▼
+         ┌───────────────────┐
+         │ Generated App's    │
+         │ own end users      │
+         │ (GeneratedRecord/   │
+         │  GeneratedAppUser)  │
+         └───────────────────┘
+```
+
+---
+
+## 6. Data Ownership Table
+
+| Data                                            | Owning primitive                                 | Model(s)                              |
+| ----------------------------------------------- | ------------------------------------------------ | ------------------------------------- |
+| What screens/workflows/data models/actors exist | P1                                               | `ProductKnowledgeNode`                |
+| How they relate                                 | P1                                               | `ProductKnowledgeEdge`                |
+| Why a change was made / approved                | P2                                               | `Decision`                            |
+| Facts, assumptions, rejected options, rationale | P2                                               | `ProductMemoryEntry`                  |
+| Whether a check passed                          | P6                                               | `TruthStatusEntry`, `ProductEvidence` |
+| A generated app's own runtime data              | P4 (proposed scoping)                            | `GeneratedRecord`, `GeneratedAppUser` |
+| A customer's own secrets                        | P5                                               | `CredentialReference`                 |
+| Blueprint/Build Plan content itself             | _(unowned by the six — pre-existing, unchanged)_ | `Blueprint`, `BuildPlan`              |
+| Extracted semantic meaning from raw text        | _(unowned by the six — pre-existing, unchanged)_ | `ProductSemanticModel`                |
+
+## 7. Source-of-Truth Table
+
+| Question                             | Authoritative source                                                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| "Does this screen exist?"            | `Blueprint.screens` (P1's `SCREEN` node is a pointer, not the source)                                                    |
+| "What does this data model contain?" | `Blueprint.dataModels` (P1's `DATA_MODEL` node is a pointer)                                                             |
+| "Was this actually verified?"        | `TruthStatusEntry` (P6)                                                                                                  |
+| "Why was this built this way?"       | `Decision` / `ProductMemoryEntry` (P2)                                                                                   |
+| "What connects to what?"             | `ProductKnowledgeEdge` (P1 — this is P1's one genuinely authoritative structural claim, not a pointer to something else) |
+| "Which environment is this data in?" | `GeneratedRecord.environment` (P4, proposed)                                                                             |
+
+This table resolves the brief's own risk directly: **the graph is a navigational/relationship layer over existing sources of truth, not a second copy of Blueprint content.** A `DATA_MODEL` node's `data` field is a cached label for fast traversal display, never re-validated against Blueprint independently — if they diverge, Blueprint wins, and the node is stale (Section 19's confidence ladder) until regeneration refreshes it.
+
+---
+
+## 8. Node Taxonomy (Governed, Minimal)
+
+Per the brief's own rule: _"Do not approve a node type without an immediate or near-term consumer."_ Of the ~25 types the brief asks to evaluate, this proposal approves 9 for active use, defers 6 with reasons, and rejects the rest as redundant with an existing primitive.
+
+| Node type                                                                                                   | Status                                  | Creator                                                                                       | Consumer                                                | Environment-scoped? | Represents                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SCREEN`                                                                                                    | **Active (exists)**                     | `blueprint-generator.ts`                                                                      | Impact Analysis                                         | No (design-time)    | Implemented                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `WORKFLOW`                                                                                                  | **Active (exists)**                     | `blueprint-generator.ts`                                                                      | Impact Analysis                                         | No                  | Implemented                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `DATA_MODEL`                                                                                                | **Active (exists)**                     | `blueprint-generator.ts`                                                                      | Impact Analysis                                         | No                  | Implemented                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `ACTION`                                                                                                    | **Active (exists)**                     | `blueprint-generator.ts`                                                                      | Impact Analysis, new `TRIGGERS` edges                   | No                  | Implemented                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `REQUIREMENT`                                                                                               | **Active (exists)**                     | `product-intelligence.ts`                                                                     | Impact Analysis                                         | No                  | Intended                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `TEST`                                                                                                      | **Newly populated (Stage 3)**           | Build Planner's generated-test step (new call site)                                           | P6 evidence linkage                                     | No                  | Implemented                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `EVIDENCE`                                                                                                  | **Newly populated (Stage 3)**           | `recordEvidence` (new: also project into graph)                                               | Impact Analysis (`VERIFIED_BY` traversal)               | No                  | Verified                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `DECISION`                                                                                                  | **New (this proposal)**                 | `recordDecision` (new: also project into graph)                                               | Context Resolution, Reversibility                       | No                  | Intended/Historical                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `ENVIRONMENT`                                                                                               | **New (this proposal)**                 | Seeded once per project (`DEVELOPMENT`/`PREVIEW`/`STAGING`/`PRODUCTION`, fixed 4 per project) | Deployment workflow, Impact Analysis environment filter | Is the scope itself | Fixed reference data                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `PERMISSION`                                                                                                | **Deferred**                            | —                                                                                             | —                                                       | —                   | No consumer until a real per-role screen/action authorization model exists beyond Blueprint's flat `roles[]` array                                                                                                                                                                                                                                                                                                                                               |
+| `INTEGRATION`                                                                                               | **Deferred**                            | —                                                                                             | —                                                       | —                   | No consumer until OAuth provider registry (currently empty, Stage 1 §2.9) has a real registered provider                                                                                                                                                                                                                                                                                                                                                         |
+| `IMPLEMENTATION`                                                                                            | **Deferred**                            | —                                                                                             | —                                                       | —                   | Redundant with `ACTION`+`SCREEN` at current generation granularity; would need real per-file/per-function generation output to mean anything, which doesn't exist (Build Plan trees remain pattern-driven placeholders, per `knownLimitations`)                                                                                                                                                                                                                  |
+| `BUSINESS_METRIC` / `BUSINESS_EVENT`                                                                        | **Deferred to Stage 3+1**               | —                                                                                             | —                                                       | —                   | Real near-term consumer exists (`business-intelligence.ts`'s calculators, `ProductOutcomeRecord`'s existing FK) but this proposal's recommended slice does not touch business-model integration — sequencing (Part 14) puts it second, not first                                                                                                                                                                                                                 |
+| `TRIGGER` / `CONDITION` / `AUTOMATION_ACTION`                                                               | **Designed, not approved for creation** | —                                                                                             | —                                                       | —                   | Required for Part 3.3's workflow chain to be specifiable at all, but **no automation execution engine exists in this codebase today** (confirmed: zero matches for "automation" anywhere in `src/lib`) — creating these node types with no engine to populate or execute them would be exactly the "infrastructure without consumers" the brief forbids                                                                                                          |
+| `Product`, `Feature`, `Component`, `Workflow step`, `Database field`, `API route`, `Incident`, `Assumption` | **Rejected**                            | —                                                                                             | —                                                       | —                   | `Product`/`Feature` redundant with `projectId` scoping itself; `Component` and `Database field` are sub-node granularity no consumer traverses yet; `Workflow step` already lives in `WORKFLOW.data`; `API route` has no first-class representation in this codebase's generation model (Server Actions/render-runtime, not a REST layer); `Incident`/`Assumption` already live in P2 (`ProductMemoryEntry`) — a graph node would be a duplicate source of truth |
+
+Every node's `data` field must record which classification applies (per Section 8's requirement, extended by Section 19's confidence ladder): **intended** (declared in Blueprint, not yet built), **implemented** (generated), **verified** (has a `VERIFIED_BY` edge to a passing `EVIDENCE`/`TEST` node), **deployed** (has a `DEPLOYED_AS` edge — deferred, Section 9's edge list), **observed** (has a `MEASURES` edge from a `BUSINESS_METRIC` — deferred, Section 26). This proposal's Stage 3 slice only needs to distinguish **intended vs. implemented vs. verified** — the other two require primitives (P4's environment scoping for deployed; the deferred business-node types for observed) not yet built.
+
+---
+
+## 9. Edge Taxonomy (Governed, Minimal)
+
+Of the 22 edge types the brief lists, this proposal approves **4 for Stage 3**, explicitly defers the rest with reasons — the same discipline applied to nodes.
+
+| Edge                                    | Approved for Stage 3? | Valid source → target                          | Direction                 | Cardinality  | Producer                                                                                                                                                                                                                                                    | Consumer                                                                 |
+| --------------------------------------- | --------------------- | ---------------------------------------------- | ------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `CONTAINS`                              | **Yes**               | `SCREEN → ACTION`, `WORKFLOW → ACTION`         | source owns target        | 1-to-many    | Graph Projector (Section 10)                                                                                                                                                                                                                                | Impact Analysis (structural traversal)                                   |
+| `TRIGGERS`                              | **Yes**               | `ACTION → WORKFLOW`                            | causal                    | many-to-1    | Graph Projector                                                                                                                                                                                                                                             | Impact Analysis, the Trigger workflow design (Part 13, paper only)       |
+| `DEPENDS_ON`                            | **Yes**               | `WORKFLOW → DATA_MODEL`, `SCREEN → DATA_MODEL` | dependent → depended-upon | many-to-many | Graph Projector                                                                                                                                                                                                                                             | Impact Analysis (blast-radius traversal)                                 |
+| `VERIFIED_BY`                           | **Yes**               | any node type → `EVIDENCE` or `TEST`           | subject → proof           | many-to-many | P6 (Section 14 Phase 3's new check, on pass)                                                                                                                                                                                                                | Impact Analysis (confidence ladder, Section 19), Glass Engine (emergent) |
+| `REPRESENTS`                            | Deferred              | `DECISION → ` any node                         | —                         | —            | Real near-term value (Context Resolution's "why" queries) but not required for the Stage 3 slice's own acceptance criteria — sequenced into Stage 3+1 with `DECISION` node population                                                                       |
+| `AFFECTS`                               | Deferred              | any → any                                      | —                         | —            | This is what a _transitive_ Impact Analysis result computes at query time (Section 20.3) — it is a derived traversal result, not a stored edge; storing it would create a second, driftable copy of what `DEPENDS_ON`+`TRIGGERS` traversal already computes |
+| `CALLS`, `READS_FROM`, `WRITES_TO`      | Deferred              | —                                              | —                         | —            | Require `IMPLEMENTATION`-granularity nodes (deferred above); no meaning at current `ACTION`/`WORKFLOW` granularity                                                                                                                                          |
+| `FOLLOWED_BY`, `CONDITIONALLY_LEADS_TO` | Deferred              | —                                              | —                         | —            | Require `WORKFLOW`-step-level nodes (deferred above)                                                                                                                                                                                                        |
+| `IMPLEMENTS`                            | Deferred              | `REQUIREMENT → SCREEN\|WORKFLOW`               | —                         | —            | Real value (requirement traceability) but explicitly out of scope per the founder's own D-0072 decision record ("requirement traceability... explicitly out of scope for this batch") — not reopened here without a fresh decision                          |
+| `AUTHORIZED_FOR`                        | Deferred              | —                                              | —                         | —            | Requires `PERMISSION` nodes (deferred above)                                                                                                                                                                                                                |
+| `OBSERVED_BY`, `MEASURES`               | Deferred              | —                                              | —                         | —            | Requires `BUSINESS_METRIC`/observation infrastructure (deferred, Section 26)                                                                                                                                                                                |
+| `PRODUCES`, `CONSUMES`                  | Deferred              | —                                              | —                         | —            | Requires `IMPLEMENTATION`-granularity (deferred)                                                                                                                                                                                                            |
+| `OWNED_BY`                              | Deferred              | —                                              | —                         | —            | Redundant with `projectId` scoping at current granularity; would matter only with per-actor node-level ownership, which nothing consumes yet                                                                                                                |
+| `DERIVED_FROM`, `SUPERSEDES`            | Deferred              | —                                              | —                         | —            | Required for node mutation/versioning (Part 3, Lifecycle) — explicitly deferred to a later slice alongside in-place node mutation                                                                                                                           |
+| `DEPLOYED_AS`                           | Deferred              | —                                              | —                         | —            | Requires `ENVIRONMENT` + `DEPLOYMENT_RESOURCE`-level edges beyond this proposal's Stage 3 scope (P4 ships separately, Part 14)                                                                                                                              |
+| `FAILS_AT`                              | Deferred              | —                                              | —                         | —            | Requires Failure Intelligence's runtime-trace infrastructure (Stage 1: genuinely missing, no near-term consumer)                                                                                                                                            |
+
+**Transitive traversal**: allowed for `DEPENDS_ON` and `TRIGGERS` (Impact Analysis's whole purpose), depth-limited (Section 20.2). **Cycles**: `DEPENDS_ON` must be acyclic by construction (a workflow cannot depend on itself transitively) — enforced by the validator (Section 10 step 4) rejecting any edge that would close a cycle, detected via a bounded traversal from the proposed target back to the proposed source before insertion.
+
+---
+
+## 10. Edge Creation Workflow — Full Specification
+
+Per the brief's own required detail level, using its own `TRIGGERS` example as the template, generalized to any of the four approved edge types:
+
+1. **Before edge creation**: `blueprint-generator.ts` has already created the `SCREEN`/`WORKFLOW`/`DATA_MODEL`/`ACTION` nodes for this generation (existing behavior, confirmed at `blueprint-generator.ts:409-426`).
+2. **Deciding component**: a new function, `projectBlueprintRelationships(actorUserId, projectId, blueprint)` in a new file `src/lib/generation/graph-projector.ts`, called from `blueprint-generator.ts` immediately after node creation, in the same generation call.
+3. **Source data — corrected against actual repository structure, not assumed.** I checked `blueprint.ts`, `blueprint-generator.ts`, and `build-planner.ts` directly: `screens`, `actions`, and `workflows` are three **independent, flat, parallel arrays** on a Blueprint (`screens: string[]`, `actions: string[]`, `workflows: { name: string, steps: string[] }[]`) with **no existing cross-reference field between them** — there is no `screen.actions[]`, no `action.targetWorkflow`, no per-workflow `dataDependencies`. This is a real, previously-undisclosed gap this proposal surfaces, not an assumption to design around silently. Two edge types therefore have different, honestly-stated derivation stories:
+   - **`DEPENDS_ON` (screen → data model) is derivable today, unchanged.** `build-planner.ts`'s existing `deriveDataDependencies(screens, dataModels)` (`build-planner.ts:122-141`) already computes exactly this relationship — a narrow, two-rule heuristic (any `LIST_LIKE_SCREEN_NAMES` screen depends on the first non-Payment data model; `CHECKOUT_SCREEN_NAME` depends on the Payment model, if one exists) — and its output is already consumed by the Build Planner. The Graph Projector reuses this exact function's output as its edge source; no new derivation logic, no schema change.
+   - **`CONTAINS` (screen → action) and `TRIGGERS` (action → workflow) have no existing structural source and require a small, disclosed schema extension.** `BLUEPRINT_CATEGORY_TEMPLATES` (`blueprint-templates.ts:23`) currently defines each category's `screens: string[]`, `actions: string[]`, and `workflow: {...}` as independent lists with no per-item pairing even within one category. This proposal's Phase 1 migration (Part 14) must extend each category template entry to optionally carry `actions: { name: string; onScreen?: string; triggersWorkflow?: string }[]` in place of the bare string array — an additive, backward-compatible schema widening (a bare string remains valid via a union type, so every existing category template continues to compile unchanged until authored otherwise). Only category templates explicitly updated with this pairing produce `CONTAINS`/`TRIGGERS` edges; templates left as bare strings produce none for those two edge types, correctly disclosed as an incomplete-relationship finding (step 10 below) rather than a guessed pairing.
+4. **Validation**: for every candidate edge, confirm (a) both endpoint node IDs were successfully created in step 1 of this same generation call (held in an in-memory map returned by the node-creation loop, not re-queried), (b) the (source type, target type) pair appears in the approved table (Section 9), (c) inserting the edge would not close a `DEPENDS_ON` cycle (bounded reverse traversal, max depth 20 — chosen to comfortably exceed any real Blueprint's workflow count while bounding worst-case cost).
+5. **Duplicate prevention**: `ProductKnowledgeEdge`'s existing `@@unique([sourceNodeId, targetNodeId])` constraint (confirmed in schema) already prevents an exact duplicate; the Graph Projector additionally checks in-memory before insert to avoid a wasted round-trip, but the database constraint is the actual source of truth for uniqueness.
+6. **Persistence**: `createKnowledgeEdge()` (existing function, unchanged signature) — called in a loop, each call independently transactional (no batch transaction needed, since partial success is an acceptable, disclosed outcome, not a corruption risk — see Failure behavior below).
+7. **Consumer**: the redesigned `impact-analysis.ts` (Section 20) is the first real consumer; until Stage 3 ships that redesign, the edges exist and are inert but harmless — this is the deliberate "populate first, consume second" sequencing (Section 14).
+8. **Test**: a new integration test in `graph-projector.integration.test.ts`, split by what each edge type actually depends on: (a) `DEPENDS_ON` — generate a fixture Blueprint with a list-like screen and a Checkout screen against a corpus fixture that produces both a primary and a Payment data model; assert the exact edge set `deriveDataDependencies` implies, no more, no fewer; (b) `CONTAINS`/`TRIGGERS` — generate against one category template updated with explicit `actions[].onScreen`/`.triggersWorkflow` pairing (step 3 above) and assert those edges exist; separately, generate against an _unmodified_ category template and assert **no** `CONTAINS`/`TRIGGERS` edges are fabricated for it — a passing "produces nothing rather than guesses" test is as important as the positive case.
+9. **Evidence**: the `ProductKnowledgeEdge` row itself, plus a new `ProductEvidence` entry (`evidenceType: "GRAPH_PROJECTION"`, `subjectKey: "graph.relationships"`) recording how many edges were successfully projected out of how many candidates — this is what lets the Quality Gate's new check (Section 14 Phase 3) report "3 of 5 candidate relationships projected" rather than silently succeeding or failing as one boolean.
+10. **If an edge cannot be created**: recorded in the same `ProductEvidence` entry's `limitations` field (e.g. "action 'submit-order' references workflow 'checkout-flow', which was not found among this generation's created nodes"); the Quality Gate's new check (Section 14 Phase 3) reads this evidence and produces a non-blocking, disclosed finding — never a silent gap, never a generation-blocking failure.
+
+---
+
+## 11. Event Model
+
+**Decision: Pocket Studio needs a governed internal event envelope, but does not need a message-bus/queue infrastructure yet.** Justification: every current "event-shaped" fact (`recordEvent`, webhook processing, job runs) is handled synchronously, in-process, by a direct function call — there is no cross-process or cross-request delivery requirement today, and building queue infrastructure with no current multi-consumer, at-least-once-delivery need would be exactly the "infrastructure without consumers" the brief forbids. This proposal defines the **envelope schema** now (so future producers/consumers agree on shape) without building a broker.
+
+**Governed envelope** (extends, does not replace, the existing `Event` model — confirmed present, backing `recordEvent`/`listEvents`):
+
+| Field                     | Required               | Source today                                                                                                                                                                                                                                  |
+| ------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `eventId`                 | Yes                    | `Event.id` (existing, cuid)                                                                                                                                                                                                                   |
+| `eventType`               | Yes                    | `Event.type` (existing, e.g. `GENERATION_COMPLETED`)                                                                                                                                                                                          |
+| `eventVersion`            | **New**                | Not currently modeled — proposed as a literal `1` on every event type until a breaking payload change requires `2`                                                                                                                            |
+| `tenantId`/`projectId`    | Yes                    | `Event.projectId` (existing; organization is resolvable via project)                                                                                                                                                                          |
+| `environment`             | **New, proposed**      | Not currently modeled — required once P4 ships; until then, events are implicitly `DEVELOPMENT`-equivalent (founder-side operations only)                                                                                                     |
+| `correlationId`           | **New, proposed**      | Not currently modeled — proposed as the `beginChangeFlow` call's own generated request ID, threaded through every event it causes                                                                                                             |
+| `causationId`             | **New, proposed**      | The `eventId` of the event that directly caused this one, if any                                                                                                                                                                              |
+| `actor`                   | Yes                    | `Event.createdByUserId` (existing)                                                                                                                                                                                                            |
+| `source`                  | Implicit               | The calling module (not currently a distinct field — proposed addition)                                                                                                                                                                       |
+| `occurredAt`/`receivedAt` | Partial                | `Event.createdAt` exists; `receivedAt` is not distinct since events are created synchronously in-process (no queue delay to measure) — not added until a real async producer exists                                                           |
+| `idempotencyKey`          | Case-by-case           | Already exists where it matters (`JobRun.idempotencyKey`, `ProcessedWebhookEvent`'s unique constraint) — not proposed as a blanket `Event` field, since most current events are naturally idempotent by their own persisted-record uniqueness |
+| `payload`                 | Yes                    | `Event.data` (existing, `Json`)                                                                                                                                                                                                               |
+| `schemaVersion`           | Same as `eventVersion` | —                                                                                                                                                                                                                                             |
+| `traceId`                 | Not proposed           | No distributed tracing infrastructure exists; out of scope                                                                                                                                                                                    |
+| `evidenceRefs`            | **New, proposed**      | Array of `ProductEvidence.id` this event's claim is backed by, where applicable                                                                                                                                                               |
+
+**Producers/consumers**: unchanged from today (`recordEvent` call sites are producers; `listEvents` via the Studio UI's timeline is the only consumer). **Delivery semantics**: in-process, synchronous, exactly-once by construction (a direct function call either happened or the enclosing transaction failed) — "at-least-once" and its idempotent-consumer requirement only becomes a real question once an actual queue/webhook-style delivery exists, which this proposal does not introduce.
+
+---
+
+## 12. Trigger Model — Designed, Not Implemented
+
+The brief requires this be specified even though no automation engine exists. This section is the paper design; Part 13.3 shows the fully worked example; **no code is proposed to implement this in Stage 3** (Section 28 explains why).
+
+A complete trigger requires, per the brief's own Mechanical Completeness Rule, applied to this codebase's actual primitives:
+
+1. **Producer**: a governed `Event` (Section 11) — e.g. a hypothetical `GENERATED_RECORD_CREATED` event, which does not exist today (current writes to `GeneratedRecord` do not emit an `Event`).
+2. **Schema**: the event envelope (Section 11), with `payload` matching the created record's `modelKey`/`data`.
+3. **Trigger node**: a `TRIGGER` node (deferred, Section 8) subscribing to one `eventType` for one project.
+4. **Condition**: a deterministic predicate over the payload — this proposal would require conditions to be a **closed, enumerable expression grammar** (field equality/comparison only), never arbitrary code execution, consistent with this codebase's consistent avoidance of executing untrusted logic.
+5. **Action payload**: derived deterministically from the triggering event's payload plus the `TRIGGER` node's own configuration — never AI-generated at execution time (AI may assist _authoring_ a trigger; it must not improvise its _execution_).
+6. **Action execution**: would call an existing mutation function (e.g. `createGeneratedRecord`) — never a new, trigger-specific execution path, reusing P3's existing validated-write machinery.
+7. **Success/failure events**: new `TRIGGER_EXECUTED`/`TRIGGER_FAILED` events, `causationId` pointing at the originating event.
+8. **Idempotency**: the action call must be idempotent under retry — reusing `JobRun`'s existing `idempotencyKey` pattern (Part 3 of the six primitives' P6-adjacent infrastructure), not a new mechanism.
+9. **Terminal failure**: recorded as a `ProductEvidence` row (`evidenceType: "TRIGGER_EXECUTION"`, `result: "failed"`) and a `TruthStatusEntry` for a per-trigger subject key — reusing P6, not inventing a new failure-tracking model.
+10. **Tests**: unit (condition evaluation), integration (event → trigger → action → success event, full chain), failure-injection (action throws → terminal failure recorded, not silently swallowed).
+11. **Runtime evidence**: the success/failure event plus the `ProductEvidence` row.
+12. **Next consumer**: whatever the triggered action's own normal downstream consumers already are (e.g. if the action is `createGeneratedRecord`, its consumers are unchanged from today).
+
+**Why this is not a Stage 3 candidate**: there is no current producer emitting the events a trigger would subscribe to (Section 11's event model, as designed, has zero real events beyond the existing `recordEvent` call sites, none of which represent "something a founder would want to automate off of" yet), and no UI surface for a founder to author a trigger. Building the trigger _engine_ before either exists is infrastructure without a consumer — the exact anti-pattern this document's own governing principles forbid.
+
+---
+
+## 13. Complete Workflow Chains
+
+### 13.1 First-Time Product Generation
+
+```
+1.  Founder submits raw idea text
+       → Server Action (existing) → beginChangeFlow(actorUserId, projectId, rawText)
+2.  resolveIntent() [intent-resolver.ts:14]
+       → loads existing ProductState (getLatestProductState) — none exists → hasExistingProductState: false
+       → calls getAIProvider().resolveIntent() → ResolvedIntent { type: "describe_idea", ... }
+       → AUTHORITATIVE for: intent classification
+3.  analyzeImpact(rawText) [impact-analysis.ts]
+       → today: keyword classification. (Section 20 redesigns this for EDIT flows; a first-time idea has no
+         graph yet to traverse, so this step is UNCHANGED for the generation workflow specifically —
+         impact analysis on a description with no existing product is definitionally "everything is new")
+4.  recordDecision() [decisions.ts]
+       → disclosureTier: "ROUTINE" (describe_idea is never itself CONSEQUENTIAL — the underlying
+         monetization/security signals, if any, surface later via governance, unchanged)
+       → PERSISTS: Decision row. AUTHORITATIVE for: this decision's existence.
+5.  generateProductIntelligence() [product-intelligence.ts]
+       → calls AIProvider.extractProductSemantics() [ADR-0001's primary path] or the heuristic fallback
+       → PERSISTS: ProductSemanticModel (authoritative for extracted meaning), ProductState (authoritative
+         for canonical product facts), ProductKnowledgeNode(type: REQUIREMENT) per requirement (existing,
+         product-intelligence.ts:126), ProductMemoryEntry(type: FACT) (existing, product-intelligence.ts)
+6.  generateInitialBlueprint() [blueprint-generator.ts]
+       → unions Impact Analysis categories + ProductSemanticModel content (existing, this session's own
+         semantic-hollowing repair)
+       → computes semanticCoverage (existing, semantic-coverage.ts) — IF materially_incomplete, this fact
+         is carried forward (existing behavior, D-0072) into the Quality Gate
+       → PERSISTS: Blueprint (authoritative for the product's structural design),
+         ProductKnowledgeNode(SCREEN/WORKFLOW/DATA_MODEL/ACTION) (existing)
+7.  [NEW, this proposal] projectBlueprintRelationships() [graph-projector.ts, Section 10]
+       → PERSISTS: ProductKnowledgeEdge (CONTAINS/TRIGGERS/DEPENDS_ON) — authoritative for relationships
+       → IF projection is incomplete (some candidate edges unresolvable): records ProductEvidence
+         (evidenceType: GRAPH_PROJECTION), does NOT block the workflow
+8.  generateBuildPlan() [build-planner.ts]
+       → PERSISTS: BuildPlan (authoritative for planStatus: READY | BLOCKED)
+9.  runQualityGate() [quality-gate.ts] — NOW INCLUDING the new incomplete-relationship check (Section 14 Phase 3)
+       → PERSISTS: ProductEvidence per check, TruthStatusEntry per dimension + aggregate quality.gate
+10. generateApplication()'s existing Truth Status sync [generation-orchestrator.ts]
+       → PERSISTS: TruthStatusEntry(generation.full_stack_web_app), TruthStatusEntry(semantic.fidelity)
+11. USER-VISIBLE RESULT: live preview at /org/[orgSlug]/[projectSlug]/preview/[screen] (existing route),
+       Studio Trust panel reflects every Truth Status entry from steps 4-10 (existing UI wiring, P2-17)
+```
+
+**Authoritative at each stage**: step 2 (intent), step 4 (decision), step 5 (semantics/state), step 6 (structure), step 7 (relationships — new), step 9 (verification). **If semantics are incomplete**: unchanged existing behavior — Quality Gate hard-fails per D-0072, disclosed via `quality.semanticFidelity`. **If graph projection fails but code generation succeeds**: generation is NOT blocked (step 7's defined behavior above); the gap is disclosed via the new Quality Gate check (Section 14 Phase 3), non-blocking. **Is deployment blocked?** Only by the existing `quality.gate` check (unchanged) — an incomplete graph projection alone does not block deployment, since the graph is a navigational layer, not the product itself. **What the user sees**: the live preview, unchanged, plus (once Stage 3's Quality Gate check ships) a new, disclosed line item if relationships were incompletely projected. **Retries avoiding duplicate nodes/edges**: node creation has no dedupe today (a full regeneration creates a fresh, parallel node set — existing behavior, unchanged by this proposal, and explicitly named as an open question for whether that's still correct once the graph has real consumers, Section 27); edge creation is protected by the database `@@unique` constraint (step 6 of Section 10) regardless of how many times projection runs.
+
+### 13.2 Conversational Edit
+
+```
+1.  Founder submits: "Change the free trial from 14 days to 30 days."
+       → beginChangeFlow(actorUserId, projectId, rawText)
+2.  resolveIntent() → { type: "edit_request", ... } (existing: hasExistingProductState: true, since a
+       prior generation exists)
+3.  [NEW, this proposal] Context Resolution (Section 22) is NOT invoked here — this example has no
+       pronoun/selection ambiguity ("the free trial" is a direct noun phrase). Context Resolution is
+       invoked only when resolveIntent's own parse contains an unresolved referent (Section 22).
+4.  analyzeImpact() — REDESIGNED (Section 20): now queries P1 for nodes matching "free trial" / "trial
+       period" (existing DATA_MODEL/WORKFLOW label match, case-insensitive substring — the same fuzzy-
+       match approach semantic-coverage.ts already uses for a different purpose, reused here), then
+       traverses DEPENDS_ON edges outward. Example real traversal: DATA_MODEL("Subscription") →
+       [DEPENDS_ON, reverse] → WORKFLOW("Checkout"), WORKFLOW("Onboarding") → [CONTAINS, reverse] →
+       SCREEN("Pricing"), SCREEN("Welcome")
+       → RETURNS: { directlyAffected: [Subscription], transitivelyAffected: [Checkout, Onboarding,
+         Pricing, Welcome], uncertain: [], missingCoverage: false }
+5.  disclosureTier computed from impact result: monetization-adjacent (Subscription data model touched)
+       → "CONSEQUENTIAL" (existing rule, unchanged: monetization is already a CONSEQUENTIAL category)
+6.  recordDecision() → PENDING_APPROVAL
+       → PERSISTS: Decision row, now carrying the REAL graph-derived impact list in its `impact` field
+         (existing Json field) instead of today's keyword-category list
+7.  createChangeSet() [change-set.ts] → PERSISTS: ChangeSet(status: PENDING) — UNCHANGED, still gated
+       on the Decision above
+8.  Founder approves → respondToChangeSetDecision() → applyChangeSet()
+9.  applyChangeSet() → generateProductIntelligence() (re-runs, existing) → generateApplication() (re-runs,
+       existing, includes step 6-10 of 13.1 again — Blueprint/BuildPlan/graph edges/Quality Gate all
+       regenerate)
+10. [NEW] addProductMemoryEntry(type: "HISTORY", content: "Changed free trial 14→30 days",
+       metadata: { knowledgeNodeId: <Subscription node id> }) — the Memory-Update stage P3's own
+       docstring already named but never wired (Stage 1 §2.6's finding); wired here for the first time.
+11. USER-VISIBLE RESULT: Trust panel reflects the new generation's Truth Status; Studio's (not yet
+       existing) impact summary would show "Changed: Subscription. Also affected: Checkout, Onboarding
+       screens." — surfacing this in the UI is explicitly a Stage 3+ concern, not this slice's own
+       acceptance criteria (Section 28).
+```
+
+Second example, **"Remove the manager role"**: step 4's traversal starts from an actor/role reference — today's graph has no `PERMISSION`/role-specific node type (deferred, Section 8), so this traversal degrades to matching `SCREEN`/`WORKFLOW` nodes whose `data` field mentions the role string (a weaker, label-based match, not a real edge traversal) — **this is disclosed as `missingCoverage: true`** in the Impact Analysis result (Section 20.4's required language distinction), not silently reported as "no impact."
+
+Third example, **"Fix this"**: `resolveIntent` receives an unresolvable referent ("this") with no accompanying selection context → Context Resolution (Section 22) is invoked _before_ impact analysis proceeds; if it cannot resolve above the ambiguity threshold (Section 22), `beginChangeFlow` returns a clarification request rather than proceeding — this is a **new early-exit branch** this proposal adds to `beginChangeFlow`, not present today.
+
+### 13.3 Trigger Workflow (Fully Specified, Paper Design)
+
+Realistic example: _"When a customer submits the contact form, save it and notify the founder by email."_
+
+| Step                                                  | Node/Edge                                                                    | Payload in                 | Payload out            | State mutation                                                              | Idempotency key                                                        | Retry                                                                     | Timeout                                                                             | Failure destination                                                                                                                                                       | Evidence                                      | Test                                                                  |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------- | ---------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------- |
+| 1. Customer submits form                              | `ACTION`("submit-contact-form")                                              | form fields                | —                      | none yet                                                                    | —                                                                      | —                                                                         | —                                                                                   | —                                                                                                                                                                         | —                                             | e2e: form submission reaches the handler                              |
+| 2. Validation                                         | (existing render-runtime write-binding validation)                           | raw fields                 | validated fields       | none                                                                        | —                                                                      | n/a (sync)                                                                | request timeout (existing Next.js default)                                          | 4xx to user, no record created                                                                                                                                            | —                                             | unit: schema rejection                                                |
+| 3. Database write                                     | `GeneratedRecord` created                                                    | validated fields           | record id              | `GeneratedRecord` row created                                               | none needed — a fresh create, not a retryable operation in this design | —                                                                         | —                                                                                   | 5xx to user, no downstream effects                                                                                                                                        | the `GeneratedRecord` row itself              | integration: write succeeds                                           |
+| 4. Event emission [NEW]                               | `Event`(type: `GENERATED_RECORD_CREATED`)                                    | record id + modelKey       | —                      | `Event` row created                                                         | `Event.id` is already unique by construction                           | n/a                                                                       | —                                                                                   | if emission fails, the write from step 3 still succeeded — record exists, no automation fires; disclosed as a known gap, not silently retried into duplicate side effects | `Event` row                                   | integration: event row matches the write                              |
+| 5. `TRIGGER` subscription match [designed, not built] | `TRIGGER` node filters on `eventType` + `projectId`                          | `Event`                    | matched trigger config | none                                                                        | —                                                                      | —                                                                         | —                                                                                   | no match → no-op, correct default                                                                                                                                         | —                                             | unit: filter matching                                                 |
+| 6. Condition evaluation [designed]                    | closed predicate grammar (Section 12 item 4)                                 | `Event.payload`            | boolean                | none                                                                        | —                                                                      | —                                                                         | bounded (predicate evaluation is not Turing-complete by design — no timeout needed) | condition false → no-op                                                                                                                                                   | —                                             | unit: predicate evaluation                                            |
+| 7. Action execution [designed]                        | reuses `SentEmail`'s existing send path                                      | derived action payload     | `SentEmail` row        | `SentEmail` row created (existing model, existing send function, unchanged) | the existing `SentEmail` idempotency pattern, reused                   | provider-level retry (existing `EmailProvider` retry behavior, unchanged) | existing SMTP timeout (unchanged)                                                   | provider decline → `SentEmail` row records the decline (existing behavior)                                                                                                | `SentEmail` row                               | existing email-provider tests, extended with one trigger-sourced case |
+| 8. Success/failure event [designed]                   | `Event`(`TRIGGER_EXECUTED` \| `TRIGGER_FAILED`)                              | trigger id + action result | —                      | `Event` row                                                                 | `causationId` = step 4's event id                                      | —                                                                         | —                                                                                   | terminal failure recorded per item 9 below                                                                                                                                | `Event` row                                   | integration: correct event type on both paths                         |
+| 9. Terminal failure handling [designed]               | `ProductEvidence`(`TRIGGER_EXECUTION`) + `TruthStatusEntry`(per-trigger key) | failure reason             | —                      | rows created                                                                | —                                                                      | —                                                                         | —                                                                                   | founder sees it in Trust panel (existing UI, new subject key)                                                                                                             | the `ProductEvidence`/`TruthStatusEntry` rows | integration: failure surfaces correctly                               |
+| 10. Tests execute full chain                          | —                                                                            | —                          | —                      | —                                                                           | —                                                                      | —                                                                         | —                                                                                   | —                                                                                                                                                                         | —                                             | one integration test spanning steps 1-9                               |
+| 11. Runtime evidence proves it operated               | —                                                                            | —                          | —                      | —                                                                           | —                                                                      | —                                                                         | —                                                                                   | —                                                                                                                                                                         | steps 4, 8, 9's rows collectively             | —                                                                     |
+| 12. Next consumer                                     | founder's own inbox (external to Pocket Studio)                              | —                          | —                      | —                                                                           | —                                                                      | —                                                                         | —                                                                                   | —                                                                                                                                                                         | —                                             | —                                                                     |
+
+**What comes before**: the form's own generation (an existing `SCREEN`/`WORKFLOW` in the Blueprint). **What comes after**: nothing within Pocket Studio — the founder reads their email externally. **This entire workflow is paper-only** (Section 12's conclusion) — no step above is implemented by this proposal.
+
+### 13.4 Payment Workflow
+
+```
+PRICING SCREEN (existing, generated Blueprint content)
+  → CHECKOUT ACTION → createGeneratedAppCharge() [generated-app-payments.ts, existing]
+      → calls GeneratedAppPaymentProvider (existing abstraction, mock + Stripe-Connect-shaped real impl)
+      → PERSISTS: GeneratedAppPayment(status: SUCCEEDED | FAILED) — this is INTENDED+IMPLEMENTED truth,
+        not yet DEPLOYED or OBSERVED truth (Section 8's node classification) — no live account is wired
+        (Stage 1's existing finding: PROTOTYPE_ONLY)
+  → WEBHOOK (Stripe → Pocket Studio's OWN billing, a SEPARATE system from generated-app payments —
+      this distinction must not be conflated: platform billing = BillingProvider/OrganizationSubscription;
+      generated-app payments = GeneratedAppPaymentProvider/GeneratedAppPayment. Only platform billing's
+      webhook exists today, at /api/webhooks/stripe)
+      → SIGNATURE VALIDATION: processBillingWebhook() → provider.constructWebhookEvent() (existing,
+        tested against self-computed valid/invalid/tampered/stale signatures)
+      → IDEMPOTENCY CHECK: ProcessedWebhookEvent unique constraint on (provider, providerEventId)
+        (existing, confirmed schema)
+      → DATABASE UPDATE: the pre-existing deterministic billing state machine (existing, unchanged)
+      → ENTITLEMENT UPDATE: src/lib/billing/entitlements.ts (existing, unchanged)
+  → CONFIRMATION: existing billing page UI wiring (unchanged)
+  → ANALYTICS: getProductAnalyticsSnapshot() [product-analytics.ts, existing] — reads GeneratedAppPayment
+      rows directly (existing), NOT yet via graph traversal (Business Model integration, deferred Section 26)
+  → VERIFICATION: no dedicated Quality Gate check for "payment actually processed live" exists — this is
+      a genuine gap, correctly named as such (P6's own docstring already limits verification to
+      generation-time checks, Stage 1 §2.10)
+  → FAILURE RECOVERY: payment SUCCEEDS at the provider but webhook processing FAILS — this exact class
+      of bug was found and fixed in Phase 3 (D-0062/D-0063, the billing webhook CRITICAL DEFECT this
+      session's own history already documents) for PLATFORM billing. For GENERATED-APP payments
+      specifically, no equivalent webhook exists yet (createGeneratedAppCharge is a direct, synchronous
+      call, not webhook-driven) — so this exact failure mode does not apply to generated-app payments
+      today, but WILL once real Stripe Connect webhooks are wired (a disclosed, deferred integration
+      task per Stage 1 §2.9's own finding: "not yet wired into the generated-app checkout UI").
+  → IMPACT ANALYSIS IF PRICING CHANGES: this is exactly the traversal shown in 13.2's first example
+      (DATA_MODEL("Subscription") reverse-traversal) — the SAME redesigned Impact Analysis, no separate
+      payment-specific impact logic needed. This is the concrete proof that Impact Analysis, once built
+      on the graph, generalizes across domains without a special case per feature type.
+```
+
+### 13.5 Authentication and Authorization Workflow
+
+**Two separate authz systems exist and must not be conflated** (confirmed by direct schema inspection this session):
+
+- **Pocket-Studio-platform authz**: `MembershipRole` (`MEMBER < ADMIN < OWNER`, existing), enforced by `requireOrganizationMembership`/`requireProjectAccess` (`authz.ts`, existing, unchanged by this proposal — already the "single choke point," per its own docstring).
+- **Generated-app end-user authz**: `GeneratedAppUser.role` — a free-form string matching whatever roles a project's own Blueprint declares (existing, confirmed `prisma/schema.prisma:1345`'s comment: "not a fixed enum... a Blueprint's roles are themselves derived"). No permission-enforcement mechanism reads this role today beyond `authenticateGeneratedAppUser`'s credential check — a real end-user permission system (e.g. "can this `role: "customer"` user see another customer's records") is not built, and is exactly why the `PERMISSION` node type is deferred (Section 8) rather than populated speculatively.
+
+```
+SIGNUP (platform): registerUser() [existing] → IDENTITY CREATION: User row → SESSION: existing
+  cookie-session mechanism (unchanged) → ROLE ASSIGNMENT: Membership row, MembershipRole (existing,
+  createOrganization's default OWNER assignment) → PERMISSION CHECK: requireOrganizationMembership on
+  every subsequent request (existing) → RESOURCE ACCESS: gated per above → AUDIT EVENT: none dedicated
+  today beyond the general Event Ledger (a gap — no AUTH-specific audit trail beyond LoginAttempt,
+  existing, and audit-log.ts's general mechanism, existing but not auth-specific)
+
+SIGNUP (generated app's own end user): authenticateGeneratedAppUser() [existing] → verifies credentials
+  → does NOT establish a session (Stage 1/state.json's own already-disclosed, unchanged gap: "a
+  generated product's own customers cannot use it yet")
+```
+
+**What happens when a role is changed or removed**: for platform `MembershipRole`, existing `Membership` update — no cascading re-evaluation exists (a demoted ADMIN's already-open browser session continues to enforce authorization per-request via `requireProjectAccess`, so the demotion takes effect on the very next request, not retroactively — this is existing, correct behavior, unchanged). For generated-app `GeneratedAppUser.role` removal (e.g. "remove the manager role" from 13.2's second example): since no permission-enforcement reads this role today, "removing" it is purely a Blueprint-content change with no live authorization consequence — disclosed here explicitly so Stage 3+ work does not assume enforcement exists where it doesn't.
+
+### 13.6 Deployment Workflow
+
+```
+APPROVED PLAN (a project's current Blueprint + Build Plan, existing)
+  → BUILD: no separate build artifact step exists — DeploymentProvider.deploy() (existing interface,
+      mock-only implementation) is called directly with { environment, projectSlug, blueprintVersion,
+      buildPlanVersion } (existing, deployments.ts:53-58)
+  → TEST: NOT part of createDeployment() today — Quality Gate is checked as a PRECONDITION for
+      PRODUCTION only (existing, deployments.ts:65-68), not re-run as part of the deploy call itself
+  → SECURITY CHECK: none dedicated — relies on Quality Gate's existing checks having already run
+  → ARTIFACT: mock provider returns { status, providerDeploymentId } (existing) — no real build artifact
+      exists since no real hosting provider exists (Stage 1's own confirmed finding)
+  → STAGING DEPLOYMENT: createDeployment(..., "STAGING") — same function, no Quality Gate precondition
+      (existing, deliberate: "iterating in development/preview/staging is exactly when the gate is
+      still expected to fail," deployments.ts's own docstring)
+  → SMOKE TEST: does not exist — no live-verification mechanism (Stage 1 §2.10's gap, unchanged)
+  → APPROVAL: implicit in the act of calling createDeployment(..., "PRODUCTION") as the founder
+      (requireProjectAccess("MEMBER") — no stronger reauthentication exists for this specific action,
+      an open question for the Risk/Approval matrix, Section 25)
+  → PRODUCTION DEPLOYMENT: createDeployment(..., "PRODUCTION") — gated on quality.gate == IMPLEMENTED
+      (existing, ProductionDeploymentBlockedError)
+  → POST-DEPLOY VERIFICATION: does not exist (same gap as smoke test)
+  → OBSERVATION: does not exist beyond the Deployment row itself (Truth Status subject key
+      deployment.production, existing)
+```
+
+**Environment transitions**: no automatic promotion exists — each environment's deployment is an independent `createDeployment` call; there is no "promote staging to production" operation that reuses a staging artifact (consistent with there being no real build artifact to promote). **Rollback**: `rollbackDeployment()` (existing, `deployments.ts`) — marks current `ROLLED_BACK`, the next-newest `SUCCEEDED` row becomes active by query construction (no separate "active" pointer to desync, existing, confirmed sound design). **Glass Engine display rules**: once a presentation layer exists (Part 2's emergent capability), it must display exactly the Truth Status value here — `IMPLEMENTED` only after a real `SUCCEEDED` `Deployment` row exists, never inferred from "the deploy button was clicked."
+
+### 13.7 Failure Diagnosis Workflow — Designed, Genuinely Missing
+
+```
+RUNTIME FAILURE → EVENT CAPTURE: [does not exist] no live generated-app runtime emits failure events
+  to Pocket Studio today (confirmed, Stage 1 §2.11 — IncidentReport is platform-ops-only)
+  → TRACE CORRELATION: [does not exist] no tracing infrastructure
+  → GRAPH TARGET RESOLUTION: [would use P1] once a failure event exists with a resolvable node
+      reference, traversal from that node via DEPENDS_ON/TRIGGERS (reverse) would identify candidates
+  → DEPENDENCY TRAVERSAL: same mechanism as Impact Analysis (Section 20) — reused, not duplicated
+  → ROOT-CAUSE CANDIDATES: ranked by edge confidence (Section 19's ladder) and evidence recency
+  → EVIDENCE RANKING: nodes with a recent, passing VERIFIED_BY edge are LESS likely candidates than
+      nodes with no VERIFIED_BY edge at all or a failing one
+  → EXPLANATION: must distinguish CONFIRMED root cause (a VERIFIED_BY edge to a FAILING evidence record
+      naming this exact node) from LIKELY CONTRIBUTOR (graph-adjacent, no direct evidence) from
+      CORRELATED EVENT (co-occurred in time, no graph relationship) from UNKNOWN CAUSE (no graph
+      coverage reaches the failure point) — Pocket Studio must never present LIKELY or CORRELATED as
+      CONFIRMED
+  → REPAIR PLAN / APPROVAL / EXECUTION / VERIFICATION: reuses P3's beginChangeFlow entirely — a repair
+      IS a conversational edit, not a separate execution path
+```
+
+**This entire workflow requires P1's edges (real, Stage 3), the Observation Layer's real signals (not built, deferred), and a live-application error-reporting producer (does not exist).** It is correctly excluded from Stage 3 candidacy (Section 28) — building the diagnosis logic before either dependency exists would produce untestable, evidence-free code, violating this document's own standard.
+
+### 13.8 Existing-App Import — Designed, Genuinely Missing
+
+```
+SOURCE INGESTION → [does not exist] no repository/file upload or analysis mechanism exists anywhere in
+  this codebase (confirmed: zero matches for import/ingestion mechanisms in src/lib)
+  → FILE/REPOSITORY ANALYSIS → RESOURCE DETECTION → SEMANTIC MODELING: would reuse
+      AIProvider.extractProductSemantics() (ADR-0001's primary path) against extracted source content
+      instead of a founder's own description text — the SAME primitive, a different input source
+  → GRAPH CREATION / EDGE CREATION: would reuse the Graph Projector (Section 10) unchanged
+  → CONFIDENCE SCORING: imported, inferred nodes/edges would need a NEW confidence tier below the
+      existing "low_risk_inference" (heuristic fallback) tier, since inferring structure from unfamiliar
+      source code is categorically less certain than extracting from a founder's own natural-language
+      description of their own intent
+  → USER REVIEW: does not exist — no UI or confirmation flow
+  → VERIFICATION → ADOPTION AS PROJECT STATE: would need to reconcile with generateProductIntelligence's
+      existing ProductState model — NOT a new state model
+```
+
+**How imported inferred state would differ from generated verified state**: an imported node's `data` would carry `sourceType: "imported_inference"` (a new provenance value, extending the existing `SemanticSourceType` enum already used by `ProductSemanticModel` — the same extension pattern, not a new concept) — always `confidence: "low"` until a founder explicitly confirms it, mirroring exactly how the heuristic-extraction fallback already marks its own output (ADR-0001's own established pattern, reused). **This is not a Stage 3 candidate** — no ingestion mechanism exists to feed it, and building semantic modeling for an input source that cannot yet be captured would be speculative infrastructure.
+
+---
+
+## 14. Migration Plan
+
+| Phase | Objective                                              | Components changed                                                                                                                    | Data migration                                                                                                                                                                                                                                                                                                  | Feature flag                                                                                                                                                                                                        | Rollback                                                                                                                                                                                                                                                           | Exit criteria                                                                                                                                                                                            | Independent review                                                                                        |
+| ----- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **1** | Populate real graph edges during generation            | `blueprint-generator.ts` (call site), new `graph-projector.ts`                                                                        | None — additive edges only, no existing table altered                                                                                                                                                                                                                                                           | Not needed — additive, zero behavior change to existing consumers (there are none)                                                                                                                                  | Revert the one call site; existing nodes/edges are harmless if unused                                                                                                                                                                                              | Edge counts match fixture expectations across the existing 9-fixture + holdout corpus                                                                                                                    | Yes — Level 3, per this codebase's established discipline for any change touching the generation pipeline |
+| **2** | Redesign Impact Analysis to consume the graph          | `impact-analysis.ts` (new traversal function alongside, not replacing, the keyword classifier), `change-flow.ts` (call site)          | None                                                                                                                                                                                                                                                                                                            | **Yes** — a feature flag (env var, mirroring `AI_PROVIDER`'s own pattern) selects graph-based vs. keyword-based impact, defaulting to keyword-based until Phase 1's edge coverage is proven sufficient on real data | Flip the flag back; zero data loss since the keyword classifier is untouched, not deleted                                                                                                                                                                          | Graph-based impact analysis produces equal-or-better results than keyword-based on every existing `change-set.integration.test.ts`/`change-flow.integration.test.ts` case, plus new graph-specific cases | Yes                                                                                                       |
+| **3** | New Quality Gate check: incomplete graph relationships | `quality-gate.ts` (13th check)                                                                                                        | None                                                                                                                                                                                                                                                                                                            | Not needed — additive, non-blocking by design (Section 10 item 10)                                                                                                                                                  | Remove the one check                                                                                                                                                                                                                                               | Existing 12 checks unaffected, all existing tests green plus new check's own tests                                                                                                                       | Yes, per this codebase's standing rule that every Quality Gate change gets independent review             |
+| **4** | Environment-scoped data partitioning (P4)              | `GeneratedRecord`/`GeneratedAppUser` schema (new required column), every read/write call site, `verify-tenant-isolation.ts` extension | **Yes — real migration.** Existing rows have no environment value; backfill strategy: default all existing rows to `DEVELOPMENT` (the only environment any live founder-preview traffic could plausibly have generated so far, since no real deployment provider exists yet to have produced `PRODUCTION` data) | Not needed — this is a data-safety fix, not a behavior toggle; shipping it partially would be worse than not shipping it                                                                                            | Schema rollback is destructive (dropping the column loses the backfilled distinction) — this phase's migration must be additive-then-backfill-then-enforce, in three separate sub-steps, each independently revertible until the final `NOT NULL` constraint lands | Zero unfiltered `GeneratedRecord`/`GeneratedAppUser` query sites per the extended static-analysis tool                                                                                                   | Yes — this is a security-boundary change, mandatory per the existing tenant-isolation review precedent    |
+| **5** | Decision/Business-node graph integration               | `decisions.ts` (call site), new `BUSINESS_METRIC` node population wiring `business-intelligence.ts`'s existing calculators            | None                                                                                                                                                                                                                                                                                                            | Not needed — additive                                                                                                                                                                                               | Remove the call sites                                                                                                                                                                                                                                              | New nodes appear correctly, existing Decision/business-intelligence tests unaffected                                                                                                                     | Yes                                                                                                       |
+
+**Sequencing**: Phase 1 before Phase 2 (cannot consume edges that don't exist). Phase 3 depends on Phase 1 (the check reads Phase 1's evidence). Phase 4 is independent of 1-3 and 5 (different subsystem entirely — data safety, not the graph) and may run in parallel. Phase 5 depends on Phase 1's Graph Projector pattern existing to extend.
+
+---
+
+## 15. Architecture Invariants
+
+In addition to every invariant the brief itself lists verbatim (all adopted without modification — tenant/project scoping, environment-crossing requiring explicit promotion, edge provenance, missing-edge-is-not-proof-of-absence, complete trigger requirements, no Glass Engine claim without evidence, no destructive action from unresolved context, no production mutation without environment resolution, no secrets in graph-visible metadata, intended/implemented/verified/deployed/observed distinguishability, AI-vs-deterministic-evidence conflict recording, the semantic-hollowing Quality Gate cannot be weakened, the frozen heuristic scope cannot expand without a new ADR, every primitive needs an immediate consumer, idempotent at-least-once consumers, end-to-end test or documented exception), this proposal adds:
+
+- **A `ProductKnowledgeNode`'s `data` field is never the sole source of truth for anything Blueprint already owns** — Part 7's Source-of-Truth Table is binding; any future code that reads graph `data` instead of the underlying Blueprint field for authoritative content is a defect.
+- **No edge type outside the approved table (Section 9) may be created without amending this document** — the same closed-vocabulary discipline this codebase already applies to `ImpactCategory`, `ProductKnowledgeNodeType`, and `TruthStatusValue`.
+- **Graph projection failure never blocks generation** (Part 3's Failure behavior) — this is a hard invariant, not a default, because the graph is additive infrastructure over an already-shippable product.
+- **Environment partitioning (P4), once shipped, has zero exceptions** — not even for founder-preview convenience; a `DEVELOPMENT`-default is a real, distinct value, not an unscoped bypass.
+
+---
+
+## 16. Simple Mode vs. Expert Mode Mapping
+
+| Object                               | Simple Mode                                                                 | Expert Mode                                                                                                                                       |
+| ------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Graph relationship (e.g. `TRIGGERS`) | "This button starts the checkout process."                                  | source/target node ids and types, edge type, provenance (Blueprint field + generation source), confidence tier, `VERIFIED_BY` status              |
+| Impact Analysis result               | "Changing this also affects: Checkout, Onboarding."                         | directly-affected vs. transitively-affected node lists, traversal depth used, `missingCoverage` flag, confidence per affected node                |
+| Trigger (once built)                 | "After a customer submits the form, Pocket Studio saves it and emails you." | event type, payload schema, condition expression, idempotency key, retry policy, evidence rows                                                    |
+| Payment webhook                      | "This confirms the payment and unlocks the customer's plan."                | endpoint, signature scheme, event types handled, idempotency table, entitlement service call, retry/dead-letter behavior, test coverage, evidence |
+| Deployment                           | "Your app is live in production."                                           | provider name, environment, Blueprint/Build Plan versions deployed, provider deployment id, Quality Gate precondition result, rollback history    |
+
+**Both modes read the same underlying state** (Truth Status, Evidence, the graph) — this table defines _presentation_, never a second data source, consistent with the brief's own "both modes represent the same underlying truth at different levels of abstraction."
+
+---
+
+## 17. Current Repository Integration Map
+
+| Component                                     | Disposition                                                                                            |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `ProductKnowledgeNode`/`Edge`                 | **Extend** — populate edges, add 2 new node types (`DECISION`, `ENVIRONMENT`)                          |
+| `impact-analysis.ts`                          | **Extend** — add graph-traversal function alongside the existing keyword classifier, feature-flagged   |
+| `blueprint-generator.ts`                      | **Extend** — one new call site (Graph Projector)                                                       |
+| `quality-gate.ts`                             | **Extend** — one new check                                                                             |
+| `change-flow.ts`                              | **Extend** — Verification + Memory-Update stages wired into the same function (Part 3's P3 definition) |
+| `AnthropicAIProvider.extractProductSemantics` | **Retain, unchanged** — ADR-0001's primary path                                                        |
+| `heuristic-extraction.ts`                     | **Retain, frozen** — ADR-0001's scope freeze, unchanged by this proposal                               |
+| `decisions.ts`, `product-memory.ts`           | **Extend** — new graph-projection call sites                                                           |
+| `GeneratedRecord`/`GeneratedAppUser`          | **Adapt** — new required `environment` column, migration Phase 4                                       |
+| `verify-tenant-isolation.ts`                  | **Extend** — new environment-filter check alongside the existing project-filter check                  |
+| `IncidentReport`                              | **Retain, unchanged** — explicitly not the same system as Failure Intelligence; no conflation          |
+| `DeploymentProvider` (mock)                   | **Retain, unchanged** — out of scope                                                                   |
+| Review protocols, Evidence/Decision Ledgers   | **Retain, unchanged** — this proposal's own Stage 3 work will follow them, not replace them            |
+
+No new file is proposed without an exact caller/callee named above or in Section 10/13.
+
+---
+
+## 18. AI-Backed Extraction Design
+
+Per ADR-0001, already-decided; restated in this proposal's required workflow form:
+
+```
+DESCRIPTION → prompt assembly [anthropic-provider.ts, existing] → model request [existing, forced
+  tool-use] → structured response [ResolvedIntent | SemanticExtractionResult, existing Zod-validated
+  schemas] → schema validation [existing] → semantic consistency validation [existing:
+  semantic-coverage.ts's computeExtractionCoverage] → retry [existing, MAX_ATTEMPTS=2] → fallback
+  [existing: heuristic-extraction.ts, frozen scope per ADR-0001] → Quality Gate [existing, D-0072's
+  hard check] → graph projection [NEW, this proposal, Section 10]
+```
+
+Output schema, confidence, provenance, model/version recording, prompt/version recording, token/cost tracking, timeout, retry count, invalid-JSON behavior, semantically-hollow-response behavior, provider-outage behavior: **all already exist and are unchanged by this proposal** (confirmed throughout this session's own extensive work on this exact code path). **Disagreement with deterministic code evidence**: not currently modeled as a distinct case — an open question (Section 26), since it requires the graph's `VERIFIED_BY` mechanism (Section 9) to exist first before "AI said X, deterministic evidence says Y" is even representable. **Live integration test / mock test / recorded-fixture policy**: unchanged — this build's tests exercise the mock/fallback path exclusively (ADR-0001's own named gap, now the single recommended next milestone per the completion report, still not closed by this Stage 2 proposal, which does not touch it).
+
+---
+
+## 19. Graph Completeness and Uncertainty (Confidence Ladder)
+
+The brief requires the system to never treat a missing edge as proof no relationship exists. This proposal defines nine distinct states, each with a precise meaning and a precise trigger — not a vague "confidence score":
+
+| State            | Meaning                                                                                                                                          | How it's determined                                                                                                                                                                                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Confirmed**    | A `VERIFIED_BY` edge exists to a currently-passing `EVIDENCE`/`TEST` node                                                                        | Direct edge lookup                                                                                                                                                                                                                                                 |
+| **Inferred**     | Created by AI-backed extraction (ADR-0001's primary path) rather than the deterministic Graph Projector                                          | `ProductKnowledgeEdge`'s provenance field (new, Section 10 step 3's schema extension) records `producedBy: "graph-projector" \| "ai-extraction"`                                                                                                                   |
+| **Planned**      | A `REQUIREMENT` node exists naming the relationship, but no `SCREEN`/`WORKFLOW`/`ACTION` node yet implements it                                  | The requirement node has no outgoing `IMPLEMENTS` edge (deferred edge type, Section 9) — today, since `IMPLEMENTS` is deferred, this state is **not yet distinguishable from Unknown** below; disclosed as a real, current limitation, not silently assumed solved |
+| **Implemented**  | The edge exists, was created by the Graph Projector against real Blueprint content, has no `VERIFIED_BY` edge yet                                | Default state for every edge Section 10 creates                                                                                                                                                                                                                    |
+| **Verified**     | Confirmed, above                                                                                                                                 | —                                                                                                                                                                                                                                                                  |
+| **Observed**     | A `MEASURES` edge (deferred, Section 9) links a `ProductOutcomeRecord` fact to this relationship's nodes                                         | Not reachable until Section 17's Business Model work ships — named, not built                                                                                                                                                                                      |
+| **Stale**        | A node has been superseded by a newer generation's node for the same logical entity, but no `SUPERSEDES` edge (deferred) formally links them yet | Detected by matching `(projectId, type, normalized label)` against a newer node's same triple — a query-time check, not a stored flag, since nothing currently writes a "stale" boolean                                                                            |
+| **Contradicted** | Deterministic evidence (a passing/failing `EVIDENCE` node) disagrees with an AI-inferred edge's claim                                            | Not currently detectable — requires both `VERIFIED_BY` traversal and provenance distinction (both defined above) to exist together; named as Open Question 4 (Section 26)                                                                                          |
+| **Unknown**      | No node could be resolved for the query at all                                                                                                   | `missingGraphCoverage: true` in the Impact Analysis result (Section 20)                                                                                                                                                                                            |
+
+**Exact required behavior per the brief's own list:**
+
+- **Incomplete graph** (some real relationships never projected, e.g. an un-updated category template per Section 10 step 3): Impact Analysis reports `missingCoverage: true` for the affected node, never silently reports "no impact."
+- **Conflicting graph data**: not currently possible to produce (the Graph Projector is the sole edge writer in Stage 3; AI-inferred edges are Section 32/18's own future work, not built here) — the Contradicted state above is designed for when it becomes possible, not encountered today.
+- **Low-confidence AI inference**: inherits the existing `confidence: "low"` provenance tag already used throughout `ProductSemanticModel` (this session's own established pattern) — an AI-inferred edge (future work) would carry the same tag, read the same way by every consumer.
+- **Deterministic evidence disagreeing with AI output**: the Contradicted state, not yet reachable (above).
+- **Stale implementation references**: the Stale state, detected at query time, above.
+- **Deleted resources**: `onDelete: Cascade` (existing) removes the node and its edges together — there is no "dangling reference" state to design for at the database level; a reference to a deleted node simply fails to resolve, treated identically to Unknown.
+- **Failed generation**: if `generateInitialBlueprint` itself throws before the Graph Projector runs, no nodes exist for that call at all — nothing to disclose beyond the existing generation-failure handling (unchanged).
+- **Partial deployment**: not a graph-state concern — handled entirely by the existing per-environment `Deployment` row model (Section 12.6/18.6), independent of node/edge state.
+
+---
+
+## 20. Impact Analysis Design (Replacing `impact-analysis.ts`'s Keyword Classifier)
+
+### 20.1 Inputs
+
+| Input                | Source                                                                                                                                                                                                          | Required       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| Change target        | Context Resolution (Section 22) or direct label-match against Section 7's node taxonomy                                                                                                                         | Yes            |
+| Proposed operation   | Free text (today) — the raw edit request string                                                                                                                                                                 | Yes            |
+| Environment          | Section 3's P4, once shipped; implicitly `DEVELOPMENT` until then                                                                                                                                               | Yes (defaults) |
+| Project              | `projectId`, existing                                                                                                                                                                                           | Yes            |
+| User                 | `actorUserId`, existing                                                                                                                                                                                         | Yes            |
+| Selected context     | Context Resolution's resolved node id, if any (Section 22)                                                                                                                                                      | No             |
+| Graph version        | Not modeled — the graph has no snapshot/version concept today (Section 3 P1's own Lifecycle definition); "current state" is the only queryable version                                                          | N/A            |
+| Confidence threshold | New, optional parameter; default excludes only the `Unknown` state (Section 19) from `directlyAffected`/`transitivelyAffected`, routing everything else including `Stale` into results with its state disclosed | No (defaults)  |
+
+### 20.2 Traversal
+
+**Starting nodes**: resolved via fuzzy label match, reusing the same case-insensitive substring approach `semantic-coverage.ts`'s existing `isRepresented()` function already implements for a different purpose (matching extracted entity names against Blueprint content) — the same matching philosophy, not a new algorithm. **Edge types traversed**: `DEPENDS_ON`, `TRIGGERS`, `CONTAINS` (the three approved structural types, Section 9); `VERIFIED_BY` is read for confidence annotation only, never for blast-radius traversal. **Direction**: `DEPENDS_ON` traversed in reverse (find what depends on the changed node); `TRIGGERS` traversed in both directions (what triggers this, and what this triggers); `CONTAINS` traversed in both directions (parent screen, sibling actions). **Depth**: bounded at 3 hops by default — chosen because real product changes in this codebase's own generated Blueprints (9 fixtures + holdout, Stage 1's own corpus) rarely exceed 2-3 structural hops of genuine relevance; configurable, and truncation is disclosed in the result (`recommendedExecutionOrder` never silently drops truncated nodes — they appear in `uncertainImpacts` instead). **Cycle protection**: a visited-node-id set, standard breadth-first-search guard. **Fan-out limit**: 50 total returned nodes — beyond that, the result reports `"impact too broad to enumerate safely — N+ nodes affected"` rather than an unusable dump. **Business vs. technical traversal**: no business nodes exist in Stage 3's scope (Section 17); once they do, the same traversal engine includes them without new logic, since they are just additional node/edge types in the same graph — this is the concrete proof the six-primitive design compresses correctly. **Environment filters**: none until Section 3's P4 ships; then, traversal only follows nodes/edges scoped to the requesting environment. **Confidence filters**: edges below the requested threshold move from `directlyAffected`/`transitivelyAffected` into `uncertainImpacts`, never silently dropped. **Stale-edge handling**: a `Stale`-state node (Section 19) is still traversed (its relationships are historically real) but flagged in the result, never excluded.
+
+### 20.3 Results
+
+```typescript
+type ImpactedNode = {
+  nodeId: string;
+  type: ProductKnowledgeNodeType;
+  label: string;
+  relationshipPath: string[]; // e.g. ["DATA_MODEL:Subscription", "DEPENDS_ON<-", "WORKFLOW:Checkout"]
+  confidenceState: "confirmed" | "implemented" | "stale" | "inferred"; // Section 19's ladder
+};
+
+type ImpactAnalysisResult = {
+  directlyAffected: ImpactedNode[];
+  transitivelyAffected: ImpactedNode[];
+  businessImpacts: ImpactedNode[]; // empty until Section 17 ships
+  technicalImpacts: ImpactedNode[]; // === directlyAffected + transitivelyAffected today
+  requiredTests: string[]; // derived from TEST-node VERIFIED_BY edges once populated — empty in Stage 3 (TEST nodes are Section 7's "newly populated (Stage 3)" row, but Stage 3's own recommended slice, Section 28, does not populate them — see Section 28's exit criteria)
+  requiredApprovals: ("ROUTINE" | "IMPORTANT" | "CONSEQUENTIAL")[]; // existing Decision Ledger tiers, unchanged rule
+  uncertainImpacts: ImpactedNode[]; // below confidence threshold, or fan-out-truncated
+  missingGraphCoverage: boolean;
+  recommendedExecutionOrder: string[]; // topological order, Section 20.5
+  cyclicDependencyWarning: string | null;
+  rollbackConcerns: string[]; // node ids with no defined reverse action, Section 24
+};
+```
+
+### 20.4 Required Language Distinction
+
+Three results, never conflated:
+
+- **"No impact exists."** — returned only when `missingGraphCoverage` is `false` (the change target resolved to a real node with real recorded edges) **and** that node has at least one approved-type edge recorded for some other relationship (proving the graph has real coverage for this area) **and** traversal genuinely returns empty. A strong claim, reserved for genuine graph coverage.
+- **"No impact was found."** — returned when the change target resolved to a real node, but that node has **zero** approved-type edges recorded at all (it could be truly isolated, or it could be under-projected — e.g. an `ACTION` whose category template was never updated per Section 10 step 3's disclosed limitation). A hedged claim, not a guarantee.
+- **"Impact cannot be determined because graph coverage is incomplete."** — returned when `missingGraphCoverage` is `true`: the change target itself could not be confidently resolved to any graph node (no fuzzy match, or an ambiguous multi-match Context Resolution (Section 22) could not disambiguate).
+
+### 20.5 Execution Ordering
+
+Topological sort (Kahn's algorithm — a standard, directly citable, easily-testable algorithm, not an invented one) over the `DEPENDS_ON` + `TRIGGERS` subgraph restricted to the affected node set. **Cycles**: `DEPENDS_ON` alone is validated acyclic at edge-creation time (Section 10 step 4c), but `TRIGGERS` + `DEPENDS_ON` combined can still form a cycle (e.g. Workflow A triggers Workflow B, which depends on data Workflow A itself writes) — Kahn's algorithm naturally detects this (nodes remain with nonzero in-degree after exhausting the zero-in-degree frontier); when detected, `recommendedExecutionOrder` returns empty and `cyclicDependencyWarning` names the specific cycle, never an arbitrary silently-chosen order. **Unresolved dependencies** (a `missingGraphCoverage` node among the affected set): placed at the end of the order with an explicit flag, never silently ordered as if fully known. **Step failure during execution**: Impact Analysis produces an _advisory_ order only — actual execution and its failure handling belongs entirely to Section 3's P3 (`beginChangeFlow`'s own defined Failure behavior), not duplicated here. **Partial rollback**: determined per-node by Section 24's Reversibility model, not by Impact Analysis itself — this section's responsibility ends at producing the order.
+
+---
+
+## 21. Evidence and Verification Model
+
+### 21.1 Evidence Taxonomy
+
+| Evidence type               | Producer (today)                                                                                 | Real today?                                                                       | Schema                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Intent evidence             | `resolveIntent()`'s `Decision.reason` field (existing)                                           | Yes                                                                               | Free text, existing                                                                                    |
+| Plan evidence               | `BuildPlan` itself (existing, versioned)                                                         | Yes                                                                               | Existing model                                                                                         |
+| Source evidence             | `ProductSemanticModel.actors[].provenance` etc. (existing, this session's own work)              | Yes                                                                               | `SemanticProvenance`, existing                                                                         |
+| Build evidence              | `Blueprint.validationStatus` + `generationMetadata` (existing)                                   | Yes                                                                               | Existing fields                                                                                        |
+| Test evidence               | `ProductEvidence` rows from `runQualityGate` (existing)                                          | Yes                                                                               | Existing model                                                                                         |
+| Deployment evidence         | `Deployment` row + its `ProductEvidence(DEPLOYMENT_ATTEMPT)` (existing, `deployments.ts:93-101`) | Yes                                                                               | Existing                                                                                               |
+| Runtime evidence            | —                                                                                                | **No** (Stage 1's own confirmed finding: no live-check mechanism exists)          | Proposed: `evidenceType: "RUNTIME_CHECK"`, reusing `ProductEvidence` — not built in this proposal      |
+| External-service evidence   | `ProcessedWebhookEvent` (existing, immutable by its own unique constraint)                       | Yes                                                                               | Existing                                                                                               |
+| Approval evidence           | `Decision.approvalStatus` transition (existing)                                                  | Yes                                                                               | Existing                                                                                               |
+| Human-verification evidence | —                                                                                                | **No** — no UI action exists for a founder to explicitly mark something confirmed | Proposed: `evidenceType: "HUMAN_VERIFICATION"`, reusing `ProductEvidence` — not built in this proposal |
+
+For each: **Producer/Consumer/Schema/Storage** as listed above. **Immutability**: every `ProductEvidence` row is append-only by construction (no `updateProductEvidence` function exists) — this is already an invariant, unchanged. **Freshness/Expiration**: not modeled today — an old `ProductEvidence` row remains valid forever unless superseded by a newer one for the same `subjectKey` (the existing Truth Status versioning pattern already handles supersession at the status level; raw evidence rows are historical, never expired). **Redaction**: no evidence type in this table stores secret material (confirmed — `ProductEvidence.result`/`limitations` are free text describing outcomes, never credential values); this is an existing, unchanged invariant. **Environment/project scope**: `projectId`-scoped throughout, existing; environment-scoping arrives with Section 3's P4. **Linked node/edge/execution**: proposed new optional field `ProductEvidence.knowledgeNodeId` (nullable FK, `SetNull` on delete — mirroring `ProductOutcomeRecord`'s existing identical pattern, Stage 1's own confirmed precedent) so evidence can point at the specific graph node it verifies. **Verification strength**: Section 19's confidence ladder.
+
+### 21.2 Verification Levels
+
+The brief asks for: Declared, Planned, Generated, Compiled, Tested, Deployed, Runtime-confirmed, Human-confirmed. **`TruthStatusValue`'s existing enum is coarser** (`IMPLEMENTED, PLANNED, MISSING, BLOCKED, UNSUPPORTED, NOT_EVALUATED`, confirmed by direct schema read) — this proposal does **not** widen that enum. Precedent: this codebase already solved an identical problem once — P2-14's own web/PWA output tracking reused rationale _text_ for §39's richer status vocabulary "rather than a new enum" (confirmed, `state.json`'s own P2-14 completion record). This proposal follows the same precedent: the eight finer verification levels live in `ProductEvidence.result`'s free text, structured as a controlled prefix (`"Declared: ..."`, `"Generated: ..."`, `"Tested: ..."`, etc.) — a closed vocabulary enforced by a validator, not a free-for-all string, but not a schema migration either.
+
+**Binding display rule** (also Section 23's new invariant): any UI surface — the existing Trust panel, or a future Glass Engine — rendering `TruthStatusValue: IMPLEMENTED` for a subject key must render the qualifying verification-level prefix from its linked `ProductEvidence.result` verbatim, never collapse it to a bare claim. Concretely: the existing Trust panel must not show "Payment works" when the only evidence reads `"Generated: payment charge function created, never executed against a live account"` — it must show that qualifying text, or a controlled paraphrase preserving the verification level, not a stronger claim than the evidence supports. This rule is not new UI work in Stage 3 (the Trust panel already renders raw evidence text, existing) — it is a **discipline constraint on future evidence-writing code**, binding via Section 23.
+
+---
+
+## 22. Context Resolution Model
+
+**Honest baseline**: none of this exists today (Stage 1's own "genuinely missing" finding, confirmed again by direct inspection this session — no selection-state tracking of any kind exists in this Next.js Server-Action-driven app). Of the brief's 7 prioritized context sources, only two have a real substrate to build from without first inventing new client-side/session infrastructure:
+
+| Priority | Source                       | Buildable today?                                                                                                                         | Substrate                                                                                             |
+| -------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1        | Explicit selected object     | **No** — no client-side selection state exists or is synced to the server                                                                | Would require new UI state, out of scope                                                              |
+| 2        | Current active panel/route   | **No** — Server Actions receive no "which panel is open" context today                                                                   | Would require passing route context explicitly into every Server Action, a real but undesigned change |
+| 3        | Active failure               | **No** — Failure Intelligence itself doesn't exist (Section 15.7/13.7)                                                                   | Depends on Section 15.7 shipping first                                                                |
+| 4        | Active execution step        | **No** — no concept of an "in-progress" step outside a single synchronous `beginChangeFlow` call                                         | Not meaningful in this codebase's request-response architecture without new state                     |
+| 5        | Recent referenced graph node | **Partially** — Section 3's P1 exists; "recent" requires a new, small, session-scoped (not project-persistent) last-touched-node pointer | New, small mechanism; real substrate                                                                  |
+| 6        | Recent conversation entity   | **No** — no turn-scoped conversation log distinct from the project-persistent Decision Ledger/Memory                                     | Would require new session infrastructure                                                              |
+| 7        | Project-wide search          | **Yes** — reuses the same fuzzy label-match Impact Analysis already uses (Section 20.2)                                                  | Real substrate, zero new infrastructure                                                               |
+
+**This proposal defines the resolution algorithm using only sources 5 and 7** — the two that don't require inventing new UI/session infrastructure — and states plainly that sources 1-4 and 6 are real future work, sequenced behind whatever slice first gives the Studio UI a client-side selection concept (not this proposal's Stage 3 candidates, Section 28).
+
+**Algorithm**: for a referent ("this", "it", "that", a noun phrase), attempt source 7 (fuzzy label match against Section 7's node taxonomy) first — highest match confidence wins if unambiguous. If zero or multiple equally-strong matches, fall back to source 5 (last-touched node this session, if one exists and the referent is a bare pronoun with no noun phrase to match against). **Confidence threshold**: a source-7 match must exceed a normalized string-similarity threshold (reusing `semantic-coverage.ts`'s existing `isRepresented()` substring-containment approach, not a new fuzzy-matching library) with no second candidate within a small margin, or it is not confident. **Ambiguity threshold**: two or more source-7 candidates within that margin = ambiguous. **When clarification is mandatory**: any ambiguous resolution, or a bare pronoun with no source-5 last-touched-node available. **When execution is prohibited**: any destructive-tier action (Section 24's Risk Matrix, tiers 6-8) with a resolution confidence below "confirmed" (source-7 exact match or source-5 with a session-fresh timestamp) — a `CONSEQUENTIAL`-adjacent action never proceeds on a merely "likely" resolution. **Persistence**: the resolved node id is attached to the `Decision` row `beginChangeFlow` creates for this turn (existing `impact` Json field, extended) — not a separate table. **Expiration**: the session-scoped "last-touched node" (source 5) expires with the session itself; no persistent cross-session context is proposed.
+
+**Worked examples** (brief's own list, resolved honestly against what's actually buildable):
+
+| Referent                                         | Resolvable today (sources 5+7 only)?                                                                                                                                                                                              | Outcome                                                                                                                                                                                                          |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "this" (with a fresh source-5 last-touched node) | Yes                                                                                                                                                                                                                               | Resolves to that node                                                                                                                                                                                            |
+| "this" (no source-5, no other context)           | No                                                                                                                                                                                                                                | Clarification mandatory                                                                                                                                                                                          |
+| "the payment thing"                              | Partial                                                                                                                                                                                                                           | Source-7 fuzzy match against `DATA_MODEL`/`WORKFLOW` labels containing "payment" — resolves if exactly one match (e.g. `DATA_MODEL:Payment`), ambiguous if the project also has a "PaymentSettings" workflow     |
+| "the page we changed yesterday"                  | **No**                                                                                                                                                                                                                            | Requires source 6 (conversation history) or a time-scoped Decision Ledger query neither this proposal nor today's codebase supports as a context-resolution primitive — falls through to mandatory clarification |
+| "fix it"                                         | Depends entirely on "it"'s resolution — same as "this" above                                                                                                                                                                      | —                                                                                                                                                                                                                |
+| "undo that"                                      | Resolves the referent the same way, but execution is additionally gated by Section 24's Reversibility model (can this specific node type even be undone) — a successful reference resolution does not guarantee a successful undo | —                                                                                                                                                                                                                |
+
+---
+
+## 23. Project Memory Model — Deepened Workflows
+
+Extending Section 3's P2 definition with the brief's required per-workflow detail:
+
+- **New decision created**: `recordDecision()` (existing, unchanged) → `PENDING_APPROVAL` or immediately actionable per `disclosureTier`.
+- **Existing decision superseded**: **does not exist as a mechanism today.** A decision that becomes outdated (e.g. approving 14-day trials, later changed to 30) has no formal link to its replacement — both simply exist as separate rows. Proposed for a future slice, not built here: a new nullable `Decision.supersededByDecisionId` self-relation, set when a later `Decision` on the same subject is recorded — additive, no migration risk, deferred because no consumer currently needs it (Impact Analysis's Section 20 design does not require decision history, only current graph state).
+- **User corrects memory**: today, only deletion exists (`deleteProductMemoryEntry`, existing) — there is no edit-in-place. A "correction" today means delete-and-recreate, losing the original's timestamp continuity. Named as a real gap, not fixed by this proposal (no near-term consumer forces an edit API yet).
+- **Conflicting memory detected**: **does not exist.** No mechanism compares a new memory entry against existing ones for contradiction. Out of scope — would require the same kind of semantic-similarity matching Context Resolution (Section 22) needs, and is not justified by a concrete near-term consumer.
+- **"Why did we build this?" query**: **does not exist** as a queryable interface — `ProductMemoryEntry` supports only `listProductMemoryEntries` filtered by `type`, not by subject/topic. The minimum viable retrieval this proposal actually specifies (Section 3's P2 Outputs): `findMemoryEntriesByGraphNode(nodeId)`, joining on a new optional `ProductMemoryEntry.metadata.knowledgeNodeId` field (using the already-`Json?` `metadata` column — no schema migration) — cheap, real, and the correct first step before any embedding-based search is justified.
+- **Memory used during Impact Analysis**: not wired in Section 20's design — Impact Analysis (Section 20) operates purely on graph traversal; memory is a _separate_ lookup a consumer (e.g. a future Glass Engine "why does this exist" panel) would perform after Impact Analysis returns a node id, via the same `findMemoryEntriesByGraphNode` function above.
+- **Memory used during conversational edit**: Section 13.2 (Complete Workflow Chains, conversational edit) step 10 already wires `addProductMemoryEntry(type: "HISTORY", ...)` into `beginChangeFlow` — this is the one memory workflow this proposal actually implements, not merely designs on paper.
+
+---
+
+## 24. Reversibility Model
+
+Per-mutation-type table, honestly distinguishing what already has a real reverse mechanism from what doesn't:
+
+| Mutation type                              | Forward action                                               | Reverse action                                                | Snapshot required?                                                       | Irreversible side effects                                                                                  | Real today?                                                                                          |
+| ------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Blueprint/code change                      | `generateInitialBlueprint` (existing)                        | `restoreBlueprintVersion` (existing, P2-09)                   | No — full version history already retained                               | None                                                                                                       | **Yes**                                                                                              |
+| Database schema change                     | `planDataModelMigration` (existing)                          | Re-run migration planning against the prior Blueprint version | Yes — the prior schema itself, already retained via Blueprint versioning | Data-loss for removed fields, already analyzed by the existing tool                                        | **Partially** — planning exists; not wired to auto-apply (existing, disclosed limitation, unchanged) |
+| Database data mutation (`GeneratedRecord`) | Any write via `render-runtime.ts`                            | **None exists**                                               | Would require a snapshot mechanism that does not exist                   | Real, permanent data loss on an undo attempt today                                                         | **No**                                                                                               |
+| Configuration change (`GovernanceProfile`) | `upsertGovernanceProfile` (existing)                         | **None** — upsert has no history                              | Would require versioning this currently-unversioned model                | Prior configuration is unrecoverable once overwritten                                                      | **No**                                                                                               |
+| Secret rotation                            | N/A — no rotation mechanism exists at all                    | N/A                                                           | N/A                                                                      | N/A                                                                                                        | **No** (not even the forward action exists)                                                          |
+| Payment                                    | `createGeneratedAppCharge` (existing)                        | A **new, opposing** refund transaction — never a true "undo"  | No snapshot — payments are append-only by nature                         | Real financial movement; a refund is a new fact, not an erasure                                            | **Forward only** — no refund mechanism exists today; must be marked irreversible until one does      |
+| Authentication/role change                 | `Membership` update (existing)                               | Manually re-grant the prior role                              | No history retained                                                      | A demoted user's prior session-level state is not retroactively restored (Section 18.5/13.5's own finding) | **Manually reversible, not tracked**                                                                 |
+| Deployment                                 | `createDeployment` (existing)                                | `rollbackDeployment` (existing, real, tested)                 | No — prior `Deployment` rows already retained                            | None — rollback is a record transition, not a re-deploy                                                    | **Yes**                                                                                              |
+| External API action                        | Depends entirely on the specific external system             | Cannot be generalized                                         | N/A                                                                      | Case-by-case                                                                                               | **Irreversible by default** — no generalized reverse mechanism proposed                              |
+| Customer communication (`SentEmail`)       | Existing send path                                           | **None — cannot be unsent**                                   | N/A                                                                      | Permanent                                                                                                  | **Irreversible, correctly so**                                                                       |
+| App Store publication                      | **Does not exist** — no `StoreReviewProvider` implementation | N/A                                                           | N/A                                                                      | N/A                                                                                                        | **Moot today** — conceptually irreversible once real                                                 |
+
+**Clearly irreversible, by design, not oversight**: payment charges (only offsettable, never erased), sent communications, external API actions, app store publication. **This proposal does not build the missing reverse mechanisms** (data-mutation snapshotting, configuration versioning, secret rotation) — they are real, disclosed gaps, correctly named here so Section 20.3's `rollbackConcerns` field has an honest, evidence-backed list to populate (a node whose mutation type appears in the "Real today? No" rows above is always listed in `rollbackConcerns`, never silently omitted).
+
+---
+
+## 25. Risk and Approval Matrix
+
+The existing Decision Ledger has three tiers (`ROUTINE < IMPORTANT < CONSEQUENTIAL`, existing, unchanged). The brief asks for eight. This proposal does **not** widen the `disclosureTier` enum (a breaking schema change with no current consumer needing the distinction at the enum level) — it subdivides the risk **within** `CONSEQUENTIAL` specifically, using the already-existing `Decision.risk` field (a free-form `Json` field, confirmed already in use — `continuous-product-agent.ts`'s own `risk: "High if left unaddressed."` string, existing) — the identical reuse-existing-field precedent as Section 21.2.
+
+| Tier                       | Example (from this actual codebase)                                                                        | Environment                    | Approval requirement                                                                                                                 | Reauthentication                                                                                                                                               | Rollback requirement                                    |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| 1. Read-only               | `listDeployments`, `getKnowledgeGraph`                                                                     | Any                            | None                                                                                                                                 | No                                                                                                                                                             | N/A                                                     |
+| 2. Preview-only            | `previewBlueprintRestore` (existing — computes a diff without applying)                                    | Any                            | None                                                                                                                                 | No                                                                                                                                                             | N/A                                                     |
+| 3. Local reversible        | A `ROUTINE`-tier conversational edit (e.g. copy change)                                                    | Development                    | None (existing)                                                                                                                      | No                                                                                                                                                             | Blueprint version restore (real)                        |
+| 4. Staging mutation        | `createDeployment(..., "STAGING")` (existing)                                                              | Staging                        | None beyond `requireProjectAccess` (existing)                                                                                        | No                                                                                                                                                             | `rollbackDeployment` (real)                             |
+| 5. Production reversible   | `createDeployment(..., "PRODUCTION")` after Quality Gate passes (existing)                                 | Production                     | Quality Gate precondition (existing, real)                                                                                           | **Not currently required** — named gap                                                                                                                         | `rollbackDeployment` (real)                             |
+| 6. Production high-risk    | A `CONSEQUENTIAL` edit touching `DATA_MODEL:Subscription` (Section 13.2's own worked example)              | Production                     | `PENDING_APPROVAL` (existing)                                                                                                        | **Not currently required** — named gap                                                                                                                         | Depends on mutation type (Section 24)                   |
+| 7. Destructive             | A `GeneratedRecord` bulk-delete operation (hypothetical — no such operation exists in this codebase today) | Any, but especially Production | Would require `CONSEQUENTIAL` **plus** Section 22's "confirmed" context-resolution bar (Section 22's own execution-prohibition rule) | **Proposed, not built**: destructive actions should require re-entering the platform session password, mirroring nothing that exists today — a real, named gap | Section 24 (often "no rollback exists" — data mutation) |
+| 8. Externally irreversible | `createGeneratedAppCharge`, `SentEmail` send                                                               | Any                            | `CONSEQUENTIAL` (existing, for payment; email is not currently classified as consequential — a real, named gap)                      | Not applicable                                                                                                                                                 | None (Section 24)                                       |
+
+**Approval expiration**: not modeled today — a `PENDING_APPROVAL` `Decision` has no timeout (existing, unchanged, not addressed by this proposal). **Execution timeout**: inherited from the platform's existing request-timeout behavior, nothing action-specific exists. **What this table adds over today's three-tier system**: nothing at the schema level — it is a **usage discipline** for how future code populates the already-existing `Decision.risk` field, and a naming of exactly which gaps (reauthentication, destructive-action confirmation, approval expiration) are real and unaddressed, not silently assumed solved.
+
+---
+
+## 26. Business Model Integration and Runtime Observation
+
+**Business Model Integration**: extends Section 3's P1 with the `BUSINESS_METRIC`/`BUSINESS_EVENT` node types already named as "deferred to Stage 3+1" in Section 7's Node Taxonomy. Populated from `business-intelligence.ts`'s existing `deriveBusinessModelBrief`/`deriveMonetizationRecommendations` (existing, real, tested — confirmed by direct read this session) and `business-health.ts`'s `assessBusinessHealth` (existing, real). Each finding becomes a `BUSINESS_METRIC` node; connected to the technical nodes it concerns (e.g. `DATA_MODEL:Subscription`) via the deferred `AFFECTS`/`MEASURES` edge types (Section 9) — **not a second graph**, per the brief's own explicit "connect to, but remain conceptually distinct from" framing, read here as one graph engine with an additional semantic layer, consistent with Stage 1's own classification of this concept as emergent from P1.
+
+**Runtime Observation**: `ProductOutcomeRecord` (existing, confirmed real, already FK'd directly to `ProductKnowledgeNode` — Stage 1's own finding that this is "already shaped exactly as the brief's own unification hint suggests") is the target substrate. Its sole existing producer, `recordProductAnalyticsSnapshotAsOutcomes` (existing), has zero live callers today (confirmed, Stage 1). This proposal does not add a caller in Stage 3 — doing so productively requires the `BUSINESS_METRIC` nodes above to exist first, so an outcome fact has a real graph node to attach to beyond the generic snapshot metrics already supported. Sequenced as Migration Plan Phase 5 (Section 14), after Phase 1's edge population.
+
+---
+
+## 27. Open Questions
+
+1. Should `ProductKnowledgeNode` support in-place mutation/versioning (vs. today's create-fresh-on-regeneration), and if so, via `SUPERSEDES` edges or a version column? Deferred — no consumer needs it yet (Part 3's P1 Lifecycle).
+2. Should the Quality Gate's hard zero-actor block (D-0072) remain a hard block given the demonstrated false-positive surface (completion report §6 item 6)? Explicitly not resolved by this proposal or ADR-0001 — a founder product-policy decision.
+3. Data promotion across environments (P4) — should any mechanism exist, or is cross-environment data movement always manual/out-of-band? Not decided here.
+4. How should AI-inferred graph relationships (once AI-backed extraction populates edges, not just nodes) be distinguished in confidence from deterministically-derived ones (Section 10's Graph Projector, which is rule-based, not AI)? Named, not resolved.
+5. Retrieval/search over `ProductMemoryEntry` beyond the minimal `knowledgeNodeId` join (Part 3's P2 Outputs) — full semantic search is real future value with no current near-term consumer forcing it; left for a dedicated future slice.
+
+---
+
+## 28. Stage 3 Candidates
+
+### Candidate A — Knowledge Graph Relationship Population + Impact Analysis Consumer (RECOMMENDED)
+
+- **User/system scenario**: a founder edits an existing project ("Change the free trial from 14 days to 30 days"); Impact Analysis returns real, graph-derived affected screens/workflows instead of a keyword-category guess.
+- **Trigger**: `beginChangeFlow` invoked with `intent.type === "edit_request"`.
+- **Preconditions**: project has at least one prior generation (edges exist to traverse).
+- **Input**: raw edit text.
+- **Full execution sequence**: exactly Part 13.2, steps 1-9 minus step 10 (Memory Update ships in the same slice, since it's a two-line addition to an already-touched function).
+- **Graph mutations**: edge creation during generation (Section 10); no new mutations from Impact Analysis itself (read-only traversal).
+- **Events**: none new (Section 11's envelope is defined but not required for this candidate — no async delivery needed).
+- **Consumer**: `change-flow.ts`'s `recordDecision` call, whose `impact` field now carries real traversal results instead of keyword categories.
+- **Verification**: new Quality Gate check (Section 14 Phase 3; Section 10 item 9).
+- **Evidence**: `ProductEvidence(evidenceType: GRAPH_PROJECTION)`.
+- **Failure path**: Section 10 item 10 — non-blocking, disclosed.
+- **Retry**: not applicable (synchronous, in-generation).
+- **Rollback**: not applicable (additive).
+- **User-visible result**: a `Decision` row's `impact` field contains real screen/workflow names instead of category strings — visible today via the existing Decision Ledger UI surface, no new UI required for the slice to be complete and testable.
+- **Files likely affected**: new `src/lib/generation/graph-projector.ts`; edits to `blueprint-generator.ts`, `blueprint-templates.ts` (additive `actions[].onScreen`/`.triggersWorkflow` pairing fields, Section 10 step 3 — the real, previously-undisclosed prerequisite this proposal's own repository check surfaced), `impact-analysis.ts` (new function, existing one untouched), `quality-gate.ts`, `change-flow.ts`.
+- **Migrations**: none (no schema change — `ProductKnowledgeEdge` already exists).
+- **Tests**: new `graph-projector.integration.test.ts`; extended `impact-analysis.test.ts`; extended `quality-gate.integration.test.ts`; extended `change-flow.integration.test.ts`; a tenant-isolation regression check extension.
+- **Live Anthropic requirement**: none — this slice is entirely deterministic, reusing existing Blueprint content.
+- **Independent review plan**: full Level 3 round per this codebase's established discipline (this touches the generation pipeline and the Quality Gate).
+- **Exit criteria**: all new/extended tests pass; the existing 9-fixture + holdout corpus produces the exactly-expected edge sets; feature-flagged graph-based Impact Analysis produces equal-or-better results than the keyword classifier on every existing `change-set`/`change-flow` test case.
+
+### Candidate B — Environment-Scoped Data Partitioning (P4)
+
+Real, disclosed, currently-missing data-safety mechanism (Part 3's P4 definition in full). Not recommended as the _first_ slice because it is orthogonal to the graph work and addresses a different risk (data-safety, not architectural connectivity) — bundling it would obscure Stage 3's own exit criteria. A strong second candidate.
+
+### Candidate C — Wire Verification + Memory-Update Into `beginChangeFlow` (Close P3's Own Documented Gap)
+
+The smallest possible slice: two new calls (`runQualityGate`, `addProductMemoryEntry`) inside `beginChangeFlow`, closing the exact gap P3's own docstring has named since it was written (Stage 1 §2.6). Real value, minimal risk, but smaller in leverage than Candidate A — it makes an already-correct sequence _automatic_ rather than making a previously-inert primitive _real_ for the first time.
+
+**Recommendation: Candidate A.** It is the one slice that converts Stage 1's single most important finding — a populated-but-inert, consumer-less graph — into the thing the entire 14-concept brief's own "Critical Architectural Principle" says everything else should be built on. Candidates B and C are both real, both correctly scoped, and both explicitly deferred to immediately follow, not because they are lower priority in absolute terms, but because Candidate A is the one piece of infrastructure every subsequent slice (including B's environment-aware impact filtering and C's verification-informed memory entries) will want to build on top of.
+
+---
+
+**Stop condition met.** No production code was modified. This document names, for every component introduced, its producer, consumer, inputs, outputs, persistence, failure behavior, retry behavior, tests, and evidence. Awaiting founder review before Stage 3 implementation begins.
