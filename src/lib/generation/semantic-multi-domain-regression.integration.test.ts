@@ -299,6 +299,53 @@ describe("phrasing-diverse regression (independent Level 3 review, post-D-0067, 
     expect(roles).toContain("Escalation Leads");
   });
 
+  // Round 7 independent review (post-D-0074) Finding, CRITICAL DEFECT
+  // (three of four found this round): a semicolon joining two independent
+  // clauses, a hyphenated compound actor name, and a bulleted/dash-
+  // prefixed role list were each, separately, invisible to
+  // ACTOR_LEAD_PATTERN for the same reason rounds 5-6 already found other
+  // constructions invisible — an ordinary punctuation/formatting choice
+  // this file's structural (not lexical) matching hadn't yet accounted
+  // for. All three fixed the same way as rounds 5-6: widen the structural
+  // match (clause-boundary set, name character class, leading-marker
+  // stripping), never enumerate more vocabulary. A fourth finding this
+  // round (a comma-less leading subordinate clause, e.g. "When a new
+  // request arrives Managers can review it") was deliberately NOT fixed —
+  // see heuristic-extraction.ts's module comment and
+  // execution/state.json's knownLimitations for why (a real, non-trivial
+  // false-positive risk from a product name incidentally followed by
+  // "can"/a verb, not a bounded structural widening like the other three).
+  const SEMICOLON_HYPHEN_BULLET_FIXTURE: Fixture = {
+    domain: "phrasing: semicolon clause boundary + hyphenated compound name (round 7 finding)",
+    idea: "ServiceHub coordinates field visits for small service companies. The dispatch system logs every incoming visit request automatically for later analysis; On-site Technicians can review assigned visits, log notes, and update job status. Full-time Staff can review weekly schedules and request time off.",
+  };
+
+  it("semicolon clause boundary and hyphenated compound actor name: actors are still found (round 7 regression guard)", async () => {
+    const { semanticModel, blueprint } = await runAndInspect(SEMICOLON_HYPHEN_BULLET_FIXTURE.idea);
+
+    const actorNames = (semanticModel.actors as { name: string }[]).map((a) => a.name);
+    expect(actorNames).toContain("On-site Technicians");
+    expect(actorNames).toContain("Full-time Staff");
+
+    const roles = blueprint.roles as string[];
+    expect(roles).toContain("On-site Technicians");
+    expect(roles).toContain("Full-time Staff");
+  });
+
+  it("bulleted/dash-prefixed role list: actors are still found, not hidden behind a leading list marker (round 7 regression guard)", async () => {
+    const { semanticModel, blueprint } = await runAndInspect(
+      "TeamHub helps small teams plan and track their work in one place.\n- Managers can create sprints and assign story points to team members.\n- Employees can update task status and log time spent on assigned work.",
+    );
+
+    const actorNames = (semanticModel.actors as { name: string }[]).map((a) => a.name);
+    expect(actorNames).toContain("Managers");
+    expect(actorNames).toContain("Employees");
+
+    const roles = blueprint.roles as string[];
+    expect(roles).toContain("Managers");
+    expect(roles).toContain("Employees");
+  });
+
   it("non-modal active voice: actors are now found directly (the tractable half of the fix)", async () => {
     const { blueprint } = await runAndInspect(NON_MODAL_ACTIVE_VOICE_FIXTURE.idea);
 

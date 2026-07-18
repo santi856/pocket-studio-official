@@ -192,6 +192,50 @@ describe("runQualityGate", () => {
     ).toBe(true);
   });
 
+  // Round 7 independent review (post-D-0074) Finding, CRITICAL DEFECT: the
+  // hard-rejection check above was also reachable through a semicolon-
+  // joined clause, a hyphenated compound actor name, or a bulleted role
+  // list — all ordinary, non-adversarial ways to write a product
+  // description, none of them exotic. Reproduces the reviewer's exact
+  // repro constructions, which must now pass, not hard-fail.
+  it("still passes for a semicolon-joined clause with a hyphenated compound actor name (round 7 regression guard)", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "ServiceHub coordinates field visits for small service companies. The dispatch system logs every incoming visit request automatically for later analysis; On-site Technicians can review assigned visits, log notes, and update job status. Full-time Staff can review weekly schedules and request time off.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+    await generateBuildPlan(owner.id, project.id);
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    const semanticCheck = result.checks.find((c) => c.name.includes("Semantic coverage"));
+    expect(
+      semanticCheck?.passed,
+      `Semantic coverage check should pass for a semicolon-joined, hyphenated-name description: ${semanticCheck?.details}`,
+    ).toBe(true);
+  });
+
+  it("still passes for a bulleted/dash-prefixed role list (round 7 regression guard)", async () => {
+    const { owner, project } = await seedProject();
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "TeamHub helps small teams plan and track their work in one place.\n- Managers can create sprints and assign story points to team members.\n- Employees can update task status and log time spent on assigned work.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+    await generateBuildPlan(owner.id, project.id);
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    const semanticCheck = result.checks.find((c) => c.name.includes("Semantic coverage"));
+    expect(
+      semanticCheck?.passed,
+      `Semantic coverage check should pass for a bulleted role list: ${semanticCheck?.details}`,
+    ).toBe(true);
+  });
+
   it("still passes for a normal multi-actor description, and for a legitimately terse one below the non-trivial threshold", async () => {
     const { owner, project: normalProject } = await seedProject();
     await generateProductIntelligence(

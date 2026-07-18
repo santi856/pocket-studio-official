@@ -280,9 +280,27 @@ const ROLE_SUFFIX_PATTERN = ROLE_SUFFIX_WORDS.map(
 // "skip one filler word" group separately handles a function word sitting
 // *between* the subject and the real modal/verb — e.g. "Drivers also can
 // track deliveries."
+// Round 7 independent review (post-D-0074) Finding, CRITICAL DEFECT: the
+// actor's first word required `[A-Z][a-zA-Z]*` with no internal hyphen,
+// so a hyphenated compound name ("On-site Technicians," "Full-time
+// Staff," "Co-Managers") — an entirely ordinary way to write a job
+// title — failed to match at all, producing the same false zero-actor
+// hard-block as rounds 5/6's findings. Widened structurally (a hyphen
+// followed by more letters, repeatable) rather than adding hyphenated
+// variants to any word list.
 const ACTOR_LEAD_PATTERN = new RegExp(
-  `^\\s*([A-Z][a-zA-Z]*(?:\\s+(?:${ROLE_SUFFIX_PATTERN}))?)\\s+(?:(?:${FUNCTION_WORD_PATTERN})\\s+)?(?:can|have|has|may|will|${ORGANIZATIONAL_VERB_PATTERN})\\b`,
+  `^\\s*([A-Z][a-zA-Z]*(?:-[a-zA-Z]+)*(?:\\s+(?:${ROLE_SUFFIX_PATTERN}))?)\\s+(?:(?:${FUNCTION_WORD_PATTERN})\\s+)?(?:can|have|has|may|will|${ORGANIZATIONAL_VERB_PATTERN})\\b`,
 );
+
+// Round 7 independent review (post-D-0074) Finding, CRITICAL DEFECT: a
+// bulleted/dash-prefixed role list ("- Managers can create sprints...")
+// — an extremely common, ordinary way to write a product description —
+// failed ACTOR_LEAD_PATTERN's `^\s*[A-Z]` anchor entirely, since the
+// clause literally starts with the bullet character, not a letter. A
+// leading list marker (a dash/bullet character, or a numbered/lettered
+// list prefix like "1." or "a)") is not part of the actor's name and is
+// stripped before matching, the same way whitespace already is.
+const LEADING_LIST_MARKER_PATTERN = /^[-*•]\s+|^\d+[.)]\s+/;
 
 const VERB_OBJECT_PATTERN = new RegExp(
   `\\b(${ORGANIZATIONAL_VERB_PATTERN})\\b\\s+([a-z][a-zA-Z\\- ]*?)(?=[,;.]|\\band\\b|\\bor\\b|$)`,
@@ -305,7 +323,43 @@ const VERB_OBJECT_PATTERN = new RegExp(
 // resulting clause, not just the sentence's own start. A clause with no
 // actor+modal/verb construction (e.g. "When a request comes in") simply
 // produces no match, same as before.
-const CLAUSE_SPLIT_PATTERN = /,\s*|\s+and\s+|\s+but\s+/;
+//
+// Round 7 independent review (post-D-0074) Finding, CRITICAL DEFECT: a
+// semicolon joining two independent clauses ("...for later analysis;
+// Managers can review them...") is not "," / "and" / "but", so it was
+// not recognized as a clause boundary either, hiding the actor in the
+// second clause the same way an unhandled comma/conjunction did before
+// round 5. A semicolon is unambiguously a clause boundary in English
+// (unlike a bare comma, which can also separate list items within one
+// clause), so it is added directly rather than through any word list.
+const CLAUSE_SPLIT_PATTERN = /,\s*|;\s*|\s+and\s+|\s+but\s+/;
+
+// Round 7 independent review (post-D-0074) also found a fourth, related
+// construction — a leading subordinate clause with NO comma before the
+// actor ("When a new request arrives Managers can review it," vs. round
+// 5's already-fixed "When a request comes in, Employees can review it").
+// Deliberately NOT fixed here, unlike the three findings above — disclosed
+// instead, honestly, as an accepted residual limitation (see
+// execution/state.json's knownLimitations). Reason: unlike a comma,
+// semicolon, hyphen, or list marker (each an unambiguous, low-risk
+// structural delimiter to add), a comma-less subordinate clause has NO
+// delimiter separating it from the main clause that follows — closing
+// this gap would require either (a) enumerating subordinating
+// conjunctions ("when," "while," "if," "because," ...) as a new clause-
+// boundary class, which does not actually solve it (splitting at the
+// subordinator does not find where THAT clause's own verb phrase ends and
+// the main clause begins — there is still no delimiter between "arrives"
+// and "Managers" above), or (b) removing ACTOR_LEAD_PATTERN's `^` anchor
+// entirely and searching for the construction anywhere in a clause — which
+// reintroduces a real, previously-avoided false-positive risk: an ordinary
+// product-capability sentence naming the product itself as the grammatical
+// subject ("<ProductName> can process X in under a minute") would then
+// extract the product's own name as an actor (a product name, not a
+// role), a corruption class this file's anchoring has deliberately
+// avoided since round 1. Given the choice between shipping a real new
+// corruption risk and disclosing a clean miss, this file ships the clean
+// miss — the same "safe miss over corrupted guess" standard round 4
+// established.
 
 function splitSentences(text: string): string[] {
   return text
@@ -388,7 +442,8 @@ export function extractSemanticsHeuristically(rawText: string): SemanticExtracti
   for (const sentence of sentences) {
     let actorName: string | null = null;
     for (const clause of splitClauses(sentence)) {
-      const actorMatch = clause.match(ACTOR_LEAD_PATTERN);
+      const cleanedClause = clause.replace(LEADING_LIST_MARKER_PATTERN, "");
+      const actorMatch = cleanedClause.match(ACTOR_LEAD_PATTERN);
       if (!actorMatch) continue;
       const clauseActorName = titleCase(actorMatch[1]!.trim());
       if (actorName === null) actorName = clauseActorName;
