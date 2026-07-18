@@ -512,6 +512,60 @@ describe("runQualityGate", () => {
     expect(result.passed).toBe(false);
   });
 
+  it("discloses full graph-relationship projection as a non-blocking, passed check (Stage 3, D-0084)", async () => {
+    const { owner, project } = await seedProject();
+    // Same fixture as graph-projector.integration.test.ts's "projects real
+    // DEPENDS_ON, CONTAINS, and TRIGGERS edges" test — every candidate
+    // relationship this description derives resolves against a real node.
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "PayNow helps small businesses collect payment from customers through a simple checkout " +
+        "process. Customers can submit their payment details and complete the workflow.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+    await generateBuildPlan(owner.id, project.id);
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    const graphCheck = result.checks.find(
+      (c) => c.name === "Product Knowledge Graph relationships were projected for this generation",
+    );
+    expect(graphCheck?.passed).toBe(true);
+    expect(graphCheck?.details).toMatch(/^\d+ of \d+ candidate relationships projected\.$/);
+    // Not asserting result.passed here: this fixture's monetization category
+    // also raises an unrelated, unapproved consequential-decision blocker
+    // (Build Plan check) — orthogonal to graph-relationship projection.
+  });
+
+  it("discloses an incomplete graph-relationship projection without blocking the overall gate (Stage 3, D-0084)", async () => {
+    const { owner, project } = await seedProject();
+    // Same fixture as graph-projector.integration.test.ts's "discloses,
+    // rather than fabricates" test — the "Submit" action's triggersWorkflow
+    // reference to "Primary Workflow" cannot resolve, since nothing here
+    // matches the "workflows" category.
+    await generateProductIntelligence(
+      owner.id,
+      project.id,
+      "ClickTrack helps teams log which button a user clicked. Users can submit a click event.",
+    );
+    await generateInitialBlueprint(owner.id, project.id);
+    await generateBuildPlan(owner.id, project.id);
+
+    const result = await runQualityGate(owner.id, project.id);
+
+    const graphCheck = result.checks.find(
+      (c) => c.name === "Product Knowledge Graph relationships were projected for this generation",
+    );
+    // Non-blocking by design (Section 10 item 10): a real, disclosed
+    // coverage gap still passes this check and the overall gate.
+    expect(graphCheck?.passed).toBe(true);
+    expect(graphCheck?.details).toContain("Incomplete:");
+    expect(graphCheck?.details).toContain("TRIGGERS");
+    expect(graphCheck?.details).toContain("Primary Workflow");
+    expect(result.passed).toBe(true);
+  });
+
   it("denies running the Quality Gate for an actor without project access", async () => {
     const { owner, project } = await seedProject();
     await generateProductIntelligence(owner.id, project.id, "Build a booking app.");

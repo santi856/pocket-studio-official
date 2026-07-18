@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "generatedBy": "execution-protocol-v1.0-session-init",
-  "lastUpdated": "2026-07-18T12:45:00Z",
+  "lastUpdated": "2026-07-18T12:52:00Z",
   "governanceCommit": "25a33f0",
   "phase": {
     "current": "phase-3",
@@ -255,7 +255,8 @@
     "D-0081",
     "D-0082",
     "D-0083",
-    "D-0084"
+    "D-0084",
+    "D-0085"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -431,7 +432,8 @@
     "EV-0126",
     "EV-0127",
     "EV-0128",
-    "EV-0129"
+    "EV-0129",
+    "EV-0130"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories \u2014 not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (\u00a761).",
@@ -485,5 +487,5 @@
     "Real Stripe test-mode end-to-end exercise (checkout, webhook delivery via the Stripe CLI, a real failed-payment/grace-period/restriction cycle) before any paid pilot -- only the mock provider and a direct-POST synthetic test harness were exercised in this report.",
     "Apple/Google developer account approval and real store review before any mobile distribution claim is made to a customer -- structurally unreachable in this build today (store readiness can never report READY by design)."
   ],
-  "nextAction": "STAGE 3 IMPLEMENTATION IN PROGRESS (Candidate A: Knowledge Graph Relationship Population + Impact Analysis Consumer), per the founder's explicit 'begin' instruction authorizing the D-0081-approved execution brief. Steps 1-9 of 15 complete (D-0082/EV-0127, D-0083/EV-0128, D-0084/EV-0129). Steps 7-9: built analyzeGraphImpact() as a new, entirely additive section of impact-analysis.ts (existing keyword classifier analyzeImpact() completely untouched) -- its pure helpers (fuzzyMatchNodes, traverseFromNode, topologicalOrder, describeImpactCoverage) built and unit-tested in isolation first (15 tests), same discipline as the Graph Projector. Two real bugs caught live against a real generated PayNow-style graph, neither anticipated by hand-crafted unit fixtures: REQUIREMENT nodes' full-sentence labels caused false candidate-resolution ambiguity (fixed by restricting resolvable node types to SCREEN/WORKFLOW/DATA_MODEL/ACTION); character-substring fuzzy matching let 'Pay' falsely match a 'Payment' search (fixed by redesigning fuzzyMatchNodes to word-boundary/word-set-subset matching -- the stricter, Gate-5-consistent choice). Added IMPACT_ANALYSIS_MODE ('keyword'|'graph', default 'keyword') to env.ts/.env.example. Wired into change-flow.ts's beginChangeFlow: disclosureTier stays 100% keyword-based and unchanged; in 'graph' mode, for edit_request intents only, the Decision's impact JSON is additionally enriched with real graph data when analyzeGraphImpact resolves the target, else falls back to identical keyword-only content. Verified via 5 DB-backed integration tests for analyzeGraphImpact alone plus 3 more for the change-flow wiring itself (enriched case, unresolvable-target fallback case, describe_idea no-op case) -- also caught and fixed a real ESM module-evaluation-order pitfall in the wiring test (getServerEnv()'s cache populated by @/lib/db's top-level import before a test's own process.env assignment can run; worked around with vi.resetModules() + dynamic import, mirroring env.test.ts's own pattern). 75/75 in every directly-touched test file; 479/479 across the full orchestration/generation/product directories. tsc/eslint/prettier clean. Full-suite confirmation still deferred to steps 12-13 (see EV-0128's note on confirmed-environmental slowdowns, not a regression). NEXT: step 10 -- add a new Quality Gate check surfacing GRAPH_PROJECTION evidence disclosures as a non-blocking finding. Then step 11 (Memory-Update wiring into beginChangeFlow), steps 12-14 (full vertical/regression/tenant-isolation tests), step 15 (independent Level 3 review). Do not begin Phase 4."
+  "nextAction": "STAGE 3 IMPLEMENTATION IN PROGRESS (Candidate A: Knowledge Graph Relationship Population + Impact Analysis Consumer), per the founder's explicit 'begin' instruction authorizing the D-0081-approved execution brief. Steps 1-10 of 15 complete (D-0082/EV-0127, D-0083/EV-0128, D-0084/EV-0129, D-0085/EV-0130). Step 10: added checkGraphRelationshipsComplete as the Quality Gate's 13th check (quality-gate.ts) -- reads the Graph Projector's ProductEvidence(GRAPH_PROJECTION, subjectKey 'graph.relationships') via the existing listEvidence() query and always returns passed: true (an incomplete graph is a disclosed, expected coverage gap per the architecture proposal's explicit non-blocking design, never a defect that should block a deployable product), with `details` surfacing the real projection count and any missing-relationship reasons. Mapped to the existing 'structural' dimension. A Blueprint predating Stage 3 (no graph-projection evidence) passes with a 'nothing to check' disclosure, same pattern as checkSemanticCoverageAdequate. Verified with 2 new integration tests reusing graph-projector.integration.test.ts's own proven fixtures (PayNow: full projection disclosed; ClickTrack: a real unresolvable TRIGGERS reference disclosed via 'Incomplete: ...' while the overall QualityGateResult.passed stays true, concretely proving non-blocking behavior, not just asserting the check's own field). 24/24 in quality-gate's own test files (all 22 pre-existing tests unmodified and still green); 481/481 across the full generation/orchestration/product regression battery. tsc/eslint/prettier clean. Full-suite confirmation still deferred to steps 12-13 (see EV-0128's note on confirmed-environmental slowdowns, not a regression). NEXT: step 11 -- wire Memory-Update (addProductMemoryEntry(type: 'HISTORY', ...)) into beginChangeFlow, per the architecture proposal's Section 13.2 step 10. Then steps 12-14 (full vertical/regression/tenant-isolation tests), step 15 (independent Level 3 review). Do not begin Phase 4."
 }

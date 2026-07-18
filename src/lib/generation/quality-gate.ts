@@ -5,7 +5,7 @@ import { getLatestBuildPlan } from "./build-plan";
 import { validateInteractionContracts, workflowContractKey } from "./interaction-contracts";
 import { loadScreenData } from "./render-runtime";
 import { bindScreenData } from "./screen-data-binding";
-import { recordEvidence } from "@/lib/product/evidence";
+import { recordEvidence, listEvidence } from "@/lib/product/evidence";
 import { setTruthStatus } from "@/lib/product/truth-status";
 import { recordEvent } from "@/lib/product/events";
 import type { ComponentNode } from "./component-registry";
@@ -470,6 +470,51 @@ function checkSemanticCoverageAdequate(blueprint: Blueprint): QualityGateCheck {
 }
 
 /**
+ * Stage 3 (D-0081/D-0082, STAGE_2_ARCHITECTURE_PROPOSAL.md Section 10 items
+ * 9-10, Section 14 Phase 3): the Graph Projector (graph-projector.ts) never
+ * blocks generation when a candidate relationship can't be resolved (e.g.
+ * an action referencing a workflow that wasn't matched by this generation's
+ * categories) — it records exactly what did and didn't project as
+ * ProductEvidence(GRAPH_PROJECTION, subjectKey "graph.relationships") and
+ * moves on. This check is that evidence's first real consumer: it always
+ * `passed: true` (an incomplete graph is a disclosed, expected coverage gap,
+ * never a defect the Quality Gate should block a deployable product over —
+ * the graph is a navigational layer, not the product itself), and its
+ * `details` surface the real projection count and any missing-relationship
+ * reasons rather than silently passing with no signal. A Blueprint that
+ * predates this Stage 3 work (no graph-projection evidence recorded at all)
+ * has nothing to check against and passes — never a breaking change for
+ * existing projects, same pattern as checkSemanticCoverageAdequate above.
+ */
+async function checkGraphRelationshipsComplete(
+  actorUserId: string,
+  projectId: string,
+): Promise<QualityGateCheck> {
+  const name = "Product Knowledge Graph relationships were projected for this generation";
+  const evidence = await listEvidence(actorUserId, projectId, {
+    subjectKey: "graph.relationships",
+  });
+  const latest = evidence[0];
+
+  if (!latest) {
+    return {
+      name,
+      passed: true,
+      details:
+        "No graph-projection evidence recorded for this Blueprint (predates the Graph Projector, Stage 3, or no candidate relationships were derivable) — nothing to check.",
+    };
+  }
+
+  return {
+    name,
+    passed: true,
+    details: latest.limitations
+      ? `${latest.result} Incomplete: ${latest.limitations}`
+      : latest.result,
+  };
+}
+
+/**
  * P2-EXIT: "quality.gate" alone is one flat status collapsing structural,
  * behavioral, accessibility, governance, and operational completeness
  * into a single pass/fail — a Build Plan with a missing alt tag and one
@@ -507,6 +552,7 @@ const CHECK_DIMENSIONS: Readonly<Record<string, QualityDimension>> = {
   "Every screen's data binding resolves without error": "operational",
   "Semantic coverage is adequate — no identified actor, entity, or workflow was silently dropped":
     "semanticFidelity",
+  "Product Knowledge Graph relationships were projected for this generation": "structural",
 };
 
 const QUALITY_DIMENSION_LABELS: Readonly<Record<QualityDimension, string>> = {
@@ -552,6 +598,7 @@ export async function runQualityGate(
     checkImagesHaveAltText(buildPlan),
     await checkScreensRenderWithoutError(actorUserId, projectId, blueprint, buildPlan),
     checkSemanticCoverageAdequate(blueprint),
+    await checkGraphRelationshipsComplete(actorUserId, projectId),
   ];
 
   const passed = checks.every((check) => check.passed);
