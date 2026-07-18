@@ -1,5 +1,14 @@
 import "server-only";
-import type { ProductKnowledgeEdgeType, ProductKnowledgeNodeType } from "@/generated/prisma/client";
+import type {
+  Prisma,
+  ProductKnowledgeEdgeType,
+  ProductKnowledgeNodeType,
+} from "@/generated/prisma/client";
+import { createKnowledgeEdge } from "@/lib/product/product-knowledge";
+import { recordEvidence } from "@/lib/product/evidence";
+import { BLUEPRINT_CATEGORY_TEMPLATES } from "./blueprint-templates";
+import { deriveDataDependencies, type BlueprintDataModel } from "./build-planner";
+import type { ImpactCategory } from "@/lib/orchestration/impact-analysis";
 
 /**
  * Stage 3 (D-0081, STAGE_2_ARCHITECTURE_PROPOSAL.md §9/§10). The governed,
@@ -87,4 +96,208 @@ export function wouldCreateDependsOnCycle(
   }
 
   return false;
+}
+
+export type BlueprintNodeMaps = {
+  screenNodeIdByLabel: ReadonlyMap<string, string>;
+  workflowNodeIdByLabel: ReadonlyMap<string, string>;
+  dataModelNodeIdByLabel: ReadonlyMap<string, string>;
+  actionNodeIdByLabel: ReadonlyMap<string, string>;
+};
+
+function mapForType(
+  type: ProductKnowledgeNodeType,
+  maps: BlueprintNodeMaps,
+): ReadonlyMap<string, string> {
+  switch (type) {
+    case "SCREEN":
+      return maps.screenNodeIdByLabel;
+    case "WORKFLOW":
+      return maps.workflowNodeIdByLabel;
+    case "DATA_MODEL":
+      return maps.dataModelNodeIdByLabel;
+    case "ACTION":
+      return maps.actionNodeIdByLabel;
+    default:
+      return new Map();
+  }
+}
+
+type EdgeCandidate = {
+  edgeType: ProductKnowledgeEdgeType;
+  sourceType: ProductKnowledgeNodeType;
+  targetType: ProductKnowledgeNodeType;
+  sourceLabel: string;
+  targetLabel: string;
+  provenance: Prisma.InputJsonValue;
+};
+
+/**
+ * Derives every candidate edge this generation *could* produce, purely
+ * from already-computed inputs — no database access, so this half of the
+ * projector is independently testable without a real generation call.
+ *
+ * DEPENDS_ON reuses `deriveDataDependencies` (build-planner.ts) unchanged.
+ * CONTAINS/TRIGGERS come from `BLUEPRINT_CATEGORY_TEMPLATES`'s optional
+ * `onScreen`/`triggersWorkflow` pairing — restricted to the categories this
+ * *specific* generation actually matched (`categories`), so a reference to
+ * a category that wasn't matched simply produces no candidate, not a
+ * guessed one (Section 10 step 3's own "produces nothing rather than
+ * guesses" standard).
+ */
+export function deriveCandidateEdges(input: {
+  categories: readonly ImpactCategory[];
+  screens: readonly string[];
+  dataModels: readonly BlueprintDataModel[];
+}): EdgeCandidate[] {
+  const candidates: EdgeCandidate[] = [];
+
+  const dataDependencies = deriveDataDependencies([...input.screens], [...input.dataModels]);
+  for (const [screen, modelNames] of Object.entries(dataDependencies)) {
+    for (const modelName of modelNames) {
+      candidates.push({
+        edgeType: "DEPENDS_ON",
+        sourceType: "SCREEN",
+        targetType: "DATA_MODEL",
+        sourceLabel: screen,
+        targetLabel: modelName,
+        provenance: { sourceField: "deriveDataDependencies", screen, dataModel: modelName },
+      });
+    }
+  }
+
+  for (const category of input.categories) {
+    const template = BLUEPRINT_CATEGORY_TEMPLATES[category];
+    for (const action of template?.actions ?? []) {
+      if (typeof action === "string") continue;
+
+      if (action.onScreen !== undefined) {
+        candidates.push({
+          edgeType: "CONTAINS",
+          sourceType: "SCREEN",
+          targetType: "ACTION",
+          sourceLabel: action.onScreen,
+          targetLabel: action.name,
+          provenance: { sourceField: "actions[].onScreen", categoryTemplate: category },
+        });
+      }
+      if (action.triggersWorkflow !== undefined) {
+        candidates.push({
+          edgeType: "TRIGGERS",
+          sourceType: "ACTION",
+          targetType: "WORKFLOW",
+          sourceLabel: action.name,
+          targetLabel: action.triggersWorkflow,
+          provenance: { sourceField: "actions[].triggersWorkflow", categoryTemplate: category },
+        });
+      }
+    }
+  }
+
+  return candidates;
+}
+
+export type ProjectionResult = {
+  candidateCount: number;
+  createdCount: number;
+  /** Human-readable reasons, one per candidate that was not persisted — never silently dropped. */
+  missing: string[];
+};
+
+/**
+ * Section 10's full edge-creation workflow, live. Called from
+ * `blueprint-generator.ts` immediately after node creation, in the same
+ * generation call. Per Section 3 P1's Failure behavior: a candidate that
+ * cannot be resolved or created is recorded in `missing`, never thrown —
+ * edge-creation failure must never block generation. The caller (this
+ * function itself) does not write the summarizing `ProductEvidence` row;
+ * see `recordGraphProjectionEvidence` below, called separately so a test
+ * can exercise projection without also asserting on evidence-recording
+ * side effects.
+ */
+export async function projectBlueprintRelationships(
+  actorUserId: string,
+  projectId: string,
+  input: {
+    categories: readonly ImpactCategory[];
+    screens: readonly string[];
+    dataModels: readonly BlueprintDataModel[];
+    nodeMaps: BlueprintNodeMaps;
+  },
+): Promise<ProjectionResult> {
+  const candidates = deriveCandidateEdges(input);
+  const createdDependsOnEdges: CandidateEdge[] = [];
+  const missing: string[] = [];
+  let createdCount = 0;
+
+  for (const candidate of candidates) {
+    const sourceId = mapForType(candidate.sourceType, input.nodeMaps).get(candidate.sourceLabel);
+    const targetId = mapForType(candidate.targetType, input.nodeMaps).get(candidate.targetLabel);
+
+    const describe = () =>
+      `${candidate.edgeType}: "${candidate.sourceLabel}" -> "${candidate.targetLabel}"`;
+
+    if (!sourceId || !targetId) {
+      missing.push(
+        `${describe()} (one or both nodes were not created for this generation — the referenced ` +
+          `category may not have been matched)`,
+      );
+      continue;
+    }
+
+    if (!isApprovedEdgeTriple(candidate.sourceType, candidate.targetType, candidate.edgeType)) {
+      // Not reachable given deriveCandidateEdges's own fixed triple shapes
+      // above — a fail-safe check, not a live code path today.
+      missing.push(`${describe()} (not an approved edge triple)`);
+      continue;
+    }
+
+    if (
+      candidate.edgeType === "DEPENDS_ON" &&
+      wouldCreateDependsOnCycle(createdDependsOnEdges, { sourceId, targetId })
+    ) {
+      missing.push(`${describe()} (would create a DEPENDS_ON cycle, skipped)`);
+      continue;
+    }
+
+    try {
+      await createKnowledgeEdge(actorUserId, projectId, {
+        sourceNodeId: sourceId,
+        targetNodeId: targetId,
+        edgeType: candidate.edgeType,
+        provenance: candidate.provenance,
+      });
+      createdCount++;
+      if (candidate.edgeType === "DEPENDS_ON") {
+        createdDependsOnEdges.push({ sourceId, targetId });
+      }
+    } catch (error) {
+      missing.push(
+        `${describe()} (${error instanceof Error ? error.message : "edge creation failed"})`,
+      );
+    }
+  }
+
+  return { candidateCount: candidates.length, createdCount, missing };
+}
+
+/**
+ * Section 10 items 9-10: one ProductEvidence row per generation recording
+ * how many candidate relationships were actually projected, and why any
+ * were not — this is what lets the new Quality Gate check (Migration Plan
+ * Phase 3) report a real, itemized finding instead of a silent gap or an
+ * opaque pass/fail boolean.
+ */
+export async function recordGraphProjectionEvidence(
+  actorUserId: string,
+  projectId: string,
+  result: ProjectionResult,
+): Promise<void> {
+  await recordEvidence(actorUserId, projectId, {
+    evidenceType: "GRAPH_PROJECTION",
+    subjectKey: "graph.relationships",
+    verificationMethod: "graph-projector.ts's projectBlueprintRelationships()",
+    result: `${result.createdCount} of ${result.candidateCount} candidate relationships projected.`,
+    limitations: result.missing.length > 0 ? result.missing.join("; ") : undefined,
+  });
 }

@@ -5,6 +5,7 @@ import { getLatestProductDNA } from "@/lib/product/product-dna";
 import { listProductMemoryEntries } from "@/lib/product/product-memory";
 import { createKnowledgeNode } from "@/lib/product/product-knowledge";
 import { recordEvent } from "@/lib/product/events";
+import { projectBlueprintRelationships, recordGraphProjectionEvidence } from "./graph-projector";
 import { deriveRequirements } from "@/lib/orchestration/requirements-engine";
 import { getLatestSemanticModel } from "@/lib/product/semantic-model";
 import { computeBlueprintSemanticCoverage } from "./semantic-coverage";
@@ -408,26 +409,62 @@ export async function generateInitialBlueprint(
     basedOnProductDnaVersion: productDNA?.version ?? null,
   });
 
+  // Stage 3 (D-0081/D-0082): node IDs are captured into per-type maps as
+  // they're created, so the Graph Projector below can resolve a candidate
+  // edge's endpoints without a second query — this generation's own nodes
+  // are the only ones that can ever be real endpoints for its own edges.
+  const screenNodeIdByLabel = new Map<string, string>();
   for (const screen of screens) {
-    await createKnowledgeNode(actorUserId, projectId, { type: "SCREEN", label: screen });
+    const node = await createKnowledgeNode(actorUserId, projectId, {
+      type: "SCREEN",
+      label: screen,
+    });
+    screenNodeIdByLabel.set(screen, node.id);
   }
+  const workflowNodeIdByLabel = new Map<string, string>();
   for (const workflow of workflows) {
-    await createKnowledgeNode(actorUserId, projectId, {
+    const node = await createKnowledgeNode(actorUserId, projectId, {
       type: "WORKFLOW",
       label: workflow.name,
       data: workflow,
     });
+    workflowNodeIdByLabel.set(workflow.name, node.id);
   }
+  const dataModelNodeIdByLabel = new Map<string, string>();
   for (const model of dataModels) {
-    await createKnowledgeNode(actorUserId, projectId, {
+    const node = await createKnowledgeNode(actorUserId, projectId, {
       type: "DATA_MODEL",
       label: model.name,
       data: model,
     });
+    dataModelNodeIdByLabel.set(model.name, node.id);
   }
+  const actionNodeIdByLabel = new Map<string, string>();
   for (const action of actions) {
-    await createKnowledgeNode(actorUserId, projectId, { type: "ACTION", label: action });
+    const node = await createKnowledgeNode(actorUserId, projectId, {
+      type: "ACTION",
+      label: action,
+    });
+    actionNodeIdByLabel.set(action, node.id);
   }
+
+  // Edge-creation failure never blocks generation (Section 3 P1's own
+  // Failure behavior) — projectBlueprintRelationships never throws for an
+  // unresolvable candidate, only records it in the returned `missing` list,
+  // which recordGraphProjectionEvidence turns into a disclosed, itemized
+  // ProductEvidence row (consumed by the new Quality Gate check).
+  const projectionResult = await projectBlueprintRelationships(actorUserId, projectId, {
+    categories,
+    screens,
+    dataModels,
+    nodeMaps: {
+      screenNodeIdByLabel,
+      workflowNodeIdByLabel,
+      dataModelNodeIdByLabel,
+      actionNodeIdByLabel,
+    },
+  });
+  await recordGraphProjectionEvidence(actorUserId, projectId, projectionResult);
 
   await recordEvent(actorUserId, projectId, {
     type: "BLUEPRINT_VERSION_CREATED",

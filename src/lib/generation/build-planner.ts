@@ -33,7 +33,7 @@ export class NoBlueprintError extends Error {
 }
 
 type BlueprintWorkflow = { name: string; steps: string[] };
-type BlueprintDataModel = { name: string; fields: string[] };
+export type BlueprintDataModel = { name: string; fields: string[] };
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
@@ -119,7 +119,13 @@ function buildComponentTree(
   return tree;
 }
 
-function deriveDataDependencies(
+/**
+ * Exported for reuse by the Graph Projector (Stage 3, D-0081,
+ * STAGE_2_ARCHITECTURE_PROPOSAL.md §10 step 3): DEPENDS_ON edges are
+ * derived from this exact function's output, unchanged — no new
+ * derivation logic, no schema change, no risk of the two drifting apart.
+ */
+export function deriveDataDependencies(
   screens: string[],
   dataModels: BlueprintDataModel[],
 ): Record<string, string[]> {

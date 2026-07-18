@@ -245,7 +245,8 @@
     "D-0079",
     "D-0080",
     "D-0081",
-    "D-0082"
+    "D-0082",
+    "D-0083"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -277,7 +278,8 @@
     "20260714280000_platform_admin",
     "20260714300000_product_outcomes",
     "20260715110501_product_semantic_model",
-    "20260718090000_add_product_knowledge_edge_type"
+    "20260718090000_add_product_knowledge_edge_type",
+    "20260718100000_add_graph_projection_evidence_type"
   ],
   "testStatus": {
     "typecheck": "pass",
@@ -418,7 +420,8 @@
     "EV-0124",
     "EV-0125",
     "EV-0126",
-    "EV-0127"
+    "EV-0127",
+    "EV-0128"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories \u2014 not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (\u00a761).",
@@ -472,5 +475,5 @@
     "Real Stripe test-mode end-to-end exercise (checkout, webhook delivery via the Stripe CLI, a real failed-payment/grace-period/restriction cycle) before any paid pilot -- only the mock provider and a direct-POST synthetic test harness were exercised in this report.",
     "Apple/Google developer account approval and real store review before any mobile distribution claim is made to a customer -- structurally unreachable in this build today (store readiness can never report READY by design)."
   ],
-  "nextAction": "STAGE 3 IMPLEMENTATION IN PROGRESS (Candidate A: Knowledge Graph Relationship Population + Impact Analysis Consumer), per the founder's explicit 'begin' instruction authorizing the D-0081-approved execution brief. Steps 1-3 of 15 complete (D-0082/EV-0127): (1) real Prisma migration 20260718090000_add_product_knowledge_edge_type -- ProductKnowledgeEdgeType enum (CONTAINS/TRIGGERS/DEPENDS_ON), edgeType (required) + provenance (nullable) columns on ProductKnowledgeEdge, unique constraint widened to include edgeType; confirmed zero real rows existed in both dev/test databases before migrating; createKnowledgeEdge's signature extended, kept domain-agnostic; live-verified two different edge types between the same node pair now succeed while true duplicates still reject. (2) blueprint-templates.ts's actions field additively widened to optionally carry onScreen/triggersWorkflow pairing; two real pairings added (Submit->Primary Workflow, Pay->Checkout); new authoring-time build test (blueprint-templates.test.ts) adversarially confirmed to catch a real typo. (3) graph-projector.ts's two pure validation functions (isApprovedEdgeTriple, wouldCreateDependsOnCycle) built and unit-tested in isolation, including a maxDepth boundary test. 20 new/updated tests all passing; a targeted regression run across every generation-pipeline-touching test file (blueprint-generator, the 9-fixture+holdout semantic-hollowing corpus, quality-gate, generation-orchestrator, change-set) -- 73/73, 18.84s. tsc/eslint/prettier clean. NOTE: two full-suite run attempts hit severe environmental slowdowns (system load 18-21, another concurrent Claude Code session observed running on this machine) with spurious failures in unrelated files that passed cleanly in isolation -- not a regression; a genuine full-suite confirmation is deferred to steps 12-13 of the implementation order. NEXT: step 4 -- build graph-projector.ts's orchestration function (projectBlueprintRelationships), wire node-id capture into blueprint-generator.ts's existing node-creation loop, call it immediately after (steps 4-6), then proceed through the redesigned impact-analysis.ts (steps 7-9), the new Quality Gate check (step 10), Memory-Update wiring (step 11), full vertical/regression tests (steps 12-13), tenant-isolation extension (step 14), and independent Level 3 review (step 15). Do not begin Phase 4."
+  "nextAction": "STAGE 3 IMPLEMENTATION IN PROGRESS (Candidate A: Knowledge Graph Relationship Population + Impact Analysis Consumer), per the founder's explicit 'begin' instruction authorizing the D-0081-approved execution brief. Steps 1-6 of 15 complete (D-0082/EV-0127, D-0083/EV-0128). Steps 1-3: real edgeType/provenance migration on ProductKnowledgeEdge (confirmed zero pre-existing rows in both databases before migrating), createKnowledgeEdge extended and kept domain-agnostic, blueprint-templates.ts's actions field additively widened with two real onScreen/triggersWorkflow pairings plus an adversarially-verified authoring-time build test, graph-projector.ts's two pure validators (isApprovedEdgeTriple, wouldCreateDependsOnCycle) built and unit-tested in isolation. Steps 4-6: a second real gap surfaced during implementation (ProductEvidenceType had no GRAPH_PROJECTION value; fixed with its own dedicated migration, not silently worked around) -- deriveDataDependencies exported from build-planner.ts unchanged for direct reuse; graph-projector.ts's deriveCandidateEdges() (pure, DB-free, independently tested) and projectBlueprintRelationships()/recordGraphProjectionEvidence() (DB-touching orchestration) built; blueprint-generator.ts's node-creation loop extended to capture node ids and call the projector immediately after. LIVE-VERIFIED END TO END FOR THE FIRST TIME (new graph-projector.integration.test.ts, 3 tests): a real generation matching monetization+actions+workflows produces real DEPENDS_ON/CONTAINS/TRIGGERS edges with real provenance and a real itemized ProductEvidence row; an unresolvable cross-category candidate is disclosed, not fabricated; an un-paired bare-string action produces zero fabricated edges. 100/100 across every generation-pipeline test file (22.54s). tsc/eslint/prettier clean. Full-suite confirmation still deferred to steps 12-13 (two attempts hit severe, confirmed-environmental slowdowns -- system load 18-21, another concurrent Claude Code session observed on this machine -- not a regression; identical files passed cleanly in isolation). NEXT: steps 7-9 -- build the graph-traversal impact-analysis.ts function (feature-flagged, existing keyword classifier untouched), its own unit/integration tests in isolation, then wire into change-flow.ts's recordDecision call. Then step 10 (new Quality Gate check), step 11 (Memory-Update wiring), steps 12-14 (full vertical/regression/tenant-isolation tests), step 15 (independent Level 3 review). Do not begin Phase 4."
 }

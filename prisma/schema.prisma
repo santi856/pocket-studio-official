@@ -656,6 +656,12 @@ enum ProductEvidenceType {
   QUALITY_GATE_CHECK
   DEPLOYMENT_ATTEMPT
   STORE_SUBMISSION_ATTEMPT
+  // Stage 3 (D-0081/D-0082): how many of a generation's candidate
+  // CONTAINS/TRIGGERS/DEPENDS_ON relationships the Graph Projector
+  // actually persisted, out of how many candidates — surfaced by the new
+  // Quality Gate check (Migration Plan Phase 3) as a non-blocking,
+  // disclosed finding, never a silent gap.
+  GRAPH_PROJECTION
 }
 
 // Backs Truth Status claims with a verifiable record, mirroring the

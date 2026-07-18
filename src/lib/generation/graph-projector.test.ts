@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isApprovedEdgeTriple, wouldCreateDependsOnCycle } from "./graph-projector";
+import {
+  deriveCandidateEdges,
+  isApprovedEdgeTriple,
+  wouldCreateDependsOnCycle,
+} from "./graph-projector";
 
 describe("isApprovedEdgeTriple", () => {
   it("approves the 5 governed triples", () => {
@@ -77,5 +81,60 @@ describe("wouldCreateDependsOnCycle", () => {
     );
     // The same case with a sufficient maxDepth correctly detects it.
     expect(wouldCreateDependsOnCycle(existing, { sourceId: "n25", targetId: "n0" }, 30)).toBe(true);
+  });
+});
+
+describe("deriveCandidateEdges", () => {
+  it("derives both a DEPENDS_ON and a CONTAINS candidate for the monetization category alone", () => {
+    const candidates = deriveCandidateEdges({
+      categories: ["monetization"],
+      screens: ["Checkout"],
+      dataModels: [{ name: "Payment", fields: ["id", "amountCents", "status", "createdAt"] }],
+    });
+
+    expect(candidates).toContainEqual(
+      expect.objectContaining({
+        edgeType: "DEPENDS_ON",
+        sourceLabel: "Checkout",
+        targetLabel: "Payment",
+      }),
+    );
+    expect(candidates).toContainEqual(
+      expect.objectContaining({
+        edgeType: "CONTAINS",
+        sourceLabel: "Checkout",
+        targetLabel: "Pay",
+      }),
+    );
+  });
+
+  it("derives a TRIGGERS candidate for the actions category alone, independent of whether workflows was matched", () => {
+    const candidates = deriveCandidateEdges({
+      categories: ["actions"],
+      screens: [],
+      dataModels: [],
+    });
+
+    expect(candidates).toEqual([
+      expect.objectContaining({
+        edgeType: "TRIGGERS",
+        sourceLabel: "Submit",
+        targetLabel: "Primary Workflow",
+      }),
+    ]);
+  });
+
+  it("produces zero candidates when no categories are matched", () => {
+    expect(deriveCandidateEdges({ categories: [], screens: [], dataModels: [] })).toEqual([]);
+  });
+
+  it("produces no CONTAINS/TRIGGERS candidate for a category whose actions are still bare strings", () => {
+    const candidates = deriveCandidateEdges({
+      categories: ["integrations"],
+      screens: [],
+      dataModels: [],
+    });
+
+    expect(candidates.filter((c) => c.edgeType !== "DEPENDS_ON")).toEqual([]);
   });
 });
