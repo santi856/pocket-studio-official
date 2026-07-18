@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "generatedBy": "execution-protocol-v1.0-session-init",
-  "lastUpdated": "2026-07-15T06:30:00Z",
+  "lastUpdated": "2026-07-18T12:45:00Z",
   "governanceCommit": "25a33f0",
   "phase": {
     "current": "phase-3",
@@ -119,7 +119,15 @@
       "name": "Practical product completeness (common-sense product reasoning)",
       "source": "D-0022",
       "summary": "Pocket Studio must reason about the normal supporting behavior a requested capability implies (affordances, workflow continuity, state completeness, data lifecycle, validation, accessibility, permissions/consequences, product continuity, customer-perceived completeness) \u2014 not just literal requirement/component compliance. Every implied behavior is classified REQUIRED, CONVENTIONALLY_IMPLIED, RECOMMENDED, OPTIONAL, CONSEQUENTIAL_DECISION (never silently approved \u2014 surface via the Decision Ledger), UNSUPPORTED (represent truthfully), or UNRESOLVED (ask or record). See src/lib/generation/interaction-contracts.ts's module comment for the initial foundation.",
-      "appliesTo": ["P2-02", "P2-03", "P2-05", "P2-06", "P2-08", "P2-10", "P2-17"],
+      "appliesTo": [
+        "P2-02",
+        "P2-03",
+        "P2-05",
+        "P2-06",
+        "P2-08",
+        "P2-10",
+        "P2-17"
+      ],
       "firstVerticalProofTarget": "DELIVERED (P2-EXIT practical-completeness repair, commit d912048, Level 3 review round 1 accepted after 2 real findings were fixed): the Example App Ideas picker (src/components/example-idea-picker.tsx) is a real Studio UI feature \u2014 selectable by mouse, keyboard, and touch (independently verified live in a browser via e2e/example-idea-picker.spec.ts, including a real hasTouch browser context), populates its connected textarea while remaining fully editable, behaves predictably under repeated selection, preserves the customer's exact attempted text through a recoverable minimum-length-validation failure, and lets the customer continue naturally into a real generation. Registered as a real, SUPPORTED_NOW platform Capability Registry entry (studio.example_app_ideas_picker) rather than per-project Truth Status, since it is a fixed Studio feature, not a per-customer capability.",
       "status": "Interaction Contract System pipeline substantially strengthened at P2-EXIT (commit d912048, Level 3-reviewed): interactionContracts is now a required, validated Blueprint field covering both screens and workflows (previously optional, silently skippable); the classification vocabulary covers 6 real values (required/conventionally_implied/recommended/optional/consequential_decision/unresolved) plus a real explicit/inferred basis axis and a real unsupportedStates capability-gap mechanism; the Build Planner consumes workflow contracts for real per-state tests; the renderer implements retry and disabled-while-pending for real (not just declared); the Quality Gate grew from 8 to 11 checks (unsupported-state detection, consequential/unresolved-disclosure re-verification, unwired-Button detection) and gained 5 real per-dimension Truth Status keys alongside the flat rollup; restore-validation now re-checks contract completeness. Known, disclosed, non-blocking gaps remain: no 'selectable list item' interaction state is modeled (list items render as static text, not clickable/keyboard-navigable \u2014 a real gap in the state vocabulary itself, not just its implementation); search/filter, pricing/plan-selection, and destructive-action-beyond-payment pattern families are not yet modeled as their own ProductPattern entries; mobile output (P2-15) has no equivalent Interaction Contract enforcement at all (its own disclosed scaffold-only limitation); the openDecisions disclosure-verification check matches on free-text substrings, fragile to future message-format drift though no live collision exists today."
     }
@@ -246,7 +254,8 @@
     "D-0080",
     "D-0081",
     "D-0082",
-    "D-0083"
+    "D-0083",
+    "D-0084"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -291,7 +300,7 @@
     "productionBuild": "pass (independently re-verified live 2026-07-18, D-0077/EV-0122)",
     "verifiedAt": "2026-07-18T06:05:00Z",
     "verifiedAgainstCommit": "c0c1ed7, independently re-verified by D-0077/EV-0122 (the round-7 reviewer's own live re-run against current HEAD, not carried forward from the implementer's D-0075/D-0076 account)",
-    "note": "Supersedes the prior stale figures (130/130 unit, 253/253 integration, 12/12 e2e), which predated Phase 3. Also see: one intermittent, low-severity display-ordering flake in src/lib/observability/audit-log.integration.test.ts under full-suite load, not reproduced in this verification run -- see POCKET_STUDIO_DEFINITIVE_FOUNDER_REPORT.md §13 for the root cause (millisecond timestamp resolution, no secondary sort key)."
+    "note": "Supersedes the prior stale figures (130/130 unit, 253/253 integration, 12/12 e2e), which predated Phase 3. Also see: one intermittent, low-severity display-ordering flake in src/lib/observability/audit-log.integration.test.ts under full-suite load, not reproduced in this verification run -- see POCKET_STUDIO_DEFINITIVE_FOUNDER_REPORT.md \u00a713 for the root cause (millisecond timestamp resolution, no secondary sort key)."
   },
   "evidenceRefs": [
     "EV-0001",
@@ -421,7 +430,8 @@
     "EV-0125",
     "EV-0126",
     "EV-0127",
-    "EV-0128"
+    "EV-0128",
+    "EV-0129"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories \u2014 not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (\u00a761).",
@@ -475,5 +485,5 @@
     "Real Stripe test-mode end-to-end exercise (checkout, webhook delivery via the Stripe CLI, a real failed-payment/grace-period/restriction cycle) before any paid pilot -- only the mock provider and a direct-POST synthetic test harness were exercised in this report.",
     "Apple/Google developer account approval and real store review before any mobile distribution claim is made to a customer -- structurally unreachable in this build today (store readiness can never report READY by design)."
   ],
-  "nextAction": "STAGE 3 IMPLEMENTATION IN PROGRESS (Candidate A: Knowledge Graph Relationship Population + Impact Analysis Consumer), per the founder's explicit 'begin' instruction authorizing the D-0081-approved execution brief. Steps 1-6 of 15 complete (D-0082/EV-0127, D-0083/EV-0128). Steps 1-3: real edgeType/provenance migration on ProductKnowledgeEdge (confirmed zero pre-existing rows in both databases before migrating), createKnowledgeEdge extended and kept domain-agnostic, blueprint-templates.ts's actions field additively widened with two real onScreen/triggersWorkflow pairings plus an adversarially-verified authoring-time build test, graph-projector.ts's two pure validators (isApprovedEdgeTriple, wouldCreateDependsOnCycle) built and unit-tested in isolation. Steps 4-6: a second real gap surfaced during implementation (ProductEvidenceType had no GRAPH_PROJECTION value; fixed with its own dedicated migration, not silently worked around) -- deriveDataDependencies exported from build-planner.ts unchanged for direct reuse; graph-projector.ts's deriveCandidateEdges() (pure, DB-free, independently tested) and projectBlueprintRelationships()/recordGraphProjectionEvidence() (DB-touching orchestration) built; blueprint-generator.ts's node-creation loop extended to capture node ids and call the projector immediately after. LIVE-VERIFIED END TO END FOR THE FIRST TIME (new graph-projector.integration.test.ts, 3 tests): a real generation matching monetization+actions+workflows produces real DEPENDS_ON/CONTAINS/TRIGGERS edges with real provenance and a real itemized ProductEvidence row; an unresolvable cross-category candidate is disclosed, not fabricated; an un-paired bare-string action produces zero fabricated edges. 100/100 across every generation-pipeline test file (22.54s). tsc/eslint/prettier clean. Full-suite confirmation still deferred to steps 12-13 (two attempts hit severe, confirmed-environmental slowdowns -- system load 18-21, another concurrent Claude Code session observed on this machine -- not a regression; identical files passed cleanly in isolation). NEXT: steps 7-9 -- build the graph-traversal impact-analysis.ts function (feature-flagged, existing keyword classifier untouched), its own unit/integration tests in isolation, then wire into change-flow.ts's recordDecision call. Then step 10 (new Quality Gate check), step 11 (Memory-Update wiring), steps 12-14 (full vertical/regression/tenant-isolation tests), step 15 (independent Level 3 review). Do not begin Phase 4."
+  "nextAction": "STAGE 3 IMPLEMENTATION IN PROGRESS (Candidate A: Knowledge Graph Relationship Population + Impact Analysis Consumer), per the founder's explicit 'begin' instruction authorizing the D-0081-approved execution brief. Steps 1-9 of 15 complete (D-0082/EV-0127, D-0083/EV-0128, D-0084/EV-0129). Steps 7-9: built analyzeGraphImpact() as a new, entirely additive section of impact-analysis.ts (existing keyword classifier analyzeImpact() completely untouched) -- its pure helpers (fuzzyMatchNodes, traverseFromNode, topologicalOrder, describeImpactCoverage) built and unit-tested in isolation first (15 tests), same discipline as the Graph Projector. Two real bugs caught live against a real generated PayNow-style graph, neither anticipated by hand-crafted unit fixtures: REQUIREMENT nodes' full-sentence labels caused false candidate-resolution ambiguity (fixed by restricting resolvable node types to SCREEN/WORKFLOW/DATA_MODEL/ACTION); character-substring fuzzy matching let 'Pay' falsely match a 'Payment' search (fixed by redesigning fuzzyMatchNodes to word-boundary/word-set-subset matching -- the stricter, Gate-5-consistent choice). Added IMPACT_ANALYSIS_MODE ('keyword'|'graph', default 'keyword') to env.ts/.env.example. Wired into change-flow.ts's beginChangeFlow: disclosureTier stays 100% keyword-based and unchanged; in 'graph' mode, for edit_request intents only, the Decision's impact JSON is additionally enriched with real graph data when analyzeGraphImpact resolves the target, else falls back to identical keyword-only content. Verified via 5 DB-backed integration tests for analyzeGraphImpact alone plus 3 more for the change-flow wiring itself (enriched case, unresolvable-target fallback case, describe_idea no-op case) -- also caught and fixed a real ESM module-evaluation-order pitfall in the wiring test (getServerEnv()'s cache populated by @/lib/db's top-level import before a test's own process.env assignment can run; worked around with vi.resetModules() + dynamic import, mirroring env.test.ts's own pattern). 75/75 in every directly-touched test file; 479/479 across the full orchestration/generation/product directories. tsc/eslint/prettier clean. Full-suite confirmation still deferred to steps 12-13 (see EV-0128's note on confirmed-environmental slowdowns, not a regression). NEXT: step 10 -- add a new Quality Gate check surfacing GRAPH_PROJECTION evidence disclosures as a non-blocking finding. Then step 11 (Memory-Update wiring into beginChangeFlow), steps 12-14 (full vertical/regression/tenant-isolation tests), step 15 (independent Level 3 review). Do not begin Phase 4."
 }

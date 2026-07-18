@@ -1,6 +1,11 @@
 import "server-only";
 import { resolveIntent } from "@/lib/orchestration/intent-resolver";
-import { analyzeImpact } from "@/lib/orchestration/impact-analysis";
+import {
+  analyzeImpact,
+  analyzeGraphImpact,
+  describeImpactCoverage,
+} from "@/lib/orchestration/impact-analysis";
+import { getServerEnv } from "@/lib/env";
 import { recordDecision, respondToDecision } from "@/lib/product/decisions";
 import { generateProductIntelligence } from "@/lib/orchestration/product-intelligence";
 import {
@@ -12,7 +17,7 @@ import {
 import type { ProductIntelligenceResult } from "@/lib/orchestration/product-intelligence";
 import type { ResolvedIntent } from "@/lib/ai/provider";
 import type { ImpactAnalysisResult } from "@/lib/orchestration/impact-analysis";
-import type { ChangeSet, Decision } from "@/generated/prisma/client";
+import type { ChangeSet, Decision, Prisma } from "@/generated/prisma/client";
 
 export type ChangeFlowResult = {
   intent: ResolvedIntent;
@@ -61,6 +66,37 @@ export async function beginChangeFlow(
       ? "IMPORTANT"
       : "ROUTINE";
 
+  // Stage 3 (D-0081/D-0082): disclosureTier stays keyword-based above,
+  // unchanged, regardless of IMPACT_ANALYSIS_MODE — GraphImpactAnalysisResult
+  // has no "consequential" signal yet. In "graph" mode, for edit requests
+  // only, the Decision's impact content is additionally enriched with real
+  // graph-traversal data when the graph actually resolves the target;
+  // otherwise (default "keyword" mode, non-edit intents, or an unresolvable
+  // target) behavior is identical to before this stage.
+  let impactRecord: Prisma.InputJsonValue = {
+    categories: impact.categories,
+    consequential: impact.consequential,
+  };
+
+  if (getServerEnv().IMPACT_ANALYSIS_MODE === "graph" && intent.type === "edit_request") {
+    const graphImpact = await analyzeGraphImpact(actorUserId, projectId, {
+      changeTargetLabel: rawText,
+    });
+    if (!graphImpact.missingGraphCoverage) {
+      impactRecord = {
+        categories: impact.categories,
+        consequential: impact.consequential,
+        graph: {
+          coverage: describeImpactCoverage(graphImpact),
+          directlyAffected: graphImpact.directlyAffected.map((n) => n.label),
+          transitivelyAffected: graphImpact.transitivelyAffected.map((n) => n.label),
+          recommendedExecutionOrder: graphImpact.recommendedExecutionOrder,
+          cyclicDependencyWarning: graphImpact.cyclicDependencyWarning,
+        },
+      };
+    }
+  }
+
   const decision = await recordDecision(actorUserId, projectId, {
     source: "orchestration.change-flow",
     summary:
@@ -71,7 +107,7 @@ export async function beginChangeFlow(
           : "Submission was too short to classify with confidence.",
     disclosureTier,
     reason: impact.rationale.join("; ") || "No impact-category keywords matched.",
-    impact: { categories: impact.categories, consequential: impact.consequential },
+    impact: impactRecord,
   });
 
   const productIntelligence =

@@ -15,6 +15,14 @@ const serverEnvSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters"),
   AI_PROVIDER: z.enum(["mock", "anthropic"]).default("mock"),
+  // Stage 3 (D-0081/D-0082, STAGE_2_ARCHITECTURE_PROPOSAL.md Migration Plan
+  // Phase 2): selects the keyword-based classifier (existing, unchanged,
+  // analyzeImpact()) or the new graph-traversal analysis
+  // (analyzeGraphImpact()) for conversational edits. Defaults to "keyword"
+  // until real generation traffic proves the graph's edge coverage is
+  // sufficient — flipping this back requires no data migration, since the
+  // keyword classifier is untouched, not deleted.
+  IMPACT_ANALYSIS_MODE: z.enum(["keyword", "graph"]).default("keyword"),
   ANTHROPIC_API_KEY: z.string().optional(),
   // Optional, deliberately unset by default (Master Spec §61 "cost
   // tracking") — this build never hardcodes a specific dollar-per-token
