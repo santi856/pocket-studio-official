@@ -68,11 +68,55 @@ describe("Product Knowledge relationships", () => {
     const edge = await createKnowledgeEdge(owner.id, projectA.id, {
       sourceNodeId: requirement.id,
       targetNodeId: workflow.id,
+      edgeType: "DEPENDS_ON",
+      provenance: { sourceField: "test-fixture" },
     });
+
+    expect(edge.edgeType).toBe("DEPENDS_ON");
+    expect(edge.provenance).toEqual({ sourceField: "test-fixture" });
 
     const graph = await getKnowledgeGraph(owner.id, projectA.id);
     expect(graph.nodes).toHaveLength(2);
     expect(graph.edges).toEqual([expect.objectContaining({ id: edge.id })]);
+  });
+
+  it("allows two different edge types between the same node pair (composite unique constraint)", async () => {
+    const { owner, projectA } = await seedTwoProjects();
+
+    const screen = await createKnowledgeNode(owner.id, projectA.id, {
+      type: "SCREEN",
+      label: "Checkout",
+    });
+    const dataModel = await createKnowledgeNode(owner.id, projectA.id, {
+      type: "DATA_MODEL",
+      label: "Payment",
+    });
+
+    const first = await createKnowledgeEdge(owner.id, projectA.id, {
+      sourceNodeId: screen.id,
+      targetNodeId: dataModel.id,
+      edgeType: "DEPENDS_ON",
+    });
+    // A second, different-typed edge between the exact same two nodes must
+    // succeed -- the acceptance review (D-0081) specifically widened the
+    // unique constraint to include edgeType so this is never blocked.
+    const second = await createKnowledgeEdge(owner.id, projectA.id, {
+      sourceNodeId: screen.id,
+      targetNodeId: dataModel.id,
+      edgeType: "CONTAINS",
+    });
+
+    expect(first.id).not.toBe(second.id);
+
+    // But a genuine duplicate (same source, target, AND edgeType) must
+    // still be rejected by the database's own unique constraint.
+    await expect(
+      createKnowledgeEdge(owner.id, projectA.id, {
+        sourceNodeId: screen.id,
+        targetNodeId: dataModel.id,
+        edgeType: "DEPENDS_ON",
+      }),
+    ).rejects.toThrow();
   });
 
   it("rejects an edge between nodes from different projects", async () => {
@@ -91,6 +135,7 @@ describe("Product Knowledge relationships", () => {
       createKnowledgeEdge(owner.id, projectA.id, {
         sourceNodeId: requirementInA.id,
         targetNodeId: workflowInB.id,
+        edgeType: "DEPENDS_ON",
       }),
     ).rejects.toBeInstanceOf(InvalidKnowledgeEdgeError);
   });
@@ -107,6 +152,7 @@ describe("Product Knowledge relationships", () => {
       createKnowledgeEdge(owner.id, projectA.id, {
         sourceNodeId: node.id,
         targetNodeId: node.id,
+        edgeType: "DEPENDS_ON",
       }),
     ).rejects.toBeInstanceOf(InvalidKnowledgeEdgeError);
   });

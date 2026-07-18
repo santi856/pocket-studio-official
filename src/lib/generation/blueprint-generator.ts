@@ -13,6 +13,7 @@ import {
   BASE_SCREENS,
   CUSTOMER_ROLE,
   OWNER_ROLE,
+  actionName,
 } from "./blueprint-templates";
 import { validateBlueprint } from "./blueprint-validation";
 import { createBlueprintVersion } from "./blueprint";
@@ -96,7 +97,9 @@ export async function generateInitialBlueprint(
     semanticCapabilities.filter((c) => c.kind === "action").map((c) => c.name),
   );
   const actions = uniq([
-    ...categories.flatMap((category) => BLUEPRINT_CATEGORY_TEMPLATES[category]?.actions ?? []),
+    ...categories.flatMap((category) =>
+      (BLUEPRINT_CATEGORY_TEMPLATES[category]?.actions ?? []).map(actionName),
+    ),
     ...semanticActionNames,
   ]);
   const categoryWorkflows = categories

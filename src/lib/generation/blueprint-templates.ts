@@ -1,15 +1,34 @@
 import "server-only";
 import type { ImpactCategory } from "@/lib/orchestration/impact-analysis";
 
+// Stage 3 D-0081 (STAGE_2_ARCHITECTURE_PROPOSAL.md §10.1): an action entry
+// may optionally carry which screen it appears on and which workflow it
+// triggers, feeding the Graph Projector's CONTAINS/TRIGGERS edge
+// derivation — additive and backward-compatible (a bare string remains
+// valid via this union), so every entry below not explicitly updated
+// continues to behave exactly as before. `onScreen`/`triggersWorkflow`
+// values are validated at build time (blueprint-templates.test.ts) against
+// every `screens`/`workflow.name` declared anywhere in this file, catching
+// a real authoring typo deterministically — see §10.1 for why this is
+// deliberately NOT enforced as a same-category-entry-only rule (most real
+// pairings are legitimately cross-category, since only the `workflows`
+// category ever declares a workflow name).
+export type BlueprintCategoryAction =
+  string | { name: string; onScreen?: string; triggersWorkflow?: string };
+
 export type BlueprintCategoryTemplate = {
   workflow?: { name: string; steps: string[] };
   screens?: string[];
-  actions?: string[];
+  actions?: BlueprintCategoryAction[];
   dataModel?: { name: string; fields: string[] };
   permission?: string;
   businessRule?: string;
   monetization?: string;
 };
+
+export function actionName(action: BlueprintCategoryAction): string {
+  return typeof action === "string" ? action : action.name;
+}
 
 /**
  * Deterministic, template-based Blueprint content keyed off the same Impact
@@ -33,7 +52,7 @@ export const BLUEPRINT_CATEGORY_TEMPLATES: Partial<
     screens: ["Browse"],
   },
   actions: {
-    actions: ["Submit"],
+    actions: [{ name: "Submit", triggersWorkflow: "Primary Workflow" }],
   },
   data: {
     dataModel: { name: "Record", fields: ["id", "status", "createdAt"] },
@@ -50,7 +69,7 @@ export const BLUEPRINT_CATEGORY_TEMPLATES: Partial<
   },
   monetization: {
     screens: ["Checkout"],
-    actions: ["Pay"],
+    actions: [{ name: "Pay", onScreen: "Checkout" }],
     dataModel: { name: "Payment", fields: ["id", "amountCents", "status", "createdAt"] },
     monetization: "Collect payment as part of the primary workflow.",
   },

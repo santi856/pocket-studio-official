@@ -244,7 +244,8 @@
     "D-0078",
     "D-0079",
     "D-0080",
-    "D-0081"
+    "D-0081",
+    "D-0082"
   ],
   "migrations": [
     "20260711133038_init_identity_and_tenancy",
@@ -275,7 +276,8 @@
     "20260714260000_observability",
     "20260714280000_platform_admin",
     "20260714300000_product_outcomes",
-    "20260715110501_product_semantic_model"
+    "20260715110501_product_semantic_model",
+    "20260718090000_add_product_knowledge_edge_type"
   ],
   "testStatus": {
     "typecheck": "pass",
@@ -415,7 +417,8 @@
     "EV-0123",
     "EV-0124",
     "EV-0125",
-    "EV-0126"
+    "EV-0126",
+    "EV-0127"
   ],
   "knownLimitations": [
     "Blueprint generation (P2-01) is deterministic/template-based, keyed off the Requirements Engine's Impact Analysis categories \u2014 not real design intelligence. Every generated Blueprint discloses this via generationMetadata.generatedBy and generationMetadata.method. Real AI-backed generation is Phase 3 scope (\u00a761).",
@@ -469,5 +472,5 @@
     "Real Stripe test-mode end-to-end exercise (checkout, webhook delivery via the Stripe CLI, a real failed-payment/grace-period/restriction cycle) before any paid pilot -- only the mock provider and a direct-POST synthetic test harness were exercised in this report.",
     "Apple/Google developer account approval and real store review before any mobile distribution claim is made to a customer -- structurally unreachable in this build today (store readiness can never report READY by design)."
   ],
-  "nextAction": "14-CONCEPT ARCHITECTURE BRIEF -- STAGE 2 ACCEPTANCE REVIEW COMPLETE, VERDICT APPROVED FOR STAGE 3 (D-0065/EV-0110 through D-0081/EV-0126). Stage 2 (D-0080/EV-0125) produced a 28-section architecture proposal; D-0081/EV-0126 is a rigorous 8-gate acceptance review of that proposal, re-verifying every Stage-3-relevant repository claim fresh (not re-reading prior prose). Found and corrected two real, load-bearing gaps, documentation-only, no code touched: (1) ProductKnowledgeEdge has zero type-discriminating column today -- the entire edge taxonomy/traversal design depended on a field (edgeType) that was never flagged as a required migration; added a new Section 10.1 with full schema-extension justification (canonical owner/producer/consumer/alternatives/invariant/lifecycle/regeneration/conversational-edit/backward-compat/migration/failure-behavior) for a new edgeType+provenance migration and corrected the Migration Plan and Candidate A's 'Migrations: none' claim accordingly; (2) VERIFIED_BY was listed as approved for Stage 3 despite its only valid targets (TEST/EVIDENCE nodes) never being populated by Candidate A's actual execution sequence -- deferred VERIFIED_BY/TEST/EVIDENCE to a bundled Stage 3+1 slice, narrowing Candidate A to exactly 3 edge types (CONTAINS/TRIGGERS/DEPENDS_ON). Also corrected the BLUEPRINT_CATEGORY_TEMPLATES validation invariant using real template data (only the 'workflows' category ever declares a workflow name, so a same-entry-only rule was wrong) into a two-part check: an authoring-time build test for typo-catching plus a non-blocking generation-time disclosure for legitimate cross-category non-matches -- explicitly reasoned against this session's own semantic-hollowing hard-gate history to avoid reintroducing a false-positive-prone block. A corrected, repository-grounded 15-step Stage 3 implementation order was produced. execution/architecture/STAGE_2_ARCHITECTURE_PROPOSAL.md is now the corrected, approved baseline. NEXT: await founder go-ahead to begin Stage 3 implementation (Candidate A: Knowledge Graph Relationship Population + Impact Analysis Consumer, corrected scope) -- do not begin Stage 3 code without that explicit go-ahead. Do not begin Phase 4."
+  "nextAction": "STAGE 3 IMPLEMENTATION IN PROGRESS (Candidate A: Knowledge Graph Relationship Population + Impact Analysis Consumer), per the founder's explicit 'begin' instruction authorizing the D-0081-approved execution brief. Steps 1-3 of 15 complete (D-0082/EV-0127): (1) real Prisma migration 20260718090000_add_product_knowledge_edge_type -- ProductKnowledgeEdgeType enum (CONTAINS/TRIGGERS/DEPENDS_ON), edgeType (required) + provenance (nullable) columns on ProductKnowledgeEdge, unique constraint widened to include edgeType; confirmed zero real rows existed in both dev/test databases before migrating; createKnowledgeEdge's signature extended, kept domain-agnostic; live-verified two different edge types between the same node pair now succeed while true duplicates still reject. (2) blueprint-templates.ts's actions field additively widened to optionally carry onScreen/triggersWorkflow pairing; two real pairings added (Submit->Primary Workflow, Pay->Checkout); new authoring-time build test (blueprint-templates.test.ts) adversarially confirmed to catch a real typo. (3) graph-projector.ts's two pure validation functions (isApprovedEdgeTriple, wouldCreateDependsOnCycle) built and unit-tested in isolation, including a maxDepth boundary test. 20 new/updated tests all passing; a targeted regression run across every generation-pipeline-touching test file (blueprint-generator, the 9-fixture+holdout semantic-hollowing corpus, quality-gate, generation-orchestrator, change-set) -- 73/73, 18.84s. tsc/eslint/prettier clean. NOTE: two full-suite run attempts hit severe environmental slowdowns (system load 18-21, another concurrent Claude Code session observed running on this machine) with spurious failures in unrelated files that passed cleanly in isolation -- not a regression; a genuine full-suite confirmation is deferred to steps 12-13 of the implementation order. NEXT: step 4 -- build graph-projector.ts's orchestration function (projectBlueprintRelationships), wire node-id capture into blueprint-generator.ts's existing node-creation loop, call it immediately after (steps 4-6), then proceed through the redesigned impact-analysis.ts (steps 7-9), the new Quality Gate check (step 10), Memory-Update wiring (step 11), full vertical/regression tests (steps 12-13), tenant-isolation extension (step 14), and independent Level 3 review (step 15). Do not begin Phase 4."
 }

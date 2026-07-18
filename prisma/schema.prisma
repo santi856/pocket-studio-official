@@ -492,17 +492,38 @@ model ProductKnowledgeNode {
   @@map("product_knowledge_nodes")
 }
 
-model ProductKnowledgeEdge {
-  id           String               @id @default(cuid())
-  projectId    String
-  project      Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  sourceNodeId String
-  sourceNode   ProductKnowledgeNode @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
-  targetNodeId String
-  targetNode   ProductKnowledgeNode @relation("TargetNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
-  createdAt    DateTime             @default(now())
+// Stage 2 architecture proposal (D-0080), corrected during Stage 2 acceptance
+// review (D-0081, execution/architecture/STAGE_2_ARCHITECTURE_PROPOSAL.md
+// §10.1): the acceptance review found ProductKnowledgeEdge had no
+// type-discriminating field at all — the entire governed edge taxonomy
+// depended on one that did not exist. Approved for Stage 3: CONTAINS,
+// TRIGGERS, DEPENDS_ON only — VERIFIED_BY is deferred to Stage 3+1 (its only
+// valid targets, TEST/EVIDENCE nodes, are not populated by this slice).
+enum ProductKnowledgeEdgeType {
+  CONTAINS
+  TRIGGERS
+  DEPENDS_ON
+}
 
-  @@unique([sourceNodeId, targetNodeId])
+model ProductKnowledgeEdge {
+  id           String                   @id @default(cuid())
+  projectId    String
+  project      Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceNodeId String
+  sourceNode   ProductKnowledgeNode     @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNodeId String
+  targetNode   ProductKnowledgeNode     @relation("TargetNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
+  edgeType     ProductKnowledgeEdgeType
+  // Free-form record of which Blueprint field/category-template entry
+  // produced this edge (e.g. { "sourceField": "actions[].triggersWorkflow",
+  // "categoryTemplate": "monetization" }) — always populated by the Graph
+  // Projector in Stage 3. Nullable only because a future AI-backed edge
+  // producer (not built) would reuse this same field for a different
+  // provenance shape rather than requiring a second migration.
+  provenance   Json?
+  createdAt    DateTime                 @default(now())
+
+  @@unique([sourceNodeId, targetNodeId, edgeType])
   @@index([projectId])
   @@map("product_knowledge_edges")
 }
