@@ -28,9 +28,10 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  sessions           Session[]
-  memberships        Membership[]
-  platformAdminGrant PlatformAdmin?
+  sessions                  Session[]
+  memberships               Membership[]
+  platformAdminGrant        PlatformAdmin?
+  requestedAccountDeletions AccountDeletionRequest[]
 
   @@map("users")
 }
@@ -134,13 +135,46 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships     Membership[]
-  projects        Project[]
-  subscription    OrganizationSubscription?
-  auditLogEntries AuditLogEntry[]
-  aiUsageEvents   AiUsageEvent[]
+  memberships             Membership[]
+  projects                Project[]
+  subscription            OrganizationSubscription?
+  auditLogEntries         AuditLogEntry[]
+  aiUsageEvents           AiUsageEvent[]
+  accountDeletionRequests AccountDeletionRequest[]
 
   @@map("organizations")
+}
+
+enum AccountDeletionStatus {
+  PENDING
+  CANCELED
+  EXECUTED
+}
+
+// A customer-initiated, permanent account deletion request — deliberately
+// separate from the billing lifecycle's own CANCELED -> RETENTION_PERIOD ->
+// DELETED path (src/lib/billing/access.ts), which Master Spec §62 and
+// customer-data-protection.integration.test.ts require to never delete
+// customer-owned data as a *consequence of nonpayment*. This model exists
+// for the different case: a customer explicitly asks to permanently delete
+// their account and its data, independent of billing state. A 30-day
+// scheduledPurgeAt grace period (founder decision, 2026-07-25) gives time
+// to cancel a request made in error before executeDueAccountDeletions
+// (src/lib/billing/account-deletion.ts) actually purges anything.
+model AccountDeletionRequest {
+  id                String                @id @default(cuid())
+  organizationId    String
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedByUserId String
+  requestedBy       User                  @relation(fields: [requestedByUserId], references: [id])
+  requestedAt       DateTime              @default(now())
+  scheduledPurgeAt  DateTime
+  status            AccountDeletionStatus @default(PENDING)
+  canceledAt        DateTime?
+  executedAt        DateTime?
+
+  @@index([organizationId])
+  @@map("account_deletion_requests")
 }
 
 // ---------------------------------------------------------------------------

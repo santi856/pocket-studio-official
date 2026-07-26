@@ -5,6 +5,11 @@ import { ForbiddenError, requireOrganizationMembership } from "@/lib/tenancy/aut
 import { resolveOrganizationForRoute } from "@/lib/web/resolve-project";
 import { listProjectsForOrganization } from "@/lib/services/projects";
 import { createProjectAction } from "@/lib/actions/project-actions";
+import {
+  requestAccountDeletionAction,
+  cancelAccountDeletionAction,
+} from "@/lib/actions/account-deletion-actions";
+import { getAccountDeletionStatus } from "@/lib/billing/account-deletion";
 import { AppNav } from "@/components/app-nav";
 
 export default async function OrganizationPage({
@@ -19,8 +24,9 @@ export default async function OrganizationPage({
   const { error } = await searchParams;
 
   const organization = await resolveOrganizationForRoute(orgSlug);
+  let membership;
   try {
-    await requireOrganizationMembership(user.id, organization.id, "MEMBER");
+    membership = await requireOrganizationMembership(user.id, organization.id, "MEMBER");
   } catch (err) {
     if (err instanceof ForbiddenError) {
       notFound();
@@ -29,6 +35,10 @@ export default async function OrganizationPage({
   }
 
   const projects = await listProjectsForOrganization(user.id, organization.id);
+  const isOwner = membership.role === "OWNER";
+  const pendingDeletion = isOwner ? await getAccountDeletionStatus(user.id, organization.id) : null;
+  const requestDeletionAction = requestAccountDeletionAction.bind(null, organization.slug);
+  const cancelDeletionAction = cancelAccountDeletionAction.bind(null, organization.slug);
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
@@ -74,6 +84,46 @@ export default async function OrganizationPage({
             Create
           </button>
         </form>
+
+        {isOwner && (
+          <div className="mt-16 rounded-lg border border-red-200 p-4 dark:border-red-900">
+            <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">Danger zone</h2>
+            {pendingDeletion ? (
+              <>
+                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                  This organization and all its projects are scheduled for permanent deletion on{" "}
+                  {pendingDeletion.scheduledPurgeAt.toLocaleDateString()}. This cannot be undone
+                  once it happens.
+                </p>
+                <form action={cancelDeletionAction} className="mt-4">
+                  <button
+                    type="submit"
+                    className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-900"
+                  >
+                    Cancel deletion
+                  </button>
+                </form>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                  Permanently delete this organization and all its projects, generated app data, and
+                  integration credentials. Billing and invoice records are kept for legal and
+                  accounting purposes. There is a 30-day grace period to cancel before anything is
+                  deleted.
+                </p>
+                <form action={requestDeletionAction} className="mt-4">
+                  <button
+                    type="submit"
+                    className="rounded-full border border-red-300 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+                  >
+                    Delete this organization
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
