@@ -6,7 +6,20 @@ import ts from "typescript";
 // reach (src/lib/tenancy/authz.ts). This tool exists so that invariant is
 // mechanically enforced going forward, not re-verified by hand each phase
 // the way it was for P3-02 itself.
-const AUTHZ_ROOTS = new Set(["requireProjectAccess", "requireOrganizationMembership"]);
+//
+// requireGeneratedAppSessionForProject (src/lib/generation/generated-app-session.ts)
+// is a second, legitimate authz root for a second identity domain: a
+// generated product's own end user (GeneratedAppUser) is not a Pocket
+// Studio platform member, so requireProjectAccess does not — and should
+// not — apply to it. It performs the equivalent check for that domain (a
+// valid session whose owner belongs to the exact project requested), so a
+// tenant-scoped function reaching it is exactly as authorized as one
+// reaching requireProjectAccess, just for a different kind of caller.
+const AUTHZ_ROOTS = new Set([
+  "requireProjectAccess",
+  "requireOrganizationMembership",
+  "requireGeneratedAppSessionForProject",
+]);
 
 // Every entry here must be a *deliberate, disclosed* exception, not a
 // convenience escape hatch — this tool's entire value is that this set
@@ -19,10 +32,26 @@ const ALLOWED_EXCEPTIONS: ReadonlyMap<string, string> = new Map([
       "system, with no actorUserId to check a membership for. projectId here " +
       "is a lookup-scoping key (disambiguating the same email across " +
       "different generated apps' isolated user tables), not an " +
-      "authorization-check subject. Not yet wired into any live route " +
-      "(src/lib/generation/generated-app-auth.ts's own docstring); today's " +
-      "access boundary is the caller's existing platform session + " +
-      "requireProjectAccess, not this function.",
+      "authorization-check subject — this function's job ends at credential " +
+      "verification, before any session exists to check. Now wired into a " +
+      "real, unauthenticated route (src/app/org/[orgSlug]/[projectSlug]/app/sign-in) " +
+      "via signInGeneratedAppUserAction: the real tenant boundary for every " +
+      "request *after* login is requireGeneratedAppSessionForProject (a " +
+      "recognized AUTHZ_ROOT above), not this function — the same " +
+      "login-verification-has-no-tenant-yet-to-check shape as " +
+      "authenticateUser (src/lib/services/users.ts), which is not excepted " +
+      "here only because it has no projectId parameter to trigger this " +
+      "analyzer at all.",
+  ],
+  [
+    "signUpGeneratedAppUser",
+    "Creates a project's own generated-app end user (GeneratedAppUser) — " +
+      "same identity domain and same shape of exception as " +
+      "authenticateGeneratedAppUser above: projectId scopes which " +
+      "generated app the new account belongs to, it is not an " +
+      "authorization-check subject, and there is no session yet at account " +
+      "-creation time for requireGeneratedAppSessionForProject to check. " +
+      "Wired into the same real, unauthenticated sign-up route.",
   ],
   [
     "applyBillingLifecycleEventFromWebhook",
@@ -64,6 +93,33 @@ const ALLOWED_EXCEPTIONS: ReadonlyMap<string, string> = new Map([
       "generated app's own end user accepts its own terms. Not yet wired " +
       "into any live route, same disclosed gap as " +
       "authenticateGeneratedAppUser.",
+  ],
+  [
+    "setGeneratedAppSessionCookie",
+    "One cookie per generated app, keyed by projectId in the cookie *name* " +
+      "(src/lib/generation/generated-app-cookies.ts) — projectId here is a " +
+      "storage-scoping key so two different generated apps' sessions can " +
+      "coexist in one browser, not an authorization-check subject. Same " +
+      "shape of exception as authenticateGeneratedAppUser above: setting a " +
+      "cookie is not itself an authorization decision. The real check " +
+      "happens on read, via requireGeneratedAppSessionForProject (a " +
+      "recognized AUTHZ_ROOT).",
+  ],
+  [
+    "clearGeneratedAppSessionCookie",
+    "The sign-out counterpart to setGeneratedAppSessionCookie above — same " +
+      "exception, same reason: projectId only selects which generated " +
+      "app's cookie to delete.",
+  ],
+  [
+    "getGeneratedAppSessionTokenFromCookies",
+    "The read counterpart to setGeneratedAppSessionCookie above — returns " +
+      "whatever raw token (if any) is stored under this project's cookie " +
+      "name. Deliberately does not itself authorize anything: the returned " +
+      "token still has to pass requireGeneratedAppSessionForProject before " +
+      "any tenant-scoped data is touched, the same way reading a platform " +
+      "session cookie (getSessionTokenFromCookies, src/lib/auth/cookies.ts) " +
+      "is not itself an authorization check either.",
   ],
   [
     "createGovernanceImpactAssessment",

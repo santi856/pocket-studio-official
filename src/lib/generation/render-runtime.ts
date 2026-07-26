@@ -18,7 +18,7 @@ export class ScreenHasNoDataDependencyError extends Error {
   }
 }
 
-function screenModelKey(dataDependencies: unknown, screenName: string): string | undefined {
+export function screenModelKey(dataDependencies: unknown, screenName: string): string | undefined {
   const deps = (dataDependencies as Record<string, string[]> | null)?.[screenName];
   return deps?.[0];
 }

@@ -15,12 +15,16 @@ describe("findTenantIsolationViolations against the real codebase", () => {
     expect(getAllowedExceptionNames()).toEqual([
       "applyBillingLifecycleEventFromWebhook",
       "authenticateGeneratedAppUser",
+      "clearGeneratedAppSessionCookie",
       "createGeneratedAppCharge",
       "createGovernanceImpactAssessment",
       "dismissGovernanceImpactAssessment",
+      "getGeneratedAppSessionTokenFromCookies",
       "notifyCustomerOfGovernanceImpact",
       "recordPolicyAcceptance",
       "retrieveCredentialSecretForGeneratedApp",
+      "setGeneratedAppSessionCookie",
+      "signUpGeneratedAppUser",
     ]);
   });
 });

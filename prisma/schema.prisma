@@ -1374,6 +1374,7 @@ model GeneratedAppUser {
   ownedRecords      GeneratedRecord[]
   payments          GeneratedAppPayment[]
   policyAcceptances PolicyAcceptance[]
+  sessions          GeneratedAppSession[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1381,6 +1382,28 @@ model GeneratedAppUser {
   @@unique([projectId, email])
   @@index([projectId])
   @@map("generated_app_users")
+}
+
+// A real, live session for a generated product's own end user — the
+// missing binding disclosed by generated-app-auth.ts's own docstring
+// (authenticateGeneratedAppUser verifies credentials but previously
+// established no session). Mirrors Session (platform users) exactly:
+// only a SHA-256 hash of the token is ever stored, so a database read can
+// never be replayed as a live session. Deliberately its own model rather
+// than a nullable-userId variant of Session — GeneratedAppUser and User are
+// different identity domains (Master Spec §25), and conflating them would
+// let a generated app's own end user and a Pocket Studio platform member
+// collide in one session table for no real benefit.
+model GeneratedAppSession {
+  id                 String           @id @default(cuid())
+  generatedAppUserId String
+  generatedAppUser   GeneratedAppUser @relation(fields: [generatedAppUserId], references: [id], onDelete: Cascade)
+  tokenHash          String           @unique
+  expiresAt          DateTime
+  createdAt          DateTime         @default(now())
+
+  @@index([generatedAppUserId])
+  @@map("generated_app_sessions")
 }
 
 enum GeneratedAppPaymentStatus {

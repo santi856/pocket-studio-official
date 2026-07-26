@@ -29,9 +29,9 @@ export class GeneratedRecordNotFoundError extends Error {
   }
 }
 
-type BlueprintDataModel = { name: string; fields: string[] };
+export type BlueprintDataModel = { name: string; fields: string[] };
 
-function asDataModels(value: unknown): BlueprintDataModel[] {
+export function asDataModels(value: unknown): BlueprintDataModel[] {
   return Array.isArray(value)
     ? (value as BlueprintDataModel[]).filter(
         (item) => typeof item?.name === "string" && Array.isArray(item?.fields),
@@ -53,7 +53,10 @@ async function requireDataModel(
   return dataModel;
 }
 
-function validateRecordFields(dataModel: BlueprintDataModel, data: Record<string, unknown>): void {
+export function validateRecordFields(
+  dataModel: BlueprintDataModel,
+  data: Record<string, unknown>,
+): void {
   const missingFields = dataModel.fields.filter((field) => !(field in data));
   if (missingFields.length > 0) {
     throw new InvalidRecordDataError(dataModel.name, missingFields);
