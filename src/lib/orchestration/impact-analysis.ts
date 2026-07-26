@@ -323,7 +323,7 @@ export function topologicalOrder(
     inDegree.set(edge.targetNodeId, (inDegree.get(edge.targetNodeId) ?? 0) + 1);
   }
 
-  let frontier = nodeIds.filter((id) => (inDegree.get(id) ?? 0) === 0);
+  const frontier = nodeIds.filter((id) => (inDegree.get(id) ?? 0) === 0);
   const order: string[] = [];
 
   while (frontier.length > 0) {

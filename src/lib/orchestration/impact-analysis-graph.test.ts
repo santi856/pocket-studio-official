@@ -108,27 +108,23 @@ describe("traverseFromNode", () => {
   });
 
   it("separates direct (depth 1) from transitive (depth 2+) neighbors", () => {
-    const edges = [
-      edge("e1", "a", "b", "TRIGGERS"),
-      edge("e2", "b", "c", "TRIGGERS"),
-    ];
+    const edges = [edge("e1", "a", "b", "TRIGGERS"), edge("e2", "b", "c", "TRIGGERS")];
     const result = traverseFromNode(edges, "a");
     expect(result.directNodeIds).toEqual(new Set(["b"]));
     expect(result.transitiveNodeIds).toEqual(new Set(["c"]));
   });
 
   it("never revisits the same node twice (cycle protection)", () => {
-    const edges = [
-      edge("e1", "a", "b", "TRIGGERS"),
-      edge("e2", "b", "a", "TRIGGERS"),
-    ];
+    const edges = [edge("e1", "a", "b", "TRIGGERS"), edge("e2", "b", "a", "TRIGGERS")];
     const result = traverseFromNode(edges, "a");
     expect(result.directNodeIds).toEqual(new Set(["b"]));
     expect(result.transitiveNodeIds).toEqual(new Set());
   });
 
   it("respects the fan-out limit and reports truncation", () => {
-    const edges = Array.from({ length: 60 }, (_, i) => edge(`e${i}`, "hub", `leaf${i}`, "TRIGGERS"));
+    const edges = Array.from({ length: 60 }, (_, i) =>
+      edge(`e${i}`, "hub", `leaf${i}`, "TRIGGERS"),
+    );
     const result = traverseFromNode(edges, "hub", 3, 50);
     expect(result.truncated).toBe(true);
     expect(result.directNodeIds.size).toBeLessThanOrEqual(50);
@@ -166,10 +162,7 @@ describe("topologicalOrder", () => {
   });
 
   it("ignores edges outside the given node-id set", () => {
-    const edges = [
-      edge("e1", "a", "b", "DEPENDS_ON"),
-      edge("e2", "a", "outside", "DEPENDS_ON"),
-    ];
+    const edges = [edge("e1", "a", "b", "DEPENDS_ON"), edge("e2", "a", "outside", "DEPENDS_ON")];
     const result = topologicalOrder(["a", "b"], edges);
     expect(result.cycleWarning).toBeNull();
     expect(result.order.sort()).toEqual(["a", "b"]);
@@ -192,7 +185,7 @@ describe("describeImpactCoverage", () => {
     hasAnyRecordedEdge: false,
   };
 
-  it('returns the coverage-incomplete message when missingGraphCoverage is true', () => {
+  it("returns the coverage-incomplete message when missingGraphCoverage is true", () => {
     expect(describeImpactCoverage({ ...baseResult, missingGraphCoverage: true })).toBe(
       "Impact cannot be determined because graph coverage is incomplete.",
     );
@@ -219,7 +212,11 @@ describe("describeImpactCoverage", () => {
       confidenceState: "implemented",
     };
     expect(
-      describeImpactCoverage({ ...baseResult, directlyAffected: [affected], hasAnyRecordedEdge: true }),
+      describeImpactCoverage({
+        ...baseResult,
+        directlyAffected: [affected],
+        hasAnyRecordedEdge: true,
+      }),
     ).toBe("Changing this also affects: Checkout.");
   });
 });

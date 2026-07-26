@@ -26,6 +26,11 @@ const eslintConfig = defineConfig([
     "src/generated/**",
     "playwright-report/**",
     "test-results/**",
+    // Full git-worktree checkouts for background agent sessions
+    // (including their own nested node_modules/src copies) — not this
+    // repo's own source, and scanning them silently multiplied lint time
+    // by however many worktrees happen to exist on disk.
+    ".claude/**",
   ]),
 ]);
 
