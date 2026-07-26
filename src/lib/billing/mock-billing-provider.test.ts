@@ -50,4 +50,29 @@ describe("MockBillingProvider", () => {
       BillingPortalNotAvailableError,
     );
   });
+
+  it("returns a local /mock-checkout URL carrying the session's real inputs as query params", async () => {
+    const session = await provider.createCheckoutSession({
+      organizationId: "org_1",
+      productName: "Builder",
+      unitAmountCents: 2900,
+      currency: "usd",
+      successUrl: "https://app.test/org/acme/billing?notice=done",
+      cancelUrl: "https://app.test/org/acme/billing?notice=canceled",
+    });
+
+    const url = new URL(session.url);
+    expect(url.origin).toBe("https://app.test");
+    expect(url.pathname).toBe("/mock-checkout");
+    expect(url.searchParams.get("organizationId")).toBe("org_1");
+    expect(url.searchParams.get("productName")).toBe("Builder");
+    expect(url.searchParams.get("unitAmountCents")).toBe("2900");
+    expect(url.searchParams.get("currency")).toBe("usd");
+    expect(url.searchParams.get("successUrl")).toBe(
+      "https://app.test/org/acme/billing?notice=done",
+    );
+    expect(url.searchParams.get("cancelUrl")).toBe(
+      "https://app.test/org/acme/billing?notice=canceled",
+    );
+  });
 });

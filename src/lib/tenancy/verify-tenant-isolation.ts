@@ -65,6 +65,21 @@ const ALLOWED_EXCEPTIONS: ReadonlyMap<string, string> = new Map([
       "authenticateGeneratedAppUser above.",
   ],
   [
+    "linkBillingProviderCustomerFromWebhook",
+    "The webhook-driven counterpart to linkBillingProviderCustomer (P3-04, " +
+      "src/lib/billing/subscription.ts) — deliberately has no actorUserId, " +
+      "same shape of exception as applyBillingLifecycleEventFromWebhook " +
+      "above. A real Stripe Checkout Session's checkout.session.completed " +
+      "event IS the authorization to link its customer/subscription ids to " +
+      "the organization named in the session's own client_reference_id " +
+      "(set by this codebase itself at session-creation time, " +
+      "src/lib/actions/billing-actions.ts) — there is no Pocket Studio " +
+      "member 'acting' when Stripe reports its own checkout completed " +
+      "server-to-server. The signature is verified by the caller " +
+      "(src/lib/billing/webhook-processing.ts) before this function is " +
+      "ever reached.",
+  ],
+  [
     "createGeneratedAppCharge",
     "A generated product's own runtime charging its own end user (P3-06, " +
       "src/lib/generation/generated-app-payments.ts) — deliberately has no " +

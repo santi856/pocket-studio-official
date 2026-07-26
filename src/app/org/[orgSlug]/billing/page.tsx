@@ -4,10 +4,12 @@ import { resolveOrganizationForRoute } from "@/lib/web/resolve-project";
 import { getEntitlements, getSubscription } from "@/lib/billing/subscription";
 import { getOrganizationUsage } from "@/lib/billing/entitlements";
 import { getAccessLevel } from "@/lib/billing/access";
+import { listLatestPlans } from "@/lib/billing/plans";
 import { ForbiddenError } from "@/lib/tenancy/authz";
 import { AppNav } from "@/components/app-nav";
 import {
   createBillingPortalSessionAction,
+  createCheckoutSessionAction,
   reconcileSubscriptionAction,
 } from "@/lib/actions/billing-actions";
 
@@ -38,6 +40,14 @@ export default async function BillingPage({
   }
 
   const accessLevel = subscription ? getAccessLevel(subscription.billingState) : "full";
+
+  // Only plans with a real configured monthlyPriceCents are offered for
+  // upgrade — Master Spec §36 "must not invent a price when not supplied."
+  // Never the organization's current plan.
+  const plans = await listLatestPlans();
+  const upgradablePlans = plans.filter(
+    (plan) => plan.monthlyPriceCents != null && plan.planKey !== subscription?.planKey,
+  );
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
@@ -91,7 +101,7 @@ export default async function BillingPage({
               </dl>
             )}
 
-            {subscription.billingProviderCustomerId ? (
+            {subscription.billingProviderCustomerId && (
               <div className="mt-6 flex gap-3">
                 <form action={createBillingPortalSessionAction}>
                   <input type="hidden" name="organizationSlug" value={orgSlug} />
@@ -112,11 +122,28 @@ export default async function BillingPage({
                   </button>
                 </form>
               </div>
-            ) : (
-              <p className="mt-6 text-xs text-zinc-500 dark:text-zinc-500">
-                Live billing, checkout, and plan changes are not yet available. Pocket Studio does
-                not charge you during this phase.
-              </p>
+            )}
+
+            {upgradablePlans.length > 0 && (
+              <div className="mt-6 border-t border-zinc-200 pt-6 dark:border-zinc-800">
+                <h2 className="text-sm font-medium text-black dark:text-white">
+                  {subscription.billingProviderCustomerId ? "Change plan" : "Upgrade"}
+                </h2>
+                <div className="mt-3 flex flex-wrap gap-3">
+                  {upgradablePlans.map((plan) => (
+                    <form key={plan.planKey} action={createCheckoutSessionAction}>
+                      <input type="hidden" name="organizationSlug" value={orgSlug} />
+                      <input type="hidden" name="planKey" value={plan.planKey} />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-medium text-black hover:bg-zinc-50 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-900"
+                      >
+                        {plan.name} — ${(plan.monthlyPriceCents! / 100).toFixed(2)}/mo
+                      </button>
+                    </form>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         )}

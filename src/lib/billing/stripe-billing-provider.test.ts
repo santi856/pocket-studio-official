@@ -221,6 +221,111 @@ describe("StripeBillingProvider.createBillingPortalSession", () => {
   });
 });
 
+describe("StripeBillingProvider.createCheckoutSession", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    setEnv({
+      BILLING_PROVIDER: "stripe",
+      STRIPE_SECRET_KEY: "sk_test_123",
+      STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
+      DATABASE_URL: "postgresql://test",
+      SESSION_SECRET: "x".repeat(32),
+      CREDENTIAL_ENCRYPTION_KEY: Buffer.alloc(32).toString("base64"),
+    });
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("sends a real Stripe Checkout Session request with inline price_data and returns the session URL", async () => {
+    const { StripeBillingProvider } = await import("./stripe-billing-provider");
+    const provider = new StripeBillingProvider();
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ url: "https://checkout.stripe.com/c/pay/test_123" }),
+      text: async () => "",
+    } as Response);
+
+    const result = await provider.createCheckoutSession({
+      organizationId: "org_123",
+      productName: "Builder",
+      unitAmountCents: 2900,
+      currency: "usd",
+      successUrl: "https://example.com/billing?notice=done",
+      cancelUrl: "https://example.com/billing?notice=canceled",
+    });
+
+    expect(result).toEqual({ url: "https://checkout.stripe.com/c/pay/test_123" });
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.stripe.com/v1/checkout/sessions");
+    expect(init.headers).toMatchObject({ Authorization: "Bearer sk_test_123" });
+    const body = String(init.body);
+    expect(body).toContain("mode=subscription");
+    expect(body).toContain("client_reference_id=org_123");
+    expect(body).toContain(
+      `success_url=${encodeURIComponent("https://example.com/billing?notice=done")}`,
+    );
+    expect(body).toContain(`line_items%5B0%5D%5Bprice_data%5D%5Bunit_amount%5D=2900`);
+    expect(body).toContain(`line_items%5B0%5D%5Bprice_data%5D%5Bcurrency%5D=usd`);
+    expect(body).toContain(`line_items%5B0%5D%5Bprice_data%5D%5Brecurring%5D%5Binterval%5D=month`);
+    expect(body).toContain(`line_items%5B0%5D%5Bprice_data%5D%5Bproduct_data%5D%5Bname%5D=Builder`);
+  });
+
+  it("throws StripeRequestError on a non-2xx response", async () => {
+    const { StripeBillingProvider, StripeRequestError } = await import("./stripe-billing-provider");
+    const provider = new StripeBillingProvider();
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      text: async () => "invalid request",
+      json: async () => ({}),
+    } as Response);
+
+    await expect(
+      provider.createCheckoutSession({
+        organizationId: "org_123",
+        productName: "Builder",
+        unitAmountCents: 2900,
+        currency: "usd",
+        successUrl: "https://example.com/billing",
+        cancelUrl: "https://example.com/billing",
+      }),
+    ).rejects.toBeInstanceOf(StripeRequestError);
+  });
+
+  it("throws BillingPortalNotAvailableError when no STRIPE_SECRET_KEY is configured", async () => {
+    setEnv({
+      BILLING_PROVIDER: "mock",
+      DATABASE_URL: "postgresql://test",
+      SESSION_SECRET: "x".repeat(32),
+      CREDENTIAL_ENCRYPTION_KEY: Buffer.alloc(32).toString("base64"),
+    });
+    const { StripeBillingProvider } = await import("./stripe-billing-provider");
+    const { BillingPortalNotAvailableError } = await import("./provider");
+    const provider = new StripeBillingProvider();
+    const mockFetch = fetch as unknown as ReturnType<typeof vi.fn>;
+
+    await expect(
+      provider.createCheckoutSession({
+        organizationId: "org_123",
+        productName: "Builder",
+        unitAmountCents: 2900,
+        currency: "usd",
+        successUrl: "https://example.com/billing",
+        cancelUrl: "https://example.com/billing",
+      }),
+    ).rejects.toBeInstanceOf(BillingPortalNotAvailableError);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
 describe("StripeBillingProvider.getSubscriptionStatus", () => {
   beforeEach(() => {
     vi.resetModules();

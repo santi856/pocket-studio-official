@@ -65,7 +65,8 @@ export type BillingLifecycleEvent =
   | "PAYMENT_RECOVERED"
   | "CANCEL_REQUESTED"
   | "RETENTION_PERIOD_EXPIRED"
-  | "DELETION_EXECUTED";
+  | "DELETION_EXECUTED"
+  | "CHECKOUT_COMPLETED";
 
 export class InvalidBillingTransitionError extends Error {
   constructor(from: BillingState, event: BillingLifecycleEvent) {
@@ -115,6 +116,21 @@ export function nextBillingState(from: BillingState, event: BillingLifecycleEven
       break;
     case "DELETION_EXECUTED":
       if (from === "RETENTION_PERIOD" || from === "DELETION_SCHEDULED") return "DELETED";
+      break;
+    // Real gap this closes (staging-readiness sprint, 2026-07-26): every
+    // organization starts TRIALING (createSubscription, subscription.ts)
+    // and no event previously existed to ever leave that state on a
+    // successful first payment — PAYMENT_RECOVERED only fires from a
+    // failure-adjacent state, so a real Stripe checkout completing while
+    // still TRIALING had no valid transition at all (webhook-processing.ts's
+    // own comment already disclosed invoice.payment_succeeded is a no-op
+    // from TRIALING). CHECKOUT_COMPLETED is the real Stripe Checkout
+    // Session's own completion event (mapped in webhook-processing.ts),
+    // distinct from PAYMENT_RECOVERED (a renewal/recovery signal) — a
+    // first subscription and a resubscription after cancellation are the
+    // only two real cases; there is nothing to "recover" from either one.
+    case "CHECKOUT_COMPLETED":
+      if (from === "TRIALING" || from === "CANCELED") return "ACTIVE";
       break;
   }
 

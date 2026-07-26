@@ -84,6 +84,20 @@ describe("nextBillingState", () => {
     expect(nextBillingState(retention, "DELETION_EXECUTED")).toBe("DELETED");
   });
 
+  it("activates a brand-new subscription on its first real Stripe Checkout completion", () => {
+    expect(nextBillingState("TRIALING", "CHECKOUT_COMPLETED")).toBe("ACTIVE");
+  });
+
+  it("re-activates a canceled organization that checks out again", () => {
+    expect(nextBillingState("CANCELED", "CHECKOUT_COMPLETED")).toBe("ACTIVE");
+  });
+
+  it("rejects CHECKOUT_COMPLETED from a state that already has an active subscription", () => {
+    expect(() => nextBillingState("ACTIVE", "CHECKOUT_COMPLETED")).toThrow(
+      InvalidBillingTransitionError,
+    );
+  });
+
   it("rejects an invalid transition instead of guessing a state", () => {
     expect(() => nextBillingState("ACTIVE", "DELETION_EXECUTED")).toThrow(
       InvalidBillingTransitionError,

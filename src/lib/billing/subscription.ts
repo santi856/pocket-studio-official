@@ -71,6 +71,7 @@ const EVENT_TO_BILLING_EVENT_TYPE: Record<
   | "PAYMENT_RECOVERED"
   | "CANCELED"
   | "STATE_TRANSITIONED"
+  | "SUBSCRIPTION_ACTIVATED"
 > = {
   PAYMENT_FAILED: "PAYMENT_FAILED",
   PAYMENT_RETRY_EXHAUSTED: "PAYMENT_RETRY_SCHEDULED",
@@ -80,6 +81,7 @@ const EVENT_TO_BILLING_EVENT_TYPE: Record<
   CANCEL_REQUESTED: "CANCELED",
   RETENTION_PERIOD_EXPIRED: "STATE_TRANSITIONED",
   DELETION_EXECUTED: "STATE_TRANSITIONED",
+  CHECKOUT_COMPLETED: "SUBSCRIPTION_ACTIVATED",
 };
 
 /**
@@ -186,6 +188,37 @@ export async function linkBillingProviderCustomer(
 ): Promise<OrganizationSubscription> {
   await requireOrganizationMembership(actorUserId, organizationId, "OWNER");
 
+  const subscription = await db.organizationSubscription.findUnique({ where: { organizationId } });
+  if (!subscription) {
+    throw new SubscriptionNotFoundError();
+  }
+
+  return db.organizationSubscription.update({
+    where: { organizationId },
+    data: {
+      billingProviderCustomerId,
+      billingProviderSubscriptionId: billingProviderSubscriptionId ?? undefined,
+    },
+  });
+}
+
+/**
+ * The webhook-driven counterpart to linkBillingProviderCustomer —
+ * deliberately has no actorUserId, same shape of exception as
+ * applyBillingLifecycleEventFromWebhook above: a real Stripe Checkout
+ * Session completing IS the authorization to link its customer/subscription
+ * ids to the organization named in the session's own client_reference_id
+ * (set by this codebase itself when the session was created,
+ * src/lib/actions/billing-actions.ts) — there is no live Pocket Studio
+ * member "acting" when Stripe reports its own checkout completed
+ * server-to-server. The signature is verified by the caller
+ * (webhook-processing.ts) before this is ever reached.
+ */
+export async function linkBillingProviderCustomerFromWebhook(
+  organizationId: string,
+  billingProviderCustomerId: string,
+  billingProviderSubscriptionId?: string,
+): Promise<OrganizationSubscription> {
   const subscription = await db.organizationSubscription.findUnique({ where: { organizationId } });
   if (!subscription) {
     throw new SubscriptionNotFoundError();

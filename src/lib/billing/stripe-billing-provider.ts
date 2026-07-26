@@ -10,6 +10,7 @@ import type {
   BillingProvider,
   ConstructWebhookEventInput,
   CreateBillingPortalSessionInput,
+  CreateCheckoutSessionInput,
   WebhookEvent,
 } from "./provider";
 
@@ -159,6 +160,47 @@ export class StripeBillingProvider implements BillingProvider {
       const body = await response.text().catch(() => "");
       throw new StripeRequestError(
         `Stripe API returned ${response.status}: ${body.slice(0, 500)}`,
+        response.status,
+      );
+    }
+
+    const data = (await response.json()) as { url: string };
+    return { url: data.url };
+  }
+
+  /**
+   * Uses inline price_data (line_items[0][price_data][...]) rather than a
+   * pre-created Stripe Price object, so a real monthly price sourced from
+   * this codebase's own Plan Registry (never invented — Master Spec §36)
+   * can be charged without requiring the founder to separately configure
+   * matching Price objects in the Stripe Dashboard. client_reference_id
+   * carries this codebase's organizationId so the later
+   * checkout.session.completed webhook can resolve the organization before
+   * any billing-provider customer id has been linked
+   * (webhook-processing.ts).
+   */
+  async createCheckoutSession(input: CreateCheckoutSessionInput): Promise<{ url: string }> {
+    const body = new URLSearchParams({
+      mode: "subscription",
+      client_reference_id: input.organizationId,
+      success_url: input.successUrl,
+      cancel_url: input.cancelUrl,
+      "line_items[0][quantity]": "1",
+      "line_items[0][price_data][currency]": input.currency,
+      "line_items[0][price_data][unit_amount]": String(input.unitAmountCents),
+      "line_items[0][price_data][recurring][interval]": "month",
+      "line_items[0][price_data][product_data][name]": input.productName,
+    });
+
+    const response = await this.request("/checkout/sessions", {
+      method: "POST",
+      body: body.toString(),
+    });
+
+    if (!response.ok) {
+      const responseBody = await response.text().catch(() => "");
+      throw new StripeRequestError(
+        `Stripe API returned ${response.status}: ${responseBody.slice(0, 500)}`,
         response.status,
       );
     }

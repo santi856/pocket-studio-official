@@ -1174,6 +1174,11 @@ enum BillingEventType {
   SUSPENDED
   RESTORED
   CANCELED
+  // A real Stripe Checkout Session completing (CHECKOUT_COMPLETED,
+  // access.ts) — distinct from PAYMENT_RECOVERED, which is a
+  // renewal/recovery signal from a failure-adjacent state, not a first
+  // subscription or a resubscribe after cancellation.
+  SUBSCRIPTION_ACTIVATED
 }
 
 // Append-only audit trail of billing-state transitions — same pattern as

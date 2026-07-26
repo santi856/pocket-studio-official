@@ -17,6 +17,22 @@ export type CreateBillingPortalSessionInput = {
   returnUrl: string;
 };
 
+export type CreateCheckoutSessionInput = {
+  /**
+   * This codebase's own organizationId — set as the Checkout Session's
+   * client_reference_id so the later checkout.session.completed webhook
+   * can be resolved back to an organization before any billing-provider
+   * customer id has been linked (webhook-processing.ts).
+   */
+  organizationId: string;
+  productName: string;
+  /** Sourced from a real PlanDefinition.monthlyPriceCents — never invented (Master Spec §36). */
+  unitAmountCents: number;
+  currency: string;
+  successUrl: string;
+  cancelUrl: string;
+};
+
 export class BillingSubscriptionNotFoundOnProviderError extends Error {
   constructor() {
     super("The billing provider has no record of this subscription.");
@@ -58,6 +74,16 @@ export interface BillingProvider {
    */
   constructWebhookEvent(input: ConstructWebhookEventInput): WebhookEvent;
   createBillingPortalSession(input: CreateBillingPortalSessionInput): Promise<{ url: string }>;
+  /**
+   * Real Stripe Checkout, subscription mode (Master Spec §36 "monthly
+   * subscriptions") — the entry point this codebase previously had no
+   * implementation of at all (staging-readiness audit, 2026-07-26). Uses
+   * inline price_data rather than a pre-created Stripe Price object, so
+   * a real monthly price sourced from this codebase's own Plan Registry
+   * can be charged without requiring the founder to separately configure
+   * matching Price objects in the Stripe Dashboard.
+   */
+  createCheckoutSession(input: CreateCheckoutSessionInput): Promise<{ url: string }>;
   /**
    * The provider's own real-time status for a subscription — used only
    * for reconciliation (comparing this against the locally recorded

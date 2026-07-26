@@ -13,6 +13,7 @@ import {
   getEntitlements,
   getSubscription,
   linkBillingProviderCustomer,
+  linkBillingProviderCustomerFromWebhook,
   SubscriptionAlreadyExistsError,
   SubscriptionNotFoundError,
   transitionBillingState,
@@ -134,6 +135,30 @@ describe("Organization billing subscription", () => {
     await expect(
       linkBillingProviderCustomer(outsider.id, org.id, "cus_forged"),
     ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("linkBillingProviderCustomerFromWebhook links a customer/subscription id with no actor, mirroring linkBillingProviderCustomer", async () => {
+    const { owner, org } = await seedOrg();
+    await createSubscription(owner.id, org.id);
+
+    const updated = await linkBillingProviderCustomerFromWebhook(
+      org.id,
+      "cus_webhook_123",
+      "sub_webhook_123",
+    );
+
+    expect(updated.billingProviderCustomerId).toBe("cus_webhook_123");
+    expect(updated.billingProviderSubscriptionId).toBe("sub_webhook_123");
+    const resolved = await findOrganizationIdByBillingProviderCustomerId("cus_webhook_123");
+    expect(resolved).toBe(org.id);
+  });
+
+  it("linkBillingProviderCustomerFromWebhook rejects an organization with no subscription", async () => {
+    const { org } = await seedOrg();
+
+    await expect(
+      linkBillingProviderCustomerFromWebhook(org.id, "cus_webhook_missing"),
+    ).rejects.toBeInstanceOf(SubscriptionNotFoundError);
   });
 
   it("applyBillingLifecycleEventFromWebhook applies the same real transition as transitionBillingState, with no actor", async () => {

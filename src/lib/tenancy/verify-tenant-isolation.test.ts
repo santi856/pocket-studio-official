@@ -20,6 +20,7 @@ describe("findTenantIsolationViolations against the real codebase", () => {
       "createGovernanceImpactAssessment",
       "dismissGovernanceImpactAssessment",
       "getGeneratedAppSessionTokenFromCookies",
+      "linkBillingProviderCustomerFromWebhook",
       "notifyCustomerOfGovernanceImpact",
       "recordPolicyAcceptance",
       "retrieveCredentialSecretForGeneratedApp",

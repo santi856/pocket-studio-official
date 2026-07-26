@@ -39,6 +39,35 @@ describe("processBillingWebhook", () => {
     return JSON.stringify({ id, type, data: { object: { customer: customerId } } });
   }
 
+  async function seedUnlinkedOrg() {
+    const owner = await registerUser({
+      email: "checkout-owner@example.com",
+      password: "password123",
+    });
+    const org = await createOrganization({ name: "Fresh Checkout Co", ownerUserId: owner.id });
+    await createSubscription(owner.id, org.id);
+    return { owner, org };
+  }
+
+  function checkoutCompletedBody(
+    id: string,
+    customerId: string,
+    subscriptionId: string,
+    clientReferenceId: string,
+  ) {
+    return JSON.stringify({
+      id,
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          customer: customerId,
+          subscription: subscriptionId,
+          client_reference_id: clientReferenceId,
+        },
+      },
+    });
+  }
+
   it("applies a real billing state transition for a mapped, correctly-signed event", async () => {
     const { owner, org } = await seedLinkedOrg("cus_active_1");
 
@@ -145,6 +174,89 @@ describe("processBillingWebhook", () => {
 
       expect(first).toEqual({ status: "processed", event: "PAYMENT_RECOVERED" });
       expect(second).toEqual({ status: "duplicate_ignored" });
+    });
+  });
+
+  describe("checkout.session.completed — real Stripe Checkout flow", () => {
+    it("resolves a brand-new checkout via client_reference_id, links the provider customer, and activates the subscription", async () => {
+      const { owner, org } = await seedUnlinkedOrg();
+      const before = await getSubscription(owner.id, org.id);
+      expect(before?.billingState).toBe("TRIALING");
+      expect(before?.billingProviderCustomerId).toBeNull();
+
+      const result = await processBillingWebhook(
+        checkoutCompletedBody("evt_checkout_1", "cus_new_1", "sub_new_1", org.id),
+        "mock-signature",
+      );
+
+      expect(result).toEqual({ status: "processed", event: "CHECKOUT_COMPLETED" });
+      const after = await getSubscription(owner.id, org.id);
+      expect(after?.billingState).toBe("ACTIVE");
+      expect(after?.billingProviderCustomerId).toBe("cus_new_1");
+      expect(after?.billingProviderSubscriptionId).toBe("sub_new_1");
+    });
+
+    it("is idempotent — a redelivered checkout.session.completed does not double-apply", async () => {
+      const { owner, org } = await seedUnlinkedOrg();
+      const body = checkoutCompletedBody("evt_checkout_dup", "cus_new_2", "sub_new_2", org.id);
+
+      const first = await processBillingWebhook(body, "mock-signature");
+      const second = await processBillingWebhook(body, "mock-signature");
+
+      expect(first).toEqual({ status: "processed", event: "CHECKOUT_COMPLETED" });
+      expect(second).toEqual({ status: "duplicate_ignored" });
+      const subscription = await getSubscription(owner.id, org.id);
+      expect(subscription?.billingState).toBe("ACTIVE");
+    });
+
+    it("treats a re-delivered or re-visited checkout for an already-ACTIVE organization as a real, recorded no-op — not an error", async () => {
+      const { owner, org } = await seedLinkedOrg("cus_already_active");
+
+      const result = await processBillingWebhook(
+        checkoutCompletedBody("evt_checkout_noop", "cus_already_active", "sub_noop", org.id),
+        "mock-signature",
+      );
+
+      expect(result).toEqual({ status: "processed", event: "CHECKOUT_COMPLETED" });
+      const subscription = await getSubscription(owner.id, org.id);
+      expect(subscription?.billingState).toBe("ACTIVE");
+      const recorded = await db.processedWebhookEvent.findUnique({
+        where: {
+          provider_providerEventId: { provider: "mock", providerEventId: "evt_checkout_noop" },
+        },
+      });
+      expect(recorded).not.toBeNull();
+    });
+
+    it("raises the same UnrecognizedWebhookOrganizationError (handled gracefully by the route) when client_reference_id matches no real organization, instead of an uncaught SubscriptionNotFoundError", async () => {
+      await expect(
+        processBillingWebhook(
+          checkoutCompletedBody(
+            "evt_checkout_garbage",
+            "cus_garbage",
+            "sub_garbage",
+            "org_never_existed",
+          ),
+          "mock-signature",
+        ),
+      ).rejects.toBeInstanceOf(UnrecognizedWebhookOrganizationError);
+    });
+
+    it("re-activates a canceled organization that checks out again", async () => {
+      const { owner, org } = await seedUnlinkedOrg();
+      await db.organizationSubscription.update({
+        where: { organizationId: org.id },
+        data: { billingState: "CANCELED" },
+      });
+
+      const result = await processBillingWebhook(
+        checkoutCompletedBody("evt_checkout_resub", "cus_resub_1", "sub_resub_1", org.id),
+        "mock-signature",
+      );
+
+      expect(result).toEqual({ status: "processed", event: "CHECKOUT_COMPLETED" });
+      const subscription = await getSubscription(owner.id, org.id);
+      expect(subscription?.billingState).toBe("ACTIVE");
     });
   });
 });

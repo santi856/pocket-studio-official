@@ -4,6 +4,7 @@ import type {
   BillingProvider,
   ConstructWebhookEventInput,
   CreateBillingPortalSessionInput,
+  CreateCheckoutSessionInput,
   WebhookEvent,
 } from "./provider";
 
@@ -46,6 +47,31 @@ export class MockBillingProvider implements BillingProvider {
     _input: CreateBillingPortalSessionInput,
   ): Promise<{ url: string }> {
     throw new BillingPortalNotAvailableError();
+  }
+
+  /**
+   * No real Stripe to redirect to in mock mode — instead points at this
+   * codebase's own /mock-checkout page (src/app/mock-checkout/page.tsx),
+   * which carries the session's real inputs as query params and, on
+   * confirm, synthesizes a checkout.session.completed-shaped event and
+   * runs it through the *real* processBillingWebhook pipeline (same
+   * idempotency check, same event mapping, same
+   * linkBillingProviderCustomerFromWebhook call a genuine Stripe webhook
+   * would trigger) rather than mutating billing state directly — so a
+   * "test-mode purchase" here exercises the actual code path, not a
+   * shortcut around it.
+   */
+  async createCheckoutSession(input: CreateCheckoutSessionInput): Promise<{ url: string }> {
+    const origin = new URL(input.successUrl).origin;
+    const params = new URLSearchParams({
+      organizationId: input.organizationId,
+      productName: input.productName,
+      unitAmountCents: String(input.unitAmountCents),
+      currency: input.currency,
+      successUrl: input.successUrl,
+      cancelUrl: input.cancelUrl,
+    });
+    return { url: `${origin}/mock-checkout?${params.toString()}` };
   }
 
   async getSubscriptionStatus(_subscriptionId: string): Promise<{ status: string }> {
