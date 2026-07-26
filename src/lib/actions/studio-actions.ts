@@ -8,6 +8,7 @@ import { DecisionNotPendingError } from "@/lib/product/decisions";
 import { getLatestProductState, updateUnitEconomicsAssumptions } from "@/lib/product/product-state";
 import { defaultUnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
 import type { UnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
+import { AnthropicRequestError, AnthropicResponseFormatError } from "@/lib/ai/anthropic-provider";
 
 // A one- or two-word submission ("app", "hi") gives the deterministic
 // pipeline nothing real to work with — reject it with an honest message
@@ -37,7 +38,27 @@ export async function submitIdeaAction(formData: FormData): Promise<void> {
     );
   }
 
-  await beginChangeFlow(user.id, project.id, text);
+  try {
+    await beginChangeFlow(user.id, project.id, text);
+  } catch (error) {
+    // Real, confirmed failure mode (staging-readiness sprint, 2026-07-26):
+    // resolveIntent's real Anthropic call path has no retry of its own
+    // (unlike extractProductSemantics, which retries then falls back to
+    // the deterministic heuristic extractor) — a live-provider timeout,
+    // rejection, or malformed response previously propagated uncaught
+    // all the way to Next.js's default error page, discarding whatever
+    // the customer had just typed. Same "recoverable failure preserves
+    // input" discipline this function already applies to a too-short
+    // idea above — the customer's exact text survives the redirect.
+    if (error instanceof AnthropicRequestError || error instanceof AnthropicResponseFormatError) {
+      redirect(
+        `/org/${orgSlug}/${projectSlug}?error=${encodeURIComponent(
+          "The AI provider did not respond correctly. Please try again.",
+        )}&text=${encodeURIComponent(text)}`,
+      );
+    }
+    throw error;
+  }
 
   redirect(`/org/${orgSlug}/${projectSlug}`);
 }
