@@ -26,6 +26,21 @@ const AUTHZ_ROOTS = new Set([
 // stays small and each entry is individually justified in code review.
 const ALLOWED_EXCEPTIONS: ReadonlyMap<string, string> = new Map([
   [
+    "beginGeneration",
+    "The AI usage safety-limit choke point (src/lib/ai/generation-limits.ts) " +
+      "— called only from resolveIntent (intent-resolver.ts) and " +
+      "extractProductSemanticsForProject (semantic-extraction.ts), both of " +
+      "which already call requireProjectAccess before this organizationId " +
+      "is ever obtained. This function is not itself a tenant-data access " +
+      "point: it never reads or returns any customer project/organization " +
+      "content, only aggregate AiUsageEvent counts/sums for a quota check " +
+      "and its own internal AiGenerationLease bookkeeping rows (a " +
+      "concurrency accounting artifact, not customer data). A caller who " +
+      "was never authorized for this organizationId could at most cause an " +
+      "incorrect quota read or an extra lease row — not a disclosure or " +
+      "mutation of any tenant's actual data.",
+  ],
+  [
     "authenticateGeneratedAppUser",
     "Authenticates a project's own generated-app end user (GeneratedAppUser) " +
       "— a separate identity domain from Pocket Studio's own User/Membership " +

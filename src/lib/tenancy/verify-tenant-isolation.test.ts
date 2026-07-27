@@ -15,6 +15,7 @@ describe("findTenantIsolationViolations against the real codebase", () => {
     expect(getAllowedExceptionNames()).toEqual([
       "applyBillingLifecycleEventFromWebhook",
       "authenticateGeneratedAppUser",
+      "beginGeneration",
       "clearGeneratedAppSessionCookie",
       "createGeneratedAppCharge",
       "createGovernanceImpactAssessment",

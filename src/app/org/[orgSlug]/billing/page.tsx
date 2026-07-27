@@ -5,6 +5,7 @@ import { getEntitlements, getSubscription } from "@/lib/billing/subscription";
 import { getOrganizationUsage } from "@/lib/billing/entitlements";
 import { getAccessLevel } from "@/lib/billing/access";
 import { listLatestPlans } from "@/lib/billing/plans";
+import { getAiUsageLimits, getAiUsageSummaryForCurrentMonth } from "@/lib/observability/ai-usage";
 import { ForbiddenError } from "@/lib/tenancy/authz";
 import { AppNav } from "@/components/app-nav";
 import {
@@ -40,6 +41,21 @@ export default async function BillingPage({
   }
 
   const accessLevel = subscription ? getAccessLevel(subscription.billingState) : "full";
+
+  // AI usage visibility is ADMIN-gated (getAiUsageSummaryForCurrentMonth's
+  // own requireOrganizationMembership check) — a plain MEMBER can still
+  // view the rest of this page (only MEMBER-gated above), so a
+  // ForbiddenError here means "don't show this section", not "hide the
+  // whole page".
+  let aiUsage: Awaited<ReturnType<typeof getAiUsageSummaryForCurrentMonth>> | null = null;
+  try {
+    aiUsage = await getAiUsageSummaryForCurrentMonth(user.id, organization.id);
+  } catch (err) {
+    if (!(err instanceof ForbiddenError)) {
+      throw err;
+    }
+  }
+  const aiUsageLimits = aiUsage ? getAiUsageLimits() : null;
 
   // Only plans with a real configured monthlyPriceCents are offered for
   // upgrade — Master Spec §36 "must not invent a price when not supplied."
@@ -99,6 +115,51 @@ export default async function BillingPage({
                   </div>
                 ))}
               </dl>
+            )}
+
+            {aiUsage && (
+              <div className="mt-6 border-t border-zinc-200 pt-6 dark:border-zinc-800">
+                <h2 className="text-sm font-medium text-black dark:text-white">
+                  AI usage this month
+                </h2>
+                <dl className="mt-3 grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <dt className="text-zinc-500 dark:text-zinc-500">Generations</dt>
+                    <dd className="font-medium text-black dark:text-white">
+                      {aiUsage.eventCount} /{" "}
+                      {aiUsageLimits?.monthlyGenerationLimit === null ||
+                      aiUsageLimits?.monthlyGenerationLimit === undefined
+                        ? "Unlimited"
+                        : aiUsageLimits.monthlyGenerationLimit}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-zinc-500 dark:text-zinc-500">Estimated cost</dt>
+                    <dd className="font-medium text-black dark:text-white">
+                      {aiUsage.totalEstimatedCostCents === null
+                        ? "Cost tracking not configured"
+                        : `$${(aiUsage.totalEstimatedCostCents / 100).toFixed(2)} / ${
+                            aiUsageLimits?.monthlySpendLimitCents === null ||
+                            aiUsageLimits?.monthlySpendLimitCents === undefined
+                              ? "Unlimited"
+                              : `$${(aiUsageLimits.monthlySpendLimitCents / 100).toFixed(2)}`
+                          }`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-zinc-500 dark:text-zinc-500">Input tokens</dt>
+                    <dd className="font-medium text-black dark:text-white">
+                      {aiUsage.totalInputTokens.toLocaleString()}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-zinc-500 dark:text-zinc-500">Output tokens</dt>
+                    <dd className="font-medium text-black dark:text-white">
+                      {aiUsage.totalOutputTokens.toLocaleString()}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
             )}
 
             {subscription.billingProviderCustomerId && (

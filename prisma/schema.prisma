@@ -140,6 +140,7 @@ model Organization {
   subscription            OrganizationSubscription?
   auditLogEntries         AuditLogEntry[]
   aiUsageEvents           AiUsageEvent[]
+  aiGenerationLeases      AiGenerationLease[]
   accountDeletionRequests AccountDeletionRequest[]
 
   @@map("organizations")
@@ -229,6 +230,41 @@ model AiUsageEvent {
 
   @@index([organizationId, createdAt])
   @@map("ai_usage_events")
+}
+
+// One row per in-flight AI provider call (src/lib/ai/generation-limits.ts)
+// — created immediately before the call, deleted immediately after, in a
+// try/finally. Concurrency is enforced by counting rows for an
+// organizationId, not by an in-memory counter, so the limit holds
+// correctly even across multiple server processes. A row whose createdAt
+// is older than the staleness window (generation-limits.ts) is treated
+// as abandoned (a crashed process that never reached its finally) and
+// opportunistically cleaned up on the next acquisition attempt for that
+// organization — no separate scheduled job required.
+model AiGenerationLease {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@map("ai_generation_leases")
+}
+
+// Abuse protection on idea/edit submission (src/lib/orchestration/
+// submission-rate-limit.ts) — one row per submission attempt, counted
+// within a sliding window keyed by userId. Same shape as LoginAttempt
+// above, minus the ipAddress column: unlike a pre-authentication login
+// attempt, a submission always has a real, already-authenticated userId
+// to key by, so there is no equivalent "don't leak which emails exist"
+// concern driving a compound key here.
+model IdeaSubmissionAttempt {
+  id        String   @id @default(cuid())
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("idea_submission_attempts")
 }
 
 enum IncidentSeverity {

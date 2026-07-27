@@ -3,6 +3,7 @@ import { requireProjectAccess } from "@/lib/tenancy/authz";
 import { getLatestProductState } from "@/lib/product/product-state";
 import { getAIProvider } from "@/lib/ai/get-provider";
 import { recordAiUsageEvent } from "@/lib/observability/ai-usage";
+import { beginGeneration } from "@/lib/ai/generation-limits";
 import type { ResolvedIntent } from "@/lib/ai/provider";
 
 /**
@@ -21,10 +22,19 @@ export async function resolveIntent(
   const existingState = await getLatestProductState(actorUserId, projectId);
 
   const provider = getAIProvider();
-  const result = await provider.resolveIntent({
-    rawText,
-    hasExistingProductState: existingState !== null,
-  });
+  // Production-safe AI usage controls (monthly quota/spend caps,
+  // concurrency limit) — the lease must be held for the exact duration of
+  // the real provider call, released whether it succeeds or throws.
+  const lease = await beginGeneration(project.organizationId);
+  let result: ResolvedIntent;
+  try {
+    result = await provider.resolveIntent({
+      rawText,
+      hasExistingProductState: existingState !== null,
+    });
+  } finally {
+    await lease.release();
+  }
 
   // Master Spec §61 "cost tracking" — only a real provider call has real
   // usage to record; mock mode's null usage is never recorded as a

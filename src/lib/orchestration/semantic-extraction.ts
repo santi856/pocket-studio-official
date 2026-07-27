@@ -2,6 +2,7 @@ import "server-only";
 import { requireProjectAccess } from "@/lib/tenancy/authz";
 import { getAIProvider } from "@/lib/ai/get-provider";
 import { recordAiUsageEvent } from "@/lib/observability/ai-usage";
+import { beginGeneration } from "@/lib/ai/generation-limits";
 import { createSemanticModelVersion } from "@/lib/product/semantic-model";
 import { computeExtractionCoverage } from "@/lib/generation/semantic-coverage";
 import type { SemanticExtractionResult } from "@/lib/ai/provider";
@@ -33,7 +34,16 @@ export async function extractProductSemanticsForProject(
   const project = await requireProjectAccess(actorUserId, projectId, "MEMBER");
 
   const provider = getAIProvider();
-  const extraction = await provider.extractProductSemantics({ rawText, priorRawText });
+  // Production-safe AI usage controls (monthly quota/spend caps,
+  // concurrency limit) — held for the exact duration of the real provider
+  // call, released whether it succeeds or throws.
+  const lease = await beginGeneration(project.organizationId);
+  let extraction: SemanticExtractionResult;
+  try {
+    extraction = await provider.extractProductSemantics({ rawText, priorRawText });
+  } finally {
+    await lease.release();
+  }
 
   // See provider.ts's SemanticExtractionResult.usage doc comment: non-null
   // usage is the sole signal a real provider call actually succeeded,

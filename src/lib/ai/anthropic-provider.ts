@@ -464,15 +464,46 @@ export class AnthropicAIProvider implements AIProvider {
     return { data: parsed.data, usage };
   }
 
+  /**
+   * Retries a bounded number of times on a request/response failure before
+   * giving up (AI_MAX_RETRIES_PER_GENERATION, src/lib/env.ts) — this call
+   * previously had no retry of its own at all (unlike
+   * extractProductSemantics below), a real, confirmed gap (staging-
+   * readiness sprint, 2026-07-26) that let a single transient timeout or
+   * malformed response fail a customer's entire idea/edit submission.
+   * Unlike extractProductSemantics, there is no deterministic fallback for
+   * intent classification — after exhausting retries, the last error
+   * propagates to the caller (studio-actions.ts already handles both
+   * error types gracefully, preserving the customer's input).
+   */
   async resolveIntent(input: ResolveIntentInput): Promise<ResolvedIntent> {
-    const { data, usage } = await this.callTool(
-      buildSystemPrompt(input.hasExistingProductState),
-      input.rawText,
-      RESOLVE_INTENT_TOOL,
-      resolvedIntentSchema,
-      1024,
-    );
-    return { ...data, usage };
+    const env = getServerEnv();
+    const maxAttempts = 1 + env.AI_MAX_RETRIES_PER_GENERATION;
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const { data, usage } = await this.callTool(
+          buildSystemPrompt(input.hasExistingProductState),
+          input.rawText,
+          RESOLVE_INTENT_TOOL,
+          resolvedIntentSchema,
+          env.AI_RESOLVE_INTENT_MAX_OUTPUT_TOKENS,
+        );
+        return { ...data, usage };
+      } catch (error) {
+        lastError = error;
+        if (
+          error instanceof AnthropicResponseFormatError ||
+          error instanceof AnthropicRequestError
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw lastError;
   }
 
   /**
@@ -485,17 +516,18 @@ export class AnthropicAIProvider implements AIProvider {
    * sets based on which path actually produced the result.
    */
   async extractProductSemantics(input: SemanticExtractionInput): Promise<SemanticExtractionResult> {
-    const MAX_ATTEMPTS = 2;
+    const env = getServerEnv();
+    const maxAttempts = 1 + env.AI_MAX_RETRIES_PER_GENERATION;
     let lastError: unknown;
 
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const { data, usage } = await this.callTool(
           buildSemanticSystemPrompt(input.priorRawText !== null),
           input.rawText,
           EXTRACT_SEMANTICS_TOOL,
           semanticExtractionRawSchema,
-          8192,
+          env.AI_EXTRACT_SEMANTICS_MAX_OUTPUT_TOKENS,
         );
 
         const attach = (kind: string, name: string, raw: z.infer<typeof provenanceRawSchema>) => ({

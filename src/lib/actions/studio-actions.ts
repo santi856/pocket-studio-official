@@ -9,6 +9,15 @@ import { getLatestProductState, updateUnitEconomicsAssumptions } from "@/lib/pro
 import { defaultUnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
 import type { UnitEconomicsAssumptions } from "@/lib/orchestration/unit-economics";
 import { AnthropicRequestError, AnthropicResponseFormatError } from "@/lib/ai/anthropic-provider";
+import {
+  ConcurrentGenerationLimitError,
+  MonthlyGenerationQuotaExceededError,
+  MonthlySpendLimitExceededError,
+} from "@/lib/ai/generation-limits";
+import {
+  assertNotSubmissionRateLimited,
+  SubmissionRateLimitedError,
+} from "@/lib/orchestration/submission-rate-limit";
 
 // A one- or two-word submission ("app", "hi") gives the deterministic
 // pipeline nothing real to work with — reject it with an honest message
@@ -39,17 +48,36 @@ export async function submitIdeaAction(formData: FormData): Promise<void> {
   }
 
   try {
+    // Abuse protection (Master Spec — production-safe AI usage controls):
+    // every submission reaches the paid AI provider at minimum via
+    // resolveIntent, so unbounded submission volume is unbounded spend.
+    await assertNotSubmissionRateLimited(user.id);
     await beginChangeFlow(user.id, project.id, text);
   } catch (error) {
+    // Same "recoverable failure preserves input" discipline this function
+    // already applies to a too-short idea above — the customer's exact
+    // text survives every one of these graceful-failure redirects.
+    if (
+      error instanceof SubmissionRateLimitedError ||
+      error instanceof ConcurrentGenerationLimitError ||
+      error instanceof MonthlyGenerationQuotaExceededError ||
+      error instanceof MonthlySpendLimitExceededError
+    ) {
+      redirect(
+        `/org/${orgSlug}/${projectSlug}?error=${encodeURIComponent(error.message)}&text=${encodeURIComponent(text)}`,
+      );
+    }
     // Real, confirmed failure mode (staging-readiness sprint, 2026-07-26):
-    // resolveIntent's real Anthropic call path has no retry of its own
+    // resolveIntent's real Anthropic call path had no retry of its own
     // (unlike extractProductSemantics, which retries then falls back to
     // the deterministic heuristic extractor) — a live-provider timeout,
     // rejection, or malformed response previously propagated uncaught
     // all the way to Next.js's default error page, discarding whatever
-    // the customer had just typed. Same "recoverable failure preserves
-    // input" discipline this function already applies to a too-short
-    // idea above — the customer's exact text survives the redirect.
+    // the customer had just typed. Both call sites now retry a
+    // configurable number of times internally (AI_MAX_RETRIES_PER_GENERATION,
+    // anthropic-provider.ts) before either of these errors ever reaches
+    // here, but a genuinely exhausted retry budget must still fail this
+    // gracefully, not crash.
     if (error instanceof AnthropicRequestError || error instanceof AnthropicResponseFormatError) {
       redirect(
         `/org/${orgSlug}/${projectSlug}?error=${encodeURIComponent(

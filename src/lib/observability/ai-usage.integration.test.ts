@@ -5,7 +5,9 @@ import { resetDatabase } from "../../../test/reset-db";
 import { registerUser } from "@/lib/services/users";
 import { createOrganization } from "@/lib/services/organizations";
 import type {
+  getAiUsageLimits as GetAiUsageLimitsType,
   getAiUsageSummary as GetAiUsageSummaryType,
+  getAiUsageSummaryForCurrentMonth as GetAiUsageSummaryForCurrentMonthType,
   recordAiUsageEvent as RecordAiUsageEventType,
 } from "./ai-usage";
 
@@ -32,6 +34,8 @@ const BASE_ENV = {
 async function loadModule(overrides: Record<string, string | undefined> = {}): Promise<{
   recordAiUsageEvent: typeof RecordAiUsageEventType;
   getAiUsageSummary: typeof GetAiUsageSummaryType;
+  getAiUsageSummaryForCurrentMonth: typeof GetAiUsageSummaryForCurrentMonthType;
+  getAiUsageLimits: typeof GetAiUsageLimitsType;
   ForbiddenError: typeof import("@/lib/tenancy/authz").ForbiddenError;
 }> {
   vi.resetModules();
@@ -146,5 +150,56 @@ describe("AI usage tracking", () => {
     });
 
     await expect(getAiUsageSummary(member.id, org.id)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  describe("getAiUsageSummaryForCurrentMonth", () => {
+    it("only counts events from the current calendar month, not earlier ones", async () => {
+      const { owner, org } = await seedOrg();
+      const { recordAiUsageEvent, getAiUsageSummaryForCurrentMonth } = await loadModule();
+      const lastMonth = new Date();
+      lastMonth.setUTCMonth(lastMonth.getUTCMonth() - 1);
+      await db.aiUsageEvent.create({
+        data: {
+          organizationId: org.id,
+          provider: "anthropic",
+          inputTokens: 999,
+          outputTokens: 999,
+          createdAt: lastMonth,
+        },
+      });
+      await recordAiUsageEvent({
+        organizationId: org.id,
+        provider: "anthropic",
+        inputTokens: 10,
+        outputTokens: 5,
+      });
+
+      const summary = await getAiUsageSummaryForCurrentMonth(owner.id, org.id);
+      expect(summary.eventCount).toBe(1);
+      expect(summary.totalInputTokens).toBe(10);
+    });
+  });
+
+  describe("getAiUsageLimits", () => {
+    it("reports null (unconfigured/unlimited) when no limits are set, never an invented number", async () => {
+      const { getAiUsageLimits } = await loadModule();
+
+      expect(getAiUsageLimits()).toEqual({
+        monthlyGenerationLimit: null,
+        monthlySpendLimitCents: null,
+      });
+    });
+
+    it("reports the real configured limits", async () => {
+      const { getAiUsageLimits } = await loadModule({
+        AI_MONTHLY_GENERATION_LIMIT_PER_ORG: "500",
+        AI_MONTHLY_SPEND_LIMIT_CENTS: "10000",
+      });
+
+      expect(getAiUsageLimits()).toEqual({
+        monthlyGenerationLimit: 500,
+        monthlySpendLimitCents: 10000,
+      });
+    });
   });
 });

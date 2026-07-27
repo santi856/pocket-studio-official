@@ -59,13 +59,30 @@ export type AiUsageSummary = {
   eventCount: number;
 };
 
+/** UTC calendar-month boundary — simple, predictable, independent of any org's billing-cycle anchor. */
+export function startOfCurrentMonth(now = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
+/**
+ * `since` is optional and defaults to all-time (the original behavior of
+ * this function) — pass `startOfCurrentMonth()` for the usage figures an
+ * admin actually cares about month to month, or a custom cutoff for
+ * anything else.
+ */
 export async function getAiUsageSummary(
   actorUserId: string,
   organizationId: string,
+  options?: { since?: Date },
 ): Promise<AiUsageSummary> {
   await requireOrganizationMembership(actorUserId, organizationId, "ADMIN");
 
-  const events = await db.aiUsageEvent.findMany({ where: { organizationId } });
+  const events = await db.aiUsageEvent.findMany({
+    where: {
+      organizationId,
+      ...(options?.since ? { createdAt: { gte: options.since } } : {}),
+    },
+  });
 
   const costedEvents = events.filter((event) => event.estimatedCostCents !== null);
 
@@ -77,5 +94,29 @@ export async function getAiUsageSummary(
         ? costedEvents.reduce((sum, event) => sum + (event.estimatedCostCents ?? 0), 0)
         : null,
     eventCount: events.length,
+  };
+}
+
+/** The this-calendar-month window an admin actually cares about, not an all-time total. */
+export async function getAiUsageSummaryForCurrentMonth(
+  actorUserId: string,
+  organizationId: string,
+): Promise<AiUsageSummary> {
+  return getAiUsageSummary(actorUserId, organizationId, { since: startOfCurrentMonth() });
+}
+
+export type AiUsageLimits = {
+  /** null means unconfigured — unlimited/unenforced (never an invented number). */
+  monthlyGenerationLimit: number | null;
+  /** null means unconfigured — unlimited/unenforced (never an invented dollar figure). */
+  monthlySpendLimitCents: number | null;
+};
+
+/** The real, currently-configured usage safety limits (src/lib/env.ts) — for display alongside actual usage, never invented. */
+export function getAiUsageLimits(): AiUsageLimits {
+  const env = getServerEnv();
+  return {
+    monthlyGenerationLimit: env.AI_MONTHLY_GENERATION_LIMIT_PER_ORG ?? null,
+    monthlySpendLimitCents: env.AI_MONTHLY_SPEND_LIMIT_CENTS ?? null,
   };
 }
