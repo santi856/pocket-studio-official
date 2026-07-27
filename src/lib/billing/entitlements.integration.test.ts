@@ -12,6 +12,7 @@ import {
   assertWithinProjectLimit,
   ExportNotAllowedError,
   getOrganizationUsage,
+  OrganizationAccessRestrictedError,
   ProjectLimitExceededError,
 } from "./entitlements";
 
@@ -127,6 +128,92 @@ describe("Organization entitlements enforcement", () => {
     await expect(assertExportAllowed(owner.id, org.id)).rejects.toBeInstanceOf(
       ExportNotAllowedError,
     );
+  });
+
+  describe("a restricted/cancelled/suspended billing state actually restricts new project creation (Master Spec §37, staging-readiness sprint follow-up 2026-07-26)", () => {
+    it("blocks new project creation once RESTRICTED, even on a high-limit plan with room to spare", async () => {
+      const { owner, org } = await seedOrg();
+      await createSubscription(owner.id, org.id);
+      await db.organizationSubscription.update({
+        where: { organizationId: org.id },
+        data: { planKey: "AGENCY", billingState: "RESTRICTED" },
+      });
+
+      await expect(assertWithinProjectLimit(owner.id, org.id)).rejects.toBeInstanceOf(
+        OrganizationAccessRestrictedError,
+      );
+      await expect(
+        createProject({ organizationId: org.id, name: "Blocked", createdByUserId: owner.id }),
+      ).rejects.toBeInstanceOf(OrganizationAccessRestrictedError);
+    });
+
+    it("blocks new project creation once CANCELED", async () => {
+      const { owner, org } = await seedOrg();
+      await createSubscription(owner.id, org.id);
+      await db.organizationSubscription.update({
+        where: { organizationId: org.id },
+        data: { planKey: "BUILDER", billingState: "CANCELED" },
+      });
+
+      await expect(assertWithinProjectLimit(owner.id, org.id)).rejects.toBeInstanceOf(
+        OrganizationAccessRestrictedError,
+      );
+    });
+
+    it("blocks new project creation once SUSPENDED", async () => {
+      const { owner, org } = await seedOrg();
+      await createSubscription(owner.id, org.id);
+      await db.organizationSubscription.update({
+        where: { organizationId: org.id },
+        data: { planKey: "BUILDER", billingState: "SUSPENDED" },
+      });
+
+      await expect(assertWithinProjectLimit(owner.id, org.id)).rejects.toBeInstanceOf(
+        OrganizationAccessRestrictedError,
+      );
+    });
+
+    it("does NOT block export while restricted — Master Spec §37 preserves data portability during restriction", async () => {
+      const { owner, org } = await seedOrg();
+      await createSubscription(owner.id, org.id);
+      await db.organizationSubscription.update({
+        where: { organizationId: org.id },
+        data: { planKey: "BUILDER", billingState: "RESTRICTED" },
+      });
+
+      await expect(assertExportAllowed(owner.id, org.id)).resolves.toBeUndefined();
+    });
+
+    it("still allows project creation through the full failed-payment sequence up to grace period — restriction only begins after grace period is exhausted", async () => {
+      const { owner, org } = await seedOrg();
+      await createSubscription(owner.id, org.id);
+
+      for (const billingState of ["PAST_DUE", "PAYMENT_RETRYING", "GRACE_PERIOD"] as const) {
+        await db.organizationSubscription.update({
+          where: { organizationId: org.id },
+          data: { planKey: "AGENCY", billingState },
+        });
+        await expect(assertWithinProjectLimit(owner.id, org.id)).resolves.toBeUndefined();
+      }
+    });
+
+    it("restores full project-creation access once payment recovers back to ACTIVE", async () => {
+      const { owner, org } = await seedOrg();
+      await createSubscription(owner.id, org.id);
+      await db.organizationSubscription.update({
+        where: { organizationId: org.id },
+        data: { planKey: "AGENCY", billingState: "SUSPENDED" },
+      });
+      await expect(assertWithinProjectLimit(owner.id, org.id)).rejects.toBeInstanceOf(
+        OrganizationAccessRestrictedError,
+      );
+
+      await db.organizationSubscription.update({
+        where: { organizationId: org.id },
+        data: { billingState: "ACTIVE" },
+      });
+      await expect(assertWithinProjectLimit(owner.id, org.id)).resolves.toBeUndefined();
+    });
   });
 });
 

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireOrganizationMembership } from "@/lib/tenancy/authz";
 import { getLatestPlan } from "@/lib/billing/plans";
+import { getAccessLevel } from "@/lib/billing/access";
 import type { PlanKey } from "@/generated/prisma/client";
 
 export class ProjectLimitExceededError extends Error {
@@ -11,6 +12,31 @@ export class ProjectLimitExceededError extends Error {
       `This workspace's plan allows up to ${limit} project${limit === 1 ? "" : "s"}. Upgrade to create more.`,
     );
     this.name = "ProjectLimitExceededError";
+  }
+}
+
+/**
+ * Master Spec §37's nonpayment/cancellation restriction actually
+ * restricting a paid feature, not just describing that it should
+ * (staging-readiness sprint follow-up, 2026-07-26): a real, confirmed gap
+ * found while verifying Task 1's "cancelled or failed subscriptions
+ * correctly restrict paid features" — resolveEntitlements previously
+ * looked only at planKey, never at billingState, so an organization whose
+ * subscription was CANCELED, SUSPENDED, RESTRICTED, EXPIRED, or
+ * RETENTION_PERIOD/DELETION_SCHEDULED kept creating new projects under its
+ * last-known plan's limit forever. RESTRICTED_CAPABILITIES (access.ts)
+ * preserves "read_only_projects" during restriction, not "create new
+ * projects" — this is that distinction actually enforced. Export
+ * ("portability_export") is deliberately left untouched here: Master Spec
+ * §37 preserves data portability even while restricted, so
+ * assertExportAllowed below intentionally does not gain this same check.
+ */
+export class OrganizationAccessRestrictedError extends Error {
+  constructor() {
+    super(
+      "This workspace's billing access is currently restricted — resolve your billing status to create new projects.",
+    );
+    this.name = "OrganizationAccessRestrictedError";
   }
 }
 
@@ -112,6 +138,15 @@ export async function assertWithinProjectLimit(
   organizationId: string,
 ): Promise<void> {
   const entitlements = await resolveEntitlements(actorUserId, organizationId);
+
+  // Checked before the plan's own projectLimit — a restricted
+  // organization's real problem is its billing status, not which number
+  // its last-known plan happened to allow.
+  const subscription = await db.organizationSubscription.findUnique({ where: { organizationId } });
+  if (subscription && getAccessLevel(subscription.billingState) !== "full") {
+    throw new OrganizationAccessRestrictedError();
+  }
+
   if (entitlements.projectLimit === null) return;
 
   const usage = await getOrganizationUsage(actorUserId, organizationId);
