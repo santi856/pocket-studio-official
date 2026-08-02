@@ -414,6 +414,12 @@ export default async function StudioSimpleModePage({
                 >
                   Export project
                 </a>
+                <Link
+                  href={`/org/${orgSlug}/${projectSlug}/publish`}
+                  className="rounded-full bg-black px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                >
+                  Publish
+                </Link>
               </div>
 
               <div className="mt-6">

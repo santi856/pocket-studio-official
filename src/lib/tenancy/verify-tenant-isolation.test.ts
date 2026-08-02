@@ -27,6 +27,7 @@ describe("findTenantIsolationViolations against the real codebase", () => {
       "retrieveCredentialSecretForGeneratedApp",
       "setGeneratedAppSessionCookie",
       "signUpGeneratedAppUser",
+      "syncPublicationsForBillingAccessChange",
     ]);
   });
 });

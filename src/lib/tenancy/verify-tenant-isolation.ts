@@ -152,6 +152,20 @@ const ALLOWED_EXCEPTIONS: ReadonlyMap<string, string> = new Map([
       "is not itself an authorization check either.",
   ],
   [
+    "syncPublicationsForBillingAccessChange",
+    "Publishing Milestone 1 (2026-07-27) — called only from " +
+      "applyBillingStateTransition (src/lib/billing/subscription.ts), the " +
+      "single choke point every billing state change already passes " +
+      "through, member-driven or webhook-driven. Deliberately has no " +
+      "actorUserId, same shape of exception as " +
+      "applyBillingLifecycleEventFromWebhook: a billing state transition " +
+      "IS the authorization to suspend or restore that organization's own " +
+      "publications, there is no Pocket Studio member 'acting' in that " +
+      "moment. Only ever mutates ProjectPublication rows already scoped to " +
+      "the organizationId it was called with (via project.organizationId), " +
+      "never accepts or trusts a client-supplied id.",
+  ],
+  [
     "createGovernanceImpactAssessment",
     "Maps a real, operator-verified governance requirement " +
       "(GovernanceRequirement, platform-wide, not tenant-scoped) onto a " +

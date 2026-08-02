@@ -68,6 +68,12 @@ const serverEnvSchema = z.object({
   // editing session.
   AI_SUBMISSION_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(20),
   AI_SUBMISSION_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
+  // Publishing Milestone 1 (2026-07-27): a published app's public route is
+  // unauthenticated and internet-reachable by construction — a real, new
+  // exposure surface. Generous defaults sized for a real visitor loading
+  // several screens/data requests quickly, not for scraping/hammering.
+  PUBLIC_ROUTE_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(120),
+  PUBLIC_ROUTE_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   BILLING_PROVIDER: z.enum(["mock", "stripe"]).default("mock"),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),

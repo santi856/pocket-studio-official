@@ -192,6 +192,12 @@ enum AuditLogAction {
   CREDENTIAL_STORED
   CREDENTIAL_ACCESSED
   BILLING_STATE_TRANSITIONED
+  PROJECT_PUBLISHED
+  PROJECT_PUBLISH_FAILED
+  PROJECT_UNPUBLISHED
+  PROJECT_PUBLICATION_SUSPENDED
+  PROJECT_PUBLICATION_RESTORED
+  PROJECT_PUBLICATION_ROLLED_BACK
 }
 
 model AuditLogEntry {
@@ -351,6 +357,7 @@ model Project {
   changeSets                  ChangeSet[]
   jobRuns                     JobRun[]
   oauthConnectionStates       OAuthConnectionState[]
+  publication                 ProjectPublication?
   generatedAppPayments        GeneratedAppPayment[]
   deployments                 Deployment[]
   exportRecords               ExportRecord[]
@@ -698,6 +705,12 @@ enum ProductEventType {
   CHANGE_SET_REJECTED
   BLUEPRINT_RESTORED
   QUALITY_GATE_RUN
+  PROJECT_PUBLISHED
+  PROJECT_PUBLISH_FAILED
+  PROJECT_UNPUBLISHED
+  PROJECT_PUBLICATION_SUSPENDED
+  PROJECT_PUBLICATION_RESTORED
+  PROJECT_PUBLICATION_ROLLED_BACK
 }
 
 // Append-only audit trail of state-changing actions on a project. Never
@@ -1560,6 +1573,104 @@ model Deployment {
 
   @@index([projectId, environment, createdAt])
   @@map("deployments")
+}
+
+// ---------------------------------------------------------------------------
+// Publishing (Publishing Milestone 1, 2026-07-27) — a distinct concept from
+// Deployment above. Deployment models pushing a build to an external
+// environment/host (real hosting vendor not yet implemented). Publishing
+// models making an EXISTING Blueprint/BuildPlan version pair reachable at a
+// stable public URL served by Pocket Studio's own interpreted runtime — no
+// external host, no build step, no compiled artifact (nothing in the
+// generation pipeline writes source files; see src/lib/generation).
+// "Publish" pins one explicit version pair; it never resolves "latest" at
+// request time, so draft edits never affect what a signed-out visitor sees
+// until the customer explicitly republishes.
+// ---------------------------------------------------------------------------
+
+enum PublicationStatus {
+  // Never published, or explicitly unpublished and not yet republished.
+  DRAFT
+  // Transient — a publish attempt is being applied. Under the current
+  // synchronous, no-external-provider architecture this is only ever
+  // observable for the instant a single DB transaction is in flight; it
+  // exists as a real state for forward-compatibility, not because a real
+  // build/deploy round-trip happens today.
+  PUBLISHING
+  // Publicly reachable at publicSlug, serving publishedBlueprintVersion /
+  // publishedBuildPlanVersion.
+  LIVE
+  // A publish attempt was made and failed after passing entitlement/
+  // generation-existence checks (e.g. an unexpected write failure) — the
+  // prior LIVE version, if any, is preserved untouched (the write is
+  // transactional; a failure never partially applies).
+  PUBLISH_FAILED
+  // Customer-initiated: was LIVE, now intentionally taken down. Distinct
+  // from SUSPENDED so billing recovery never resurrects something the
+  // customer chose to remove.
+  UNPUBLISHED
+  // System-initiated: billing access left "full" while this was LIVE.
+  // Automatically restored to LIVE when billing access returns to "full" —
+  // never resurrects an UNPUBLISHED (customer-removed) publication.
+  SUSPENDED
+}
+
+model ProjectPublication {
+  id        String  @id @default(cuid())
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // The stable public identifier (e.g. /p/{publicSlug}/...) — deliberately
+  // independent of the organization/project slugs, which are Pocket
+  // Studio-internal identifiers that must never leak into a public URL
+  // (see the public-route threat model, docs/PUBLISHING.md). Immutable
+  // once assigned for the pilot — no slug-change flow exists yet.
+  publicSlug String @unique
+
+  status PublicationStatus @default(DRAFT)
+
+  // The exact, pinned version pair currently served at publicSlug — null
+  // whenever status is not LIVE. Never "latest" at request time.
+  publishedBlueprintVersion Int?
+  publishedBuildPlanVersion Int?
+  publishedAt               DateTime?
+  publishedByUserId         String?
+
+  // The version pair to fall back to via "Restore previous version" — set
+  // to whatever was LIVE immediately before the current publish, so one
+  // restore always recovers the last version customers were actually
+  // seeing, not just "one version number lower."
+  lastKnownGoodBlueprintVersion Int?
+  lastKnownGoodBuildPlanVersion Int?
+
+  // Populated only when status is SUSPENDED (system-driven, billing) or
+  // PUBLISH_FAILED (an attempted publish that errored) — never both at
+  // once in practice, but modeled as two fields since they answer two
+  // different questions ("why is this down" vs "why did that attempt fail").
+  suspensionReason String?
+  failureReason    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([publicSlug])
+  @@map("project_publications")
+}
+
+// Basic per-IP abuse protection on the public render route (Publishing
+// Milestone 1) — a published app is, by definition, unauthenticated and
+// internet-reachable, an exposure surface that did not exist before this
+// feature. Scoped per (publicSlug, ipAddress) rather than globally, so one
+// abusive visitor hammering one published app never throttles unrelated
+// visitors to a different customer's app.
+model PublicRouteRequest {
+  id         String   @id @default(cuid())
+  publicSlug String
+  ipAddress  String
+  createdAt  DateTime @default(now())
+
+  @@index([publicSlug, ipAddress, createdAt])
+  @@map("public_route_requests")
 }
 
 // Master Spec §61 "production exports" -- a real, append-only audit fact

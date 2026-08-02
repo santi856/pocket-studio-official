@@ -4,6 +4,7 @@ import { requireOrganizationMembership } from "@/lib/tenancy/authz";
 import { getLatestPlan } from "@/lib/billing/plans";
 import { nextBillingState } from "@/lib/billing/access";
 import { recordAuditLogEntry } from "@/lib/observability/audit-log";
+import { syncPublicationsForBillingAccessChange } from "@/lib/deployment/publication-billing-sync";
 import type { BillingLifecycleEvent } from "@/lib/billing/access";
 import type { OrganizationSubscription, PlanKey } from "@/generated/prisma/client";
 
@@ -98,33 +99,40 @@ async function applyBillingStateTransition(
   organizationId: string,
   event: BillingLifecycleEvent,
 ): Promise<OrganizationSubscription> {
-  return db.$transaction(async (tx) => {
-    const subscription = await tx.organizationSubscription.findUnique({
-      where: { organizationId },
+  return db
+    .$transaction(async (tx) => {
+      const subscription = await tx.organizationSubscription.findUnique({
+        where: { organizationId },
+      });
+      if (!subscription) {
+        throw new SubscriptionNotFoundError();
+      }
+
+      const toState = nextBillingState(subscription.billingState, event);
+
+      const updated = await tx.organizationSubscription.update({
+        where: { organizationId },
+        data: { billingState: toState },
+      });
+
+      await tx.billingEvent.create({
+        data: {
+          organizationSubscriptionId: subscription.id,
+          type: EVENT_TO_BILLING_EVENT_TYPE[event],
+          fromState: subscription.billingState,
+          toState,
+          summary: `Billing state transitioned from ${subscription.billingState} to ${toState} (${event}).`,
+        },
+      });
+
+      return updated;
+    })
+    .then(async (updated) => {
+      // Deliberately after the transaction commits, not inside it — see
+      // syncPublicationsForBillingAccessChange's own doc comment for why.
+      await syncPublicationsForBillingAccessChange(organizationId, updated.billingState);
+      return updated;
     });
-    if (!subscription) {
-      throw new SubscriptionNotFoundError();
-    }
-
-    const toState = nextBillingState(subscription.billingState, event);
-
-    const updated = await tx.organizationSubscription.update({
-      where: { organizationId },
-      data: { billingState: toState },
-    });
-
-    await tx.billingEvent.create({
-      data: {
-        organizationSubscriptionId: subscription.id,
-        type: EVENT_TO_BILLING_EVENT_TYPE[event],
-        fromState: subscription.billingState,
-        toState,
-        summary: `Billing state transitioned from ${subscription.billingState} to ${toState} (${event}).`,
-      },
-    });
-
-    return updated;
-  });
 }
 
 export async function transitionBillingState(

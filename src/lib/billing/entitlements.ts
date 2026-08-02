@@ -47,6 +47,41 @@ export class ExportNotAllowedError extends Error {
   }
 }
 
+/**
+ * Publishing Milestone 1 (2026-07-27) — the first real consumer of the
+ * `deploymentAllowed` entitlement, which existed in the Plan Registry and
+ * seed data since before this feature but was never read anywhere (the
+ * Capability Registry's own self-disclosure confirmed this: "no deployment
+ * feature exists in this codebase" — now one does).
+ */
+export class PublishNotAllowedError extends Error {
+  constructor() {
+    super(
+      "Publishing is not included in this workspace's current plan. Upgrade to publish this project.",
+    );
+    this.name = "PublishNotAllowedError";
+  }
+}
+
+/**
+ * Same billing-access-level posture as OrganizationAccessRestrictedError
+ * above, applied to publishing rather than project creation: a restricted
+ * organization cannot publish *new* changes. An already-LIVE publication
+ * additionally gets suspended (taken offline) while restricted — see
+ * src/lib/deployment/publication-billing-sync.ts — since continuing to
+ * serve a public app for free is not something nonpayment should preserve,
+ * while the underlying project data itself is never touched (Master Spec
+ * §37: "must not delete customer data due to nonpayment").
+ */
+export class PublishingAccessRestrictedError extends Error {
+  constructor() {
+    super(
+      "This workspace's billing access is currently restricted — resolve your billing status to publish.",
+    );
+    this.name = "PublishingAccessRestrictedError";
+  }
+}
+
 // Mirrors src/lib/billing/seed-plans.ts's INITIAL_PLANS shape exactly.
 // Parsed (not blindly cast) since entitlements are stored as untyped JSON
 // (Master Spec §36: "configurable pricing and entitlements") — a
@@ -162,5 +197,21 @@ export async function assertExportAllowed(
   const entitlements = await resolveEntitlements(actorUserId, organizationId);
   if (!entitlements.exportAllowed) {
     throw new ExportNotAllowedError();
+  }
+}
+
+export async function assertPublishAllowed(
+  actorUserId: string,
+  organizationId: string,
+): Promise<void> {
+  const entitlements = await resolveEntitlements(actorUserId, organizationId);
+
+  const subscription = await db.organizationSubscription.findUnique({ where: { organizationId } });
+  if (subscription && getAccessLevel(subscription.billingState) !== "full") {
+    throw new PublishingAccessRestrictedError();
+  }
+
+  if (!entitlements.deploymentAllowed) {
+    throw new PublishNotAllowedError();
   }
 }

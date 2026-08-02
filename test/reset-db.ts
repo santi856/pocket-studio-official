@@ -47,4 +47,10 @@ export async function resetDatabase(): Promise<void> {
   // SentEmail model comment, prisma/schema.prisma) — not covered by
   // User's cascade above.
   await db.sentEmail.deleteMany();
+  // userId is a plain correlation field (same shape as SentEmail above),
+  // not a `@relation` — not covered by User's cascade above.
+  await db.ideaSubmissionAttempt.deleteMany();
+  // publicSlug is a plain field, not a `@relation` to Project — not
+  // covered by Project's cascade above.
+  await db.publicRouteRequest.deleteMany();
 }
